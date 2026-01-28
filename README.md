@@ -1,5 +1,15 @@
 # LM-WebuUI
 
+<p align="center">
+  <img src="./assets/demo.png" width="1080" />
+</p>
+
+<p align="center">
+  <!-- badges here -->
+</p>
+
+---
+
 > ⚠️ **Work in Progress (WIP)**
 > lm-webui is under active development. Features, APIs, and architecture may change as the project evolves. Contributions, feedback, and early testing are welcome, but expect breaking changes.
 
