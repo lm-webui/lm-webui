@@ -1,3 +1,5 @@
+import { authFetch } from '../utils/api';
+
 export interface StreamingConfig {
   provider: string;
   model: string;
@@ -56,7 +58,7 @@ export class StreamingService {
 
     try {
       // Start streaming session via REST API
-      const response = await fetch('/api/chat/stream/start', {
+      const session = await authFetch('/api/chat/stream/start', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -68,15 +70,8 @@ export class StreamingService {
           api_key: config.api_key,
           deep_thinking_mode: config.deep_thinking_mode,
         }),
-        credentials: 'include',
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Failed to start streaming session');
-      }
-
-      const session: StreamingSession = await response.json();
       this.sessionId = session.session_id;
 
       // Connect to WebSocket
@@ -101,13 +96,12 @@ export class StreamingService {
     if (this.sessionId) {
       try {
         // Send stop command via REST API as fallback
-        await fetch('/api/chat/stream/stop', {
+        await authFetch('/api/chat/stream/stop', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({ session_id: this.sessionId }),
-          credentials: 'include',
         });
       } catch (error) {
         console.warn('REST API stop failed:', error);
@@ -309,10 +303,7 @@ export class StreamingService {
   }
 
   static async getCapabilities(): Promise<any> {
-    const response = await fetch('/api/chat/stream/info', {
-      credentials: 'include',
-    });
-    return response.json();
+    return await authFetch('/api/chat/stream/info');
   }
 }
 

@@ -4,101 +4,88 @@ import { useAuth } from '../hooks/useAuth';
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
 
-// Utility function to handle fetch responses
-async function handleResponse(response: Response) {
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    const error = new Error(errorData.message || errorData.detail || `HTTP ${response.status}`);
-    (error as any).status = response.status;
-    (error as any).response = errorData;
-    throw error;
+// Helper function to handle token refresh
+async function handleTokenRefresh(): Promise<void> {
+  console.log('🔐 401 detected, attempting token refresh...');
+  
+  try {
+    const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    
+    if (refreshResponse.ok) {
+      console.log('✅ Token refreshed successfully');
+      return;
+    } else {
+      console.warn('⚠️ Token refresh failed with status:', refreshResponse.status);
+      throw new Error('Token refresh failed');
+    }
+  } catch (refreshError) {
+    console.error('❌ Token refresh error:', refreshError);
+    useAuth.getState().logout();
+    throw new Error('Authentication failed. Please login again.');
   }
+}
 
-  // Handle different response types
+// Helper function to parse response based on content type
+async function parseResponse(response: Response, url: string): Promise<any> {
   const contentType = response.headers.get('content-type');
-  if (contentType && contentType.includes('application/json')) {
+  
+  if (contentType?.includes('application/json')) {
     return response.json();
+  } else if (contentType?.includes('application/octet-stream') ||
+             url.includes('/download/') ||
+             url.includes('/api/download/')) {
+    return response.blob();
   } else {
-    return response.blob(); // For file downloads
+    return response.text();
   }
 }
 
-// Create authenticated fetch wrapper
-async function authFetch(url: string, options: RequestInit = {}): Promise<any> {
-  const finalOptions = createAuthRequestOptions(options);
-
-  // Debug logging for authentication
-  console.log('🔐 Auth check:', {
-    url: url.split('?')[0], // Remove query params for cleaner logs
-    method: options.method || 'GET',
-    credentials: 'include'
-  });
-
-  try {
-    const response = await fetch(url, finalOptions);
-    return await handleResponse(response);
-  } catch (error: any) {
-    // For 401 errors, try to refresh token
-    if (error.status === 401) {
-      try {
-        // Try to refresh the access token
-        const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-
-        if (refreshResponse.ok) {
-          // Token refreshed successfully, retry the original request
-          const retryResponse = await fetch(url, finalOptions);
-          return await handleResponse(retryResponse);
-        } else {
-          // Refresh failed, throw error
-          throw new Error('Authentication failed');
-        }
-      } catch (refreshError) {
-        throw new Error('Authentication failed');
-      }
-    }
-
-    throw error;
-  }
+// Helper function to create standardized fetch options
+function createFetchOptions(options: RequestInit = {}): RequestInit {
+  return {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  };
 }
 
-// Create authenticated streaming fetch wrapper for real-time data
-async function authenticatedStreamingFetch(url: string, options: RequestInit = {}): Promise<Response> {
-  const finalOptions = createAuthRequestOptions(options);
+export async function authFetch(url: string, options: RequestInit = {}): Promise<any> {
+  const fetchOptions = createFetchOptions(options);
 
   try {
-    const response = await fetch(url, finalOptions);
-
-    // For 401 errors in streaming, try to refresh token once
+    const response = await fetch(url, fetchOptions);
+    
+    // Handle 401 Unauthorized - attempt token refresh
     if (response.status === 401) {
-      try {
-        // Try to refresh the access token
-        const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-          method: 'POST',
-          credentials: 'include',
-        });
-
-        if (refreshResponse.ok) {
-          // Token refreshed successfully, retry the original request
-          const retryResponse = await fetch(url, finalOptions);
-          return retryResponse;
-        } else {
-          // Refresh failed, throw error
-          throw new Error('Authentication failed');
-        }
-      } catch (refreshError) {
-        throw new Error('Authentication failed');
-      }
+      await handleTokenRefresh();
+      // Retry the original request with fresh token
+      return fetch(url, fetchOptions);
     }
-
-    // Return the response directly for streaming (don't use handleResponse)
-    return response;
+    
+    // Handle non-401 errors
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    return await parseResponse(response, url);
   } catch (error: any) {
-    // For non-401 errors, re-throw
+    // Re-throw with enhanced error info
+    if (error.name === 'TypeError' && error.message.includes('fetch')) {
+      throw new Error('Network error: Unable to connect to server');
+    }
     throw error;
   }
+}
+
+function isAuthenticated(): boolean {
+  return useAuth.getState().isAuthenticated;
 }
 
 interface ChatRequest {
@@ -106,15 +93,15 @@ interface ChatRequest {
   provider: string;
   model: string;
   api_key?: string;
-  endpoint?: string; // For configurable endpoints like LM Studio
-  conversation_history?: any[]; // Previous messages for context
-  signal?: AbortSignal; // Added for aborting requests
-  show_raw_response?: boolean; // Show raw unfiltered model output
-  deep_thinking_mode?: boolean; // Enable extended reasoning/deep thinking
-  conversation_id?: string; // Conversation ID for backend conversation tracking
-  file_references?: any[]; // File references for RAG context
-  web_search?: boolean; // Enable web search
-  search_provider?: string; // Search provider to use
+  endpoint?: string;
+  conversation_history?: any[];
+  signal?: AbortSignal; 
+  show_raw_response?: boolean; 
+  deep_thinking_mode?: boolean; 
+  conversation_id?: string;
+  file_references?: any[];
+  web_search?: boolean;
+  search_provider?: string;
 }
 
 // Validate ChatRequest before sending
@@ -162,10 +149,8 @@ async function _chatWithModel(
     ...req,
     api_key: req.api_key,
     use_rag: useRAG,  // Add use_rag parameter for enhanced endpoint
-    // Remove endpoint parameter as it's handled by backend now
   };
 
-  // DEBUG: Log the request to see if conversation_id is included
   console.log('🔍 DEBUG _chatWithModel requestWithKey:', {
     hasConversationId: 'conversation_id' in requestWithKey,
     conversationId: requestWithKey.conversation_id,
@@ -182,8 +167,8 @@ async function _chatWithModel(
 
     if (shouldStream && stream) {
       // Handle streaming response for raw/deep thinking modes
-      // Use authenticated streaming approach to maintain token refresh capability
-      const response = await authenticatedStreamingFetch(`${API_BASE_URL}${endpoint}`, {
+      // Use authFetch for streaming - it will handle authentication automatically
+      const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -191,75 +176,90 @@ async function _chatWithModel(
         body: JSON.stringify(requestWithKey)
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}`);
-      }
+      // For streaming, authFetch returns the raw response for streaming endpoints
+      // We need to handle the streaming manually
+      // Note: This is a temporary workaround - we should update streaming endpoints
+      // to use proper SSE format that authFetch can handle
+      if (response instanceof Response) {
+        // Handle fetch Response object (fallback)
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}`);
+        }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let fullResponse = '';
-      let buffer = '';
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let fullResponse = '';
+        let buffer = '';
 
-      if (reader) {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+        if (reader) {
+          try {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
 
-            const textChunk = decoder.decode(value, { stream: true });
-            buffer += textChunk;
-            
-            // Split buffer by double newline to handle SSE events
-            const lines = buffer.split('\n\n');
-            // Keep the last partial line in the buffer
-            buffer = lines.pop() || '';
-            
-            for (const line of lines) {
-              const trimmedLine = line.trim();
-              if (trimmedLine.startsWith('data: ')) {
-                const dataStr = trimmedLine.slice(6);
-                try {
-                  // Try to parse as JSON first (standard SSE format from our backend)
-                  const data = JSON.parse(dataStr);
-                  
-                  if (data.type === 'status') {
-                    // Handle status updates (e.g., "Searching web...", "Reading results...")
-                    if (onStatus) onStatus(data.content);
-                  } else if (data.chunk) {
-                    // Handle content chunks
-                    fullResponse += data.chunk;
-                    if (onChunk) onChunk(data.chunk);
-                  } else if (data.error) {
-                    console.error('Stream error:', data.error);
-                    throw new Error(data.error);
+              const textChunk = decoder.decode(value, { stream: true });
+              buffer += textChunk;
+              
+              // Split buffer by double newline to handle SSE events
+              const lines = buffer.split('\n\n');
+              // Keep the last partial line in the buffer
+              buffer = lines.pop() || '';
+              
+              for (const line of lines) {
+                const trimmedLine = line.trim();
+                if (trimmedLine.startsWith('data: ')) {
+                  const dataStr = trimmedLine.slice(6);
+                  try {
+                    // Try to parse as JSON first (standard SSE format from our backend)
+                    const data = JSON.parse(dataStr);
+                    
+                    if (data.type === 'status') {
+                      // Handle status updates (e.g., "Searching web...", "Reading results...")
+                      if (onStatus) onStatus(data.content);
+                    } else if (data.chunk) {
+                      // Handle content chunks
+                      fullResponse += data.chunk;
+                      if (onChunk) onChunk(data.chunk);
+                    } else if (data.error) {
+                      console.error('Stream error:', data.error);
+                      throw new Error(data.error);
+                    }
+                  } catch (e) {
+                    // Fallback for older format or non-JSON data
+                    console.warn('Failed to parse SSE data:', e, dataStr);
                   }
-                } catch (e) {
-                  // Fallback for older format or non-JSON data
-                  console.warn('Failed to parse SSE data:', e, dataStr);
+                } else if (trimmedLine && !trimmedLine.startsWith('data: ')) {
+                   // Handle raw streaming if backend didn't use SSE format (fallback)
+                   fullResponse += trimmedLine;
+                   if (onChunk) onChunk(trimmedLine);
                 }
-              } else if (trimmedLine && !trimmedLine.startsWith('data: ')) {
-                 // Handle raw streaming if backend didn't use SSE format (fallback)
-                 fullResponse += trimmedLine;
-                 if (onChunk) onChunk(trimmedLine);
               }
             }
+          } catch (readError: any) {
+            // If the connection was closed cleanly or network error
+            if (readError.name === 'AbortError') {
+              console.log('Stream aborted by user');
+            } else {
+              console.error("Stream reading error:", readError);
+              if (onStatus) onStatus("Connection interrupted");
+              throw readError;
+            }
+          } finally {
+            reader.releaseLock();
           }
-        } catch (readError: any) {
-          // If the connection was closed cleanly or network error
-          if (readError.name === 'AbortError') {
-            console.log('Stream aborted by user');
-          } else {
-            console.error("Stream reading error:", readError);
-            if (onStatus) onStatus("Connection interrupted");
-            throw readError;
-          }
-        } finally {
-          reader.releaseLock();
         }
-      }
 
-      return fullResponse;
+        return fullResponse;
+      } else {
+        // If authFetch returned parsed data (non-streaming), handle it
+        // Handle errors from the backend
+        if (response.error) {
+          throw new Error(response.message || response.error);
+        }
+
+        return response.response;
+      }
     } else {
       // Handle regular non-streaming response
       const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
@@ -612,13 +612,8 @@ export async function refreshModelsCache(provider?: string): Promise<void> {
   });
 }
 
-// Backward compatibility aliases
+// Backward compatibility alias (keep only the one that's actually used)
 export const fetchModelsByProvider = (provider: string) => fetchModels(provider, { dynamic: true }) as Promise<string[]>;
-export const fetchAllModels = () => fetchModels(undefined, { allProviders: true }) as Promise<Record<string, string[]>>;
-export const fetchModelsForProvider = (provider: string, apiKey?: string) => {
-  console.warn('fetchModelsForProvider is deprecated, use fetchModels with apiKey option instead');
-  return fetchModels(provider, { apiKey }) as Promise<string[]>;
-};
 
 export async function fetchImageModels(): Promise<string[]> {
   const response = await authFetch(`${API_BASE_URL}/api/images/models`);
@@ -778,67 +773,6 @@ export async function deleteSession(sessionId: string): Promise<void> {
   });
 }
 
-// Standardized Authentication Utilities
-
-/**
- * Check if user is authenticated
- * Uses consistent pattern across the application
- */
-export function isAuthenticated(): boolean {
-  // Use the auth store to check authentication status
-  // This will be updated by the useAuth hook
-  const { isAuthenticated } = useAuth.getState();
-  return isAuthenticated;
-}
-
-/**
- * Get authentication headers for API requests
- * Provides consistent header format across all authenticated requests
- */
-export function getAuthHeaders(): Record<string, string> {
-  // For cookie-based authentication, we don't need to add headers
-  // The browser will automatically include cookies with credentials: 'include'
-  return {
-    'Content-Type': 'application/json',
-  };
-}
-
-/**
- * Create authenticated request options
- * Standardized way to create authenticated fetch options
- */
-export function createAuthRequestOptions(options: RequestInit = {}): RequestInit {
-  return {
-    ...options,
-    headers: {
-      ...getAuthHeaders(),
-      ...options.headers,
-    },
-    credentials: 'include', // Include cookies for both tokens
-  };
-}
-
-/**
- * Check if authentication is required for a route
- * Standardized route categorization helper
- */
-export function requiresAuth(route: string): boolean {
-  const publicRoutes = [
-    '/api/auth/login',
-    '/api/auth/register',
-    '/api/auth/status',
-    '/api/auth/refresh'
-  ];
-  
-  return !publicRoutes.some(publicRoute => route.startsWith(publicRoute));
-}
-
-export async function getSessionImages(sessionId: string): Promise<any[]> {
-  const url = new URL(`${API_BASE_URL}/api/images`);
-  url.searchParams.set('session_id', sessionId);
-  const response = await authFetch(url.toString());
-  return response.images;
-}
 
 // API Key Management Functions
 export interface ApiKey {
@@ -922,18 +856,6 @@ export async function generateConversationTitleInBackend(conversationId: string)
   return response;
 }
 
-// Intent verification function
-export async function verifyIntent(prompt: string, type: string): Promise<{ verified: boolean; prompt: string; type: string }> {
-  const response = await authFetch(`${API_BASE_URL}/api/intents/verify`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ prompt, type })
-  });
-  return response;
-}
-
 // SSE (Server-Sent Events) for real-time title updates
 export interface TitleUpdateEvent {
   title: string;
@@ -1009,15 +931,3 @@ export function listenForTitleUpdates(
   };
 }
 
-/**
- * Health check for title updates SSE endpoint
- */
-export async function checkTitleUpdatesHealth(conversationId: string): Promise<{
-  conversation_id: string;
-  active_connections: number;
-  status: string;
-  timestamp: string;
-}> {
-  const response = await authFetch(`${API_BASE_URL}/api/conversations/${conversationId}/title-updates/health`);
-  return response;
-}

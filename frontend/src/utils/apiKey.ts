@@ -1,4 +1,5 @@
 import { PROVIDER_MAPPING, LOCAL_STORAGE_API_KEY_MAPPING } from './modelProviders';
+import { authFetch } from "../utils/api";
 
 export async function getApiKeyForProvider(
   provider: string,
@@ -16,14 +17,8 @@ export async function getApiKeyForProvider(
       const backendProvider = PROVIDER_MAPPING[provider as keyof typeof PROVIDER_MAPPING] || provider;
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
       
-      const response = await fetch(`${API_BASE_URL}/api/api_keys/${backendProvider}`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.api_key;
-      }
+      const data = await authFetch(`${API_BASE_URL}/api/api_keys/${backendProvider}`);
+      return data.api_key;
     } catch (error) {
       console.warn(`Failed to fetch API key from backend for ${provider}:`, error);
     }

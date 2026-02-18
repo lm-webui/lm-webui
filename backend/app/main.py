@@ -352,8 +352,8 @@ async def debug_context(request: Request):
 
 # --- Serve Frontend (SPA) ---
 # Resolve the frontend dist path relative to this file
-# Assuming this file is at /app/backend/app/main.py
-# And dist is at /app/frontend/dist
+# Backend main at /app/backend/app/main.py
+# Frontend dist at /app/frontend/dist
 frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
 
 if frontend_dist.exists():

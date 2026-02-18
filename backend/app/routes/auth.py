@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from app.database import get_db
 from app.security.auth.core import create_access_token, create_refresh_token, verify_token, pwd_context, hash_password, verify_password
 from app.security.auth.dependencies import get_current_user
+from app.core.config_manager import is_development
 
 router = APIRouter(prefix="/api/auth")
 
@@ -36,12 +37,14 @@ async def login(req: LoginRequest, response: Response):
         refresh = create_refresh_token(user_id)
         
         # Set both tokens as httpOnly cookies with security attributes
+        # Use secure=True in production, secure=False in development
+        secure_cookie = not is_development()
         response.set_cookie(
             key="access_token",
             value=access,
             httponly=True,
-            secure=True,  # True in production with HTTPS
-            samesite="strict",
+            secure=secure_cookie,
+            samesite="lax" if is_development() else "strict",
             max_age=60*60  # 60 minutes
         )
         
@@ -49,8 +52,8 @@ async def login(req: LoginRequest, response: Response):
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=True,  # True in production with HTTPS
-            samesite="strict",
+            secure=secure_cookie,
+            samesite="lax" if is_development() else "strict",
             max_age=7*24*60*60  # 7 days
         )
         
@@ -67,12 +70,14 @@ async def refresh(response: Response, refresh_token: str = Cookie(None)):
         new_access = create_access_token(user_id)
         
         # Set new access token as httpOnly cookie
+        # Use secure=True in production, secure=False in development
+        secure_cookie = not is_development()
         response.set_cookie(
             key="access_token",
             value=new_access,
             httponly=True,
-            secure=True,  # True in production with HTTPS
-            samesite="strict",
+            secure=secure_cookie,
+            samesite="lax" if is_development() else "strict",
             max_age=60*60  # 60 minutes
         )
         
@@ -112,12 +117,14 @@ async def register(req: LoginRequest, response: Response):
         refresh = create_refresh_token(user_id)
         
         # Set both tokens as httpOnly cookies with security attributes
+        # Use secure=True in production, secure=False in development
+        secure_cookie = not is_development()
         response.set_cookie(
             key="access_token",
             value=access,
             httponly=True,
-            secure=True,  # True in production with HTTPS
-            samesite="strict",
+            secure=secure_cookie,
+            samesite="lax" if is_development() else "strict",
             max_age=60*60  # 60 minutes
         )
         
@@ -125,8 +132,8 @@ async def register(req: LoginRequest, response: Response):
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=True,  # True in production with HTTPS
-            samesite="strict",
+            secure=secure_cookie,
+            samesite="lax" if is_development() else "strict",
             max_age=7*24*60*60  # 7 days
         )
         

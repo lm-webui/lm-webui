@@ -1,4 +1,4 @@
-import { fetchModelsByProvider, fetchImageModels } from "@/utils/api";
+import { fetchModelsByProvider, fetchImageModels, authFetch } from "@/utils/api";
 import { PROVIDER_MAPPING, PROVIDERS_REQUIRING_API_KEY } from "@/utils/modelProviders";
 import { ConnectionStatus, ModelInfo, ModelFetchResult, ProviderMapping } from "./types";
 
@@ -26,10 +26,7 @@ export class ModelService {
   private static async loadGGUFModels(): Promise<ModelFetchResult> {
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const response = await fetch(`${API_BASE_URL}/api/models/local`);
-      if (!response.ok) throw new Error("Failed to fetch GGUF models");
-
-      const ggufModels: any[] = await response.json();
+      const ggufModels: any[] = await authFetch(`${API_BASE_URL}/api/models/local`);
       const modelNames = ggufModels.map((model: any) => model.name);
 
       // Transform GGUF models to ModelInfo format
@@ -192,19 +189,7 @@ export class ModelService {
   static async loadReasoningModels(): Promise<ModelCapabilities[]> {
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const response = await fetch(`${API_BASE_URL}/api/search/models/capabilities`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch reasoning models: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await authFetch(`${API_BASE_URL}/api/search/models/capabilities`);
       return data.models || [];
     } catch (error) {
       console.error("Failed to fetch reasoning models:", error);
@@ -215,19 +200,7 @@ export class ModelService {
   static async getReasoningModelNames(): Promise<string[]> {
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const response = await fetch(`${API_BASE_URL}/api/search/models/reasoning-capable`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch reasoning model names: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await authFetch(`${API_BASE_URL}/api/search/models/reasoning-capable`);
       return data.models || [];
     } catch (error) {
       console.error("Failed to fetch reasoning model names:", error);
@@ -244,20 +217,10 @@ export class ModelService {
   } | null> {
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const response = await fetch(`${API_BASE_URL}/api/search/models/recommend`, {
+      const data = await authFetch(`${API_BASE_URL}/api/search/models/recommend`, {
         method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ query })
       });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get model recommendation: ${response.status}`);
-      }
-
-      const data = await response.json();
       return data.recommendation || null;
     } catch (error) {
       console.error("Failed to get model recommendation:", error);

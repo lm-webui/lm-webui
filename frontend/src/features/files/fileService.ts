@@ -1,3 +1,5 @@
+import { authFetch } from "../../utils/api";
+
 export class FileService {
   static async uploadFiles(
     files: FileList,
@@ -19,13 +21,10 @@ export class FileService {
 
     const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
 
-    const response = await fetch(`${API_BASE_URL}/api/upload/files`, {
+    const result = await authFetch(`${API_BASE_URL}/api/upload/files`, {
       method: 'POST',
       body: formData,
-      credentials: 'include',
     });
-    
-    const result = await response.json();
     
     if (result.success) {
       const fileNames = Array.from(files).map(file => file.name).join(', ');

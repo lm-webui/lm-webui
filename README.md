@@ -223,13 +223,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Discussions**: [GitHub Discussions](https://github.com/lm-webui/lm-webui/discussions)
 
 ---
-## ⭐ Star History
 
-<p align="center">
-  <a href="https://star-history.com/#lm-webui/lm-webui&Date">
-    <img src="https://api.star-history.com/svg?repos=lm-webui/lm-webui&type=Date&theme=dark" />
-  </a>
-</p>
+## ⭐ Star History
 
 <p align="center">
   <a href="https://star-history.com/#lm-webui/lm-webui&Date">

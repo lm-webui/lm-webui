@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+import axios from 'axios';
 
 interface User {
   id: number;
@@ -23,6 +22,18 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 interface AuthProviderProps {
   children: ReactNode;
 }
+
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+
+// Create Axios instance for authentication endpoints
+const authAxios = axios.create({
+  baseURL: API_BASE_URL,
+  withCredentials: true, // Essential for cookie-based authentication
+  timeout: 30000, // 30 second timeout
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -84,13 +95,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Check if registration is required (no users exist)
   const checkRegistrationRequired = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/status`, {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRequiresRegistration(!data.hasUser);
-      }
+      const response = await authAxios.get('/api/auth/status');
+      setRequiresRegistration(!response.data.hasUser);
     } catch (error) {
       console.error('Failed to check registration status:', error);
     }
@@ -98,16 +104,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const fetchUser = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-        startRefreshTimer();
-        return true;
-      }
-      return false;
+      const response = await authAxios.get('/api/auth/me');
+      setUser(response.data);
+      startRefreshTimer();
+      return true;
     } catch {
       return false;
     }
@@ -115,17 +115,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshAccessToken = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        // After refresh, ensure we have the latest user data and timers set
-        await fetchUser();
-      } else {
-        throw new Error('Token refresh failed');
-      }
+      await authAxios.post('/api/auth/refresh', {});
+      // After refresh, ensure we have the latest user data and timers set
+      await fetchUser();
     } catch (error: any) {
       setUser(null);
       stopRefreshTimer();
@@ -139,10 +131,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Simple check for authentication without side effects
       const checkAuthWithoutSideEffects = async (): Promise<boolean> => {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/me`, {
-            credentials: 'include'
-          });
-          return response.ok;
+          await authAxios.get('/api/auth/me');
+          return true;
         } catch {
           return false;
         }
@@ -216,27 +206,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email,
-          password
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        startRefreshTimer();
-        clearTempStorage(); // Clear temp storage on successful login
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Login failed');
-      }
+      const response = await authAxios.post('/api/auth/login', { email, password });
+      setUser(response.data.user);
+      startRefreshTimer();
+      clearTempStorage(); // Clear temp storage on successful login
     } catch (error: any) {
       throw error;
     }
@@ -244,10 +217,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await fetch(`${API_BASE_URL}/api/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await authAxios.post('/api/auth/logout', {});
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -261,27 +231,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const register = async (email: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email,
-          password
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-        startRefreshTimer();
-        clearTempStorage(); // Clear temp storage on successful registration
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Registration failed');
-      }
+      const response = await authAxios.post('/api/auth/register', { email, password });
+      setUser(response.data.user);
+      startRefreshTimer();
+      clearTempStorage(); // Clear temp storage on successful registration
     } catch (error: any) {
       throw error;
     }

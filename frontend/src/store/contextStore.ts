@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { authFetch } from "../utils/api";
 
 interface ContextItem {
   id: string;
@@ -55,19 +56,7 @@ export const useContextStore = create<ContextState>()(
         try {
           set({ contextLoading: true, lastError: null });
 
-          const response = await fetch(`/api/context/${conversationId}`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
-              'Content-Type': 'application/json',
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch context: ${response.statusText}`);
-          }
-
-          const contextData = await response.json();
+          const contextData = await authFetch(`/api/context/${conversationId}`);
 
           set({
             activeContext: {
@@ -101,17 +90,9 @@ export const useContextStore = create<ContextState>()(
         try {
           set({ memoryDeleting: true, lastError: null });
 
-          const response = await fetch(`/api/context/${conversationId}/memory/${memoryId}`, {
+          await authFetch(`/api/context/${conversationId}/memory/${memoryId}`, {
             method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('authToken') || ''}`,
-              'Content-Type': 'application/json',
-            },
           });
-
-          if (!response.ok) {
-            throw new Error(`Failed to delete memory: ${response.statusText}`);
-          }
 
           // Refresh context after deletion
           await get().fetchActiveContext(conversationId);
