@@ -1,6 +1,6 @@
-# 🏗️ System Architecture
+# ⚙️ System Architecture & Features
 
-## 🔭 High-Level Overview
+## High-Level Overview
 
 The application follows a modern decoupled architecture, composed of a reactive **Single Page Application (SPA)** frontend and a high-performance **FastAPI** backend. The system is designed for local LLM inference, RAG (Retrieval-Augmented Generation), and multimodal interaction, emphasizing data privacy and hardware acceleration.
 
@@ -120,97 +120,166 @@ A cross-cutting concern that optimizes runtime performance:
 3. **Service Layer Standardization**: Consistent API service patterns
 4. **Component Consolidation**: Reusable UI components with proper prop interfaces
 
-### Streaming Pipeline Fixes
-
-- **Fixed WebSocket Streaming**: Resolved "Model is still thinking..." status issue
-- **Message Persistence**: Assistant messages now properly saved to database
-- **Event System**: Proper `type: "complete"` events for frontend synchronization
-
 ---
 
-## 📁 Repository Structure (Open-Source Ready)
+## Core Features
 
-```
-lm-webui/
-├── 📁 backend/                    # FastAPI backend
-│   ├── app/                      # Application code
-│   │   ├── routes/              # API endpoints
-│   │   ├── services/            # Business logic
-│   │   ├── rag/                 # RAG engine
-│   │   ├── hardware/            # Hardware abstraction
-│   │   └── database/            # Data persistence
-│   └── tests/                   # Backend tests
-├── 📁 frontend/                  # React + TypeScript frontend
-│   ├── src/
-│   │   ├── components/          # UI components
-│   │   ├── features/            # Feature modules
-│   │   ├── store/              # State management
-│   │   ├── services/           # API services
-│   │   └── types/core/         # Unified type definitions
-│   └── tests/                  # Frontend tests
-├── 📁 docs/                     # Documentation
-│   ├── implementation/         # Implementation details
-│   ├── prompts/               # Prompt templates
-│   └── testing/               # Test documentation
-├── 📁 scripts/                 # Utility scripts
-│   ├── debug/                 # Debug scripts
-│   └── tests/                 # Test utilities
-├── 📁 examples/                # Example configurations
-│   └── samples/               # Sample files
-├── 📁 .github/                 # GitHub configuration
-│   ├── workflows/             # CI/CD pipelines
-│   ├── ISSUE_TEMPLATE/        # Issue templates
-│   └── instructions/          # Development instructions
-├── 📄 LICENSE                  # MIT License
-├── 📄 CONTRIBUTING.md          # Contribution guidelines
-├── 📄 README.md                # Project documentation
-├── 📄 architecture.md          # Architecture documentation
-├── 📄 DEPLOYMENT.md            # Deployment instructions
-├── 📄 docker-compose.yml       # Docker Compose configuration
-├── 📄 Dockerfile               # Docker build configuration
-├── 📄 install.sh               # One-line installation script
-└── 📄 cleanup_repository.sh    # Repository organization script
-```
+### 1. 🔐 Authentication & User Management
 
----
+#### JWT-Based Authentication
 
-## 🚀 Deployment & Operations
+- **Stateless authentication** using JSON Web Tokens
+- **Refresh tokens** stored as HTTP-only cookies for security
+- **Role-based access control** with user and admin levels
+- **Session isolation** ensuring conversation privacy
 
-### Single-Command Deployment
+#### User Management
 
-```bash
-# One-line installation
-curl -sSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
+- User registration and login
+- Session management with automatic expiration
+- Conversation isolation per user
+- Secure password hashing with bcrypt
 
-# Or using the local script
-./install.sh
-```
+#### Security Features
 
-### Docker Deployment
+- Input validation and sanitization
+- Rate limiting protection
+- CSRF protection
+- Secure cookie handling
 
-```bash
-# Build and run with Docker Compose
-docker-compose up -d
+### 2. 🌐 WebSocket Streaming with Reasoning
 
-# With GPU support (NVIDIA)
-docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
-```
+- **Bidirectional WebSocket communication** for instant updates
+- **Token-by-token streaming** with controlled pacing (1-2 tokens per message)
+- **Connection health monitoring** with automatic reconnection
+- **Heartbeat mechanism** to detect and recover from disconnections
+- **Step-by-step reasoning visualization** showing AI thinking process
+- **Expandable reasoning steps** with confidence scores
+- **Real-time progress indicators** during generation
+- **Visual thinking animations** for better user experience
+- **Immediate cancellation** with state preservation
+- **Stop/resume functionality** during generation
+- **Session management** for concurrent streams
+- **Resource cleanup** on connection close
 
-### Development Environment
+### 3. 🔗 RAG (Retrieval-Augmented Generation)
 
-```bash
-# Frontend development
-cd frontend
-npm install
-npm run dev
+#### Vector Store Integration
 
-# Backend development
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
-```
+- **Qdrant vector database** for efficient similarity search
+- **Automatic embedding generation** for text and documents
+- **Metadata storage** for source attribution and versioning
+- **Index optimization** for fast retrieval
+
+#### Context Management
+
+- **Intelligent context window management** with token optimization
+- **Cross-conversation retrieval** of relevant historical context
+- **File reference integration** for multimodal content
+- **Automatic context pruning** to stay within model limits
+
+#### Retrieval Pipeline
+
+- **Semantic search** across conversation history
+- **Hybrid search** combining semantic and keyword matching
+- **Relevance scoring** with configurable thresholds
+- **Source attribution** showing where information came from
+
+### 4. 👁️ Multimodal Processing
+
+#### Image Processing
+
+- **Image upload and validation** (PNG, JPG, WebP formats)
+- **Automatic resizing and optimization** for LLM consumption
+- **OCR text extraction** using EasyOCR integration
+- **Base64 encoding** for seamless LLM integration
+- **Metadata extraction** (dimensions, format, size)
+
+#### Document Processing
+
+- **PDF parsing** with pypdf for text extraction
+- **DOCX processing** with python-docx integration
+- **Content summarization** for large documents
+- **Structured data preparation** for LLM context
+- **File size limits** with intelligent truncation
+
+#### Multimodal Integration
+
+- **Automatic context inclusion** of file content in conversations
+- **File reference tracking** across conversations
+- **Thumbnail generation** for visual previews
+- **Progress tracking** during file processing
+
+### 5. ⚡ Hardware Acceleration
+
+#### Automatic Detection
+
+- **CUDA detection** for NVIDIA GPUs with VRAM measurement
+- **ROCm detection** for AMD GPUs on Linux systems
+- **Metal detection** for Apple Silicon Macs
+- **CPU fallback** with optimization recommendations
+- **Cross-platform compatibility** checks
+
+#### Intelligent Quantization
+
+- **VRAM-aware quantization selection** based on available memory
+- **Backend-specific quantization hierarchies** for optimal performance
+- **Automatic fallback** to CPU-safe options when needed
+- **Performance optimization** based on hardware capabilities
+
+#### Optimization Features
+
+- **Model loading optimization** for available hardware
+- **Memory management** with automatic cleanup
+- **Performance monitoring** with real-time feedback
+- **Hardware utilization display** in UI
+
+### 6. 🤖 GGUF Runtime & Model Management ⭐
+
+#### Complete GGUF Integration
+
+- **GGUF model management system** with full API support
+- **HuggingFace integration** for direct model downloads
+- **Local model registry** for organizing GGUF files
+- **Hardware compatibility checking** before model usage
+
+#### Model Operations
+
+- **Upload GGUF models** from local storage
+- **Download from HuggingFace** with progress tracking
+- **Model validation** ensuring file integrity
+- **Metadata extraction** from GGUF files
+- **Model deletion** with cleanup
+
+#### WebSocket Progress Tracking
+
+- **Real-time download progress** via WebSocket
+- **Cancelable downloads** with cleanup
+- **Progress visualization** in UI
+- **Error handling** with user feedback
+
+### 7. 🧠 Knowledge Graph & Memory System
+
+#### Conversation Memory
+
+- **Persistent conversation storage** with relationship tracking
+- **Entity extraction** and relationship mapping
+- **Semantic linking** between related conversations
+- **Memory consolidation** over time
+
+#### Knowledge Organization
+
+- **Topic clustering** for better organization
+- **Cross-reference creation** between related content
+- **Temporal tracking** of conversation evolution
+- **Import/export functionality** for knowledge transfer
+
+#### Search Capabilities
+
+- **Semantic search** across stored knowledge
+- **Relationship traversal** through connected entities
+- **Context-aware retrieval** based on current conversation
+- **Relevance ranking** of retrieved memories
 
 ---
 
@@ -271,6 +340,52 @@ uvicorn app.main:app --reload
 - **Time to Interactive**: <3 seconds
 - **WebSocket Reconnection**: Automatic reconnection with state recovery
 - **Offline Support**: Partial offline functionality
+
+---
+
+## 📁 Repository Structure (Open-Source Ready)
+
+```
+lm-webui/
+├── 📁 backend/                    # FastAPI backend
+│   ├── app/                      # Application code
+│   │   ├── routes/              # API endpoints
+│   │   ├── services/            # Business logic
+│   │   ├── rag/                 # RAG engine
+│   │   ├── hardware/            # Hardware abstraction
+│   │   └── database/            # Data persistence
+│   └── tests/                   # Backend tests
+├── 📁 frontend/                  # React + TypeScript frontend
+│   ├── src/
+│   │   ├── components/          # UI components
+│   │   ├── features/            # Feature modules
+│   │   ├── store/              # State management
+│   │   ├── services/           # API services
+│   │   └── types/core/         # Unified type definitions
+│   └── tests/                  # Frontend tests
+├── 📁 docs/                     # Documentation
+│   ├── implementation/         # Implementation details
+│   ├── prompts/               # Prompt templates
+│   └── testing/               # Test documentation
+├── 📁 scripts/                 # Utility scripts
+│   ├── debug/                 # Debug scripts
+│   └── tests/                 # Test utilities
+├── 📁 examples/                # Example configurations
+│   └── samples/               # Sample files
+├── 📁 .github/                 # GitHub configuration
+│   ├── workflows/             # CI/CD pipelines
+│   ├── ISSUE_TEMPLATE/        # Issue templates
+│   └── instructions/          # Development instructions
+├── 📄 LICENSE                  # MIT License
+├── 📄 CONTRIBUTING.md          # Contribution guidelines
+├── 📄 README.md                # Project documentation
+├── 📄 architecture.md          # Architecture documentation
+├── 📄 DEPLOYMENT.md            # Deployment instructions
+├── 📄 docker-compose.yml       # Docker Compose configuration
+├── 📄 Dockerfile               # Docker build configuration
+├── 📄 install.sh               # One-line installation script
+└── 📄 cleanup_repository.sh    # Repository organization script
+```
 
 ---
 
