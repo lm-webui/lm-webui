@@ -76,18 +76,16 @@ Access the application at `http://localhost:5178`
 
 ## ⚡ Core Features
 
-| Feature                      | Capabilities                                                 |
-| ---------------------------- | ------------------------------------------------------------ |
-| 🔐 **Authentication**        | JWT-based auth with refresh tokens and user sessions         |
-| 🌐 **WebSocket Streaming**   | Real-time token streaming with interactive reasoning display |
-| 🔗 **RAG Engine**            | Configurable retrieval pipelines with Qdrant vector store    |
-| 👁️ **Multimodal Processing** | Image/document upload with OCR and content extraction        |
-| ⚡ **Hardware Acceleration** | Automatic CUDA/ROCm/Metal detection with VRAM optimization   |
-| 🤖 **GGUF Runtime**          | Complete GGUF model management with HuggingFace integration  |
-| 🧠 **Knowledge Graph**       | Conversation memory and entity relationship tracking         |
-| 🔍 **Semantic Search**       | Vector-based similarity search across conversations          |
-| 📱 **Real-time Updates**     | Live title updates and conversation synchronization          |
-| 🏠 **Self-Hosted Ready**     | Effortless on-prem, private cloud, and isolated deployments  |
+| Feature                   | Capabilities                                                                                                                                       |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Authentication**        | Secure JWT-based authentication with refresh tokens and persistent user sessions. Designed for multi-user deployments and role-aware environments. |
+| **WebSocket Streaming**   | Bidirectional streaming with structured events, typing indicators, cancellation support, and step-by-step reasoning visibility.                    |
+| **Hardware Acceleration** | Automatic CUDA, ROCm, and Metal detection with dynamic Memory and Layer optimization for efficient local execution across GPUs and CPUs.           |
+| **GGUF Runtime**          | Built-in GGUF model lifecycle management download, load, quantize, and serve models locally with HuggingFace compatibility.                        |
+| **RAG Engine**            | Modular retrieval pipeline powered by Qdrant for vector search, reranking, semantic chunking, and context injection.                               |
+| **Multimodal Processing** | Image and document processing with OCR, embedding, and structured content extraction for unified chat workflows.                                   |
+| **Knowledge Graph**       | Triplet-based semantic memory and entity relationship tracking to enhance long-term contextual understanding.                                      |
+| **Self-Hosted Ready**     | Effortless on-prem, private cloud, and isolated deployments with no required external telemetry.                                                   |
 
 ### 🎯 GGUF Runtime Highlights
 
