@@ -85,8 +85,8 @@ For detailed documentation, see the [`docs/`](./docs/) directory:
 
 - **[Getting Started](./docs/getting-started.md)** - Complete setup guide
 - **[Features](./docs/architecture.md)** - Detailed feature documentation
-- **[Deployment](./docs/deployment.md)** - Production deployment guides
-- **[Contributing](./contributing.md)** - How to contribute to the project
+- **[Deployment](./docs/DEPLOYMENT.md)** - Production deployment guides
+- **[Contributing](./CONTRIBUTING.md)** - How to contribute to the project
 
 ---
 
