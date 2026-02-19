@@ -32,10 +32,6 @@ Built open-source for comunity, developers, system integrators, and organization
 
 Run fully offline, integrate with cloud APIs when needed, and deploy across environments without sacrificing performance, privacy, or sovereignty.
 
-<<<<<<< HEAD
-=======
-
->>>>>>> 8d3909c70c8a0c692cf9b675e455a4e638a25911
 > ⚠️ **Work in Progress (WIP)**
 > lm-webui is under active development. Features, APIs, and architecture may change as the project evolves. Contributions, feedback, and early testing are welcome, but expect breaking changes.
 
