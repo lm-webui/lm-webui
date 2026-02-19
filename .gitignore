@@ -66,6 +66,8 @@ backend/thumbnails/*
 backend/models/*
 !backend/models/.keep
 backend/app/files/*
+backend/media/*
+!backend/media/.keep
 *.db
 *.sqlite
 *.sqlite3
@@ -98,7 +100,5 @@ __dev__/
 __plans__/
 __implementation__/
 __internal__/
-__prompt___/
-__sample__/
 __test__/
 __backup__/

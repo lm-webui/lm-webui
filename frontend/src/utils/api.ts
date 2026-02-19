@@ -1,6 +1,6 @@
-import { PROVIDER_MAPPING, LOCAL_STORAGE_API_KEY_MAPPING, PROVIDERS_REQUIRING_API_KEY } from './modelProviders';
-import { getApiKeyForProvider, getBackendProviderName } from './apiKey';
+import { PROVIDER_MAPPING } from './modelProviders';
 import { useAuth } from '../hooks/useAuth';
+import { SSEService } from '../services/SSEService';
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
 
@@ -166,100 +166,24 @@ async function _chatWithModel(
     const shouldStream = req.show_raw_response || req.deep_thinking_mode;
 
     if (shouldStream && stream) {
-      // Handle streaming response for raw/deep thinking modes
-      // Use authFetch for streaming - it will handle authentication automatically
-      const response = await authFetch(`${API_BASE_URL}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestWithKey)
-      });
-
-      // For streaming, authFetch returns the raw response for streaming endpoints
-      // We need to handle the streaming manually
-      // Note: This is a temporary workaround - we should update streaming endpoints
-      // to use proper SSE format that authFetch can handle
-      if (response instanceof Response) {
-        // Handle fetch Response object (fallback)
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}`);
-        }
-
-        const reader = response.body?.getReader();
-        const decoder = new TextDecoder();
-        let fullResponse = '';
-        let buffer = '';
-
-        if (reader) {
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const textChunk = decoder.decode(value, { stream: true });
-              buffer += textChunk;
-              
-              // Split buffer by double newline to handle SSE events
-              const lines = buffer.split('\n\n');
-              // Keep the last partial line in the buffer
-              buffer = lines.pop() || '';
-              
-              for (const line of lines) {
-                const trimmedLine = line.trim();
-                if (trimmedLine.startsWith('data: ')) {
-                  const dataStr = trimmedLine.slice(6);
-                  try {
-                    // Try to parse as JSON first (standard SSE format from our backend)
-                    const data = JSON.parse(dataStr);
-                    
-                    if (data.type === 'status') {
-                      // Handle status updates (e.g., "Searching web...", "Reading results...")
-                      if (onStatus) onStatus(data.content);
-                    } else if (data.chunk) {
-                      // Handle content chunks
-                      fullResponse += data.chunk;
-                      if (onChunk) onChunk(data.chunk);
-                    } else if (data.error) {
-                      console.error('Stream error:', data.error);
-                      throw new Error(data.error);
-                    }
-                  } catch (e) {
-                    // Fallback for older format or non-JSON data
-                    console.warn('Failed to parse SSE data:', e, dataStr);
-                  }
-                } else if (trimmedLine && !trimmedLine.startsWith('data: ')) {
-                   // Handle raw streaming if backend didn't use SSE format (fallback)
-                   fullResponse += trimmedLine;
-                   if (onChunk) onChunk(trimmedLine);
-                }
-              }
-            }
-          } catch (readError: any) {
-            // If the connection was closed cleanly or network error
-            if (readError.name === 'AbortError') {
-              console.log('Stream aborted by user');
-            } else {
-              console.error("Stream reading error:", readError);
-              if (onStatus) onStatus("Connection interrupted");
-              throw readError;
-            }
-          } finally {
-            reader.releaseLock();
-          }
-        }
-
-        return fullResponse;
-      } else {
-        // If authFetch returned parsed data (non-streaming), handle it
-        // Handle errors from the backend
-        if (response.error) {
-          throw new Error(response.message || response.error);
-        }
-
-        return response.response;
-      }
+      // Use the production-ready SSEService for streaming
+      // Ensure api_key is a string (not undefined) for SSEService compatibility
+      const streamingRequest = {
+        ...requestWithKey,
+        api_key: requestWithKey.api_key || '',
+      };
+      
+      // Build streaming options, only including defined callbacks
+      const streamingOptions: any = {
+        signal: req.signal,
+        timeout: 30000,
+        maxRetries: 2,
+      };
+      
+      if (onChunk) streamingOptions.onChunk = onChunk;
+      if (onStatus) streamingOptions.onStatus = onStatus;
+      
+      return await SSEService.streamChat(streamingRequest, streamingOptions);
     } else {
       // Handle regular non-streaming response
       const response = await authFetch(`${API_BASE_URL}${endpoint}`, {

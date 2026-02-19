@@ -31,7 +31,7 @@ jobs:
       - name: Run backend tests
         run: |
           cd backend
-          python -m pytest backend/__test__/ -v --cov=app --cov-report=xml
+          python -m pytest tests/ -v --cov=app --cov-report=xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3
