@@ -38,17 +38,26 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: "pip"
 
+      # Install Python dependencies using project requirements
       - name: Install Python dependencies
         run: |
-          pip install ruff mypy pip-audit
-          cd backend && pip install -r requirements.txt
+          cd backend
+          pip install -r requirements.txt
+          pip install -r requirements-test.txt
+          pip install pip-audit
 
-      # Blocking lint checks
-      - name: Run Ruff linting
-        run: ruff check backend
+      # Code quality checks using project's tools
+      - name: Run Black formatting check
+        run: cd backend && black --check .
+
+      - name: Run isort import sorting check
+        run: cd backend && isort --check-only .
+
+      - name: Run flake8 linting
+        run: cd backend && flake8 . --max-line-length=120 --ignore=E501,W503
 
       - name: Run mypy type checking
-        run: mypy backend --ignore-missing-imports
+        run: cd backend && mypy app --ignore-missing-imports
 
       # Security audit — block on CRITICAL only
       - name: Audit Python dependencies
@@ -85,7 +94,7 @@ jobs:
           cache: "pip"
 
       - name: Install backend dependencies
-        run: cd backend && pip install -r requirements.txt pytest pytest-cov
+        run: cd backend && pip install -r requirements.txt -r requirements-test.txt
 
       # Blocking test run with minimum coverage enforced
       - name: Run backend tests
@@ -94,7 +103,7 @@ jobs:
           python -m pytest tests/ -v \
             --cov=app \
             --cov-report=xml \
-            --cov-fail-under=60 \
+            --cov-fail-under=70 \
             -x
 
       - name: Upload backend coverage to Codecov
@@ -119,7 +128,7 @@ jobs:
 
           from app.main import app
           routes = [r.path for r in app.routes]
-          required = ['/api/chat/completions', '/api/rag', '/api/inference']
+          required = ['/api/chat', '/api/rag', '/api/inference']
           missing = [r for r in required if r not in routes]
           if missing:
               print(f'✗ Missing AI routes: {missing}')
@@ -137,8 +146,8 @@ jobs:
       - name: Install frontend dependencies
         run: cd frontend && npm ci
 
-      - name: Run frontend tests
-        run: cd frontend && npm test -- --coverage --watchAll=false
+      - name: Run frontend tests with coverage
+        run: cd frontend && npm run test:coverage
 
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v4
@@ -266,7 +275,7 @@ jobs:
 
           # AI endpoint: 401/403 = OK (auth required), 500/000 = real failure
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            -X POST http://localhost:8000/api/chat/completions \
+            -X POST http://localhost:8000/api/chat \
             -H "Content-Type: application/json" \
             -d '{"messages":[{"role":"user","content":"test"}]}')
           if [ "$STATUS" = "500" ] || [ "$STATUS" = "000" ]; then
