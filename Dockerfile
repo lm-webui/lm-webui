@@ -1,5 +1,5 @@
 # --- Stage 1: Build Frontend (Static Assets) ---
-FROM node:22-alpine AS frontend-builder
+FROM node:24-alpine AS frontend-builder
 
 WORKDIR /frontend
 COPY frontend/package*.json ./
