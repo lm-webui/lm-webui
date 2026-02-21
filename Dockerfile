@@ -11,7 +11,7 @@ RUN npm run build
 
 # --- Stage 2: Runtime Environment (Python 3.12) ---
 # Using 3.12 for stable llama-cpp-python wheels
-FROM python:3.12-slim-bookworm
+FROM python:3.13-slim-bookworm
 
 WORKDIR /backend
 
@@ -36,7 +36,7 @@ ENV CMAKE_ARGS="-DGGML_CPU=on"
 
 # Upgrade pip to handle modern wheels
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r backend/requirements.txt
+    pip install --no-cache-dir --root-user-action=ignore -r backend/requirements.txt
 
 # 3. Copy Application Code
 COPY backend/ ./backend/
