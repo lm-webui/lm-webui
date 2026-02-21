@@ -23,7 +23,7 @@ class TestErrorHandlers:
         """Test 422 error handling for validation errors"""
         # Try to register with invalid data
         invalid_data = {
-            "username": "",  # Empty username
+            "email": "",  # Empty email
             "password": "short"  # Too short password
         }
         response = client.post("/api/auth/register", json=invalid_data)

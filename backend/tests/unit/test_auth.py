@@ -9,22 +9,20 @@ class TestAuthentication:
     def test_register_user_success(self, client):
         """Test successful user registration"""
         user_data = {
-            "username": f"testuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"testuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         
         response = client.post("/api/auth/register", json=user_data)
         assert response.status_code == 201
-        assert "message" in response.json()
-        assert response.json()["message"] == "User registered successfully"
+        assert "user" in response.json()
+        assert "id" in response.json()["user"]
     
     def test_register_duplicate_user(self, client):
         """Test duplicate user registration fails"""
         user_data = {
-            "username": "duplicateuser",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": "duplicateuser@test.com",
+            "password": "testpass123"
         }
         
         # First registration should succeed
@@ -40,23 +38,21 @@ class TestAuthentication:
         """Test successful login"""
         # First register a user
         user_data = {
-            "username": "loginuser",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": "loginuser@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         # Then login
         login_data = {
-            "username": "loginuser",
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": "loginuser@test.com",
+            "password": "testpass123"
         }
         
         response = client.post("/api/auth/login", json=login_data)
         assert response.status_code == 200
-        assert "access_token" in response.json()
+        # Token is in cookie, not JSON body
+        assert "access_token" in response.cookies
         # Check if refresh token cookie was set
         assert "refresh_token" in response.cookies
     
@@ -64,18 +60,15 @@ class TestAuthentication:
         """Test login with wrong password fails"""
         # First register a user
         user_data = {
-            "username": "wrongpassuser",
-            "password": "correctpass",
-            "device_id": "test-device"
+            "email": "wrongpassuser@test.com",
+            "password": "correctpass"
         }
         client.post("/api/auth/register", json=user_data)
         
         # Try login with wrong password
         login_data = {
-            "username": "wrongpassuser",
-            "password": "wrongpass",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": "wrongpassuser@test.com",
+            "password": "wrongpass"
         }
         
         response = client.post("/api/auth/login", json=login_data)
@@ -86,27 +79,24 @@ class TestAuthentication:
         """Test accessing protected endpoint with valid token"""
         # Register and login to get token
         user_data = {
-            "username": "protecteduser",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": "protecteduser@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": "protecteduser",
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": "protecteduser@test.com",
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         # Access protected endpoint
         headers = {"Authorization": f"Bearer {token}"}
         response = client.get("/api/auth/me", headers=headers)
         assert response.status_code == 200
-        assert "username" in response.json()
-        assert response.json()["username"] == "protecteduser"
+        assert "email" in response.json()
+        assert response.json()["email"] == "protecteduser@test.com"
     
     def test_protected_endpoint_without_token(self, client):
         """Test accessing protected endpoint without token fails"""
@@ -117,40 +107,34 @@ class TestAuthentication:
         """Test token refresh functionality"""
         # Register and login
         user_data = {
-            "username": "refreshuser",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": "refreshuser@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": "refreshuser",
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": "refreshuser@test.com",
+            "password": "testpass123"
         }
-        login_response = client.post("/api/auth/login", json=login_data)
+        client.post("/api/auth/login", json=login_data)
         
         # Refresh token
         response = client.post("/api/auth/refresh")
         assert response.status_code == 200
-        assert "access_token" in response.json()
+        assert "access_token" in response.cookies
     
     def test_logout(self, client):
         """Test logout functionality"""
         # Register and login
         user_data = {
-            "username": "logoutuser",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": "logoutuser@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": "logoutuser",
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": "logoutuser@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/login", json=login_data)
         
@@ -163,10 +147,10 @@ class TestAuthentication:
         assert response.status_code == 401
     
     @pytest.mark.parametrize("invalid_data,expected_status", [
-        ({"username": "", "password": "pass"}, 422),  # Empty username
-        ({"username": "user", "password": ""}, 422),  # Empty password
-        ({"username": "user", "password": "short"}, 422),  # Short password
-        ({"username": "a" * 51, "password": "validpass"}, 422),  # Too long username
+        ({"email": "", "password": "pass"}, 422),  # Empty email
+        ({"email": "user", "password": ""}, 422),  # Empty password
+        ({"email": "user", "password": "short"}, 422),  # Short password
+        ({"email": "a" * 51 + "@test.com", "password": "validpass"}, 422),  # Too long email
     ])
     def test_register_validation(self, client, invalid_data, expected_status):
         """Test registration validation"""
@@ -174,8 +158,8 @@ class TestAuthentication:
         assert response.status_code == expected_status
     
     @pytest.mark.parametrize("invalid_data,expected_status", [
-        ({"username": "", "password": "pass"}, 422),  # Empty username
-        ({"username": "user", "password": ""}, 422),  # Empty password
+        ({"email": "", "password": "pass"}, 422),  # Empty email
+        ({"email": "user", "password": ""}, 422),  # Empty password
     ])
     def test_login_validation(self, client, invalid_data, expected_status):
         """Test login validation"""

@@ -8,22 +8,22 @@ class TestAPIKeys:
     
     def test_add_api_key(self, client):
         """Test adding an API key"""
-        # First register and login to get token
+        # First register and login to get token (from cookie)
         user_data = {
-            "username": f"apikeyuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"apikeyuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        
+        # Get token from cookie, not JSON body
+        assert "access_token" in login_response.cookies, f"No cookie set. Response: {login_response.json()}"
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -42,20 +42,17 @@ class TestAPIKeys:
         """Test listing API keys"""
         # Register, login, and add a key first
         user_data = {
-            "username": f"listkeysuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"listkeysuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -76,20 +73,17 @@ class TestAPIKeys:
         """Test getting a specific API key"""
         # Register, login, and add a key first
         user_data = {
-            "username": f"getkeyuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"getkeyuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -110,20 +104,17 @@ class TestAPIKeys:
         """Test deleting an API key"""
         # Register, login, and add a key first
         user_data = {
-            "username": f"deletekeyuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"deletekeyuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -154,20 +145,17 @@ class TestAPIKeys:
         """Test adding API key with invalid provider fails"""
         # Register and login first
         user_data = {
-            "username": f"invalidprovider_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"invalidprovider_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
@@ -185,20 +173,17 @@ class TestAPIKeys:
         """Test adding API key with empty key fails"""
         # Register and login first
         user_data = {
-            "username": f"emptykeyuser_{int(time.time())}",
-            "password": "testpass123",
-            "device_id": "test-device"
+            "email": f"emptykeyuser_{int(time.time())}@test.com",
+            "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
         
         login_data = {
-            "username": user_data["username"],
-            "password": "testpass123",
-            "remember_me": True,
-            "device_id": "test-device"
+            "email": user_data["email"],
+            "password": "testpass123"
         }
         login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.json()["access_token"]
+        token = login_response.cookies["access_token"]
         
         headers = {"Authorization": f"Bearer {token}"}
         
