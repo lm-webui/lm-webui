@@ -6,6 +6,9 @@
     "assets": [],
     "scripts": []
   },
+  "overrides": {
+    "minimatch": ">=10.2.1"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -35,7 +38,6 @@
   },
   "devDependencies": {
     "@hookform/resolvers": "^3.9.0",
-    "radix-ui": "^1.4.3",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@swc/core": "^1.11.24",
@@ -49,8 +51,8 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@types/three": "^0.182.0",
-    "@typescript-eslint/eslint-plugin": "^7.13.1",
-    "@typescript-eslint/parser": "^7.13.1",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
     "@vitejs/plugin-react-swc": "^3.5.0",
     "autoprefixer": "^10.4.24",
     "class-variance-authority": "^0.7.1",
@@ -59,9 +61,9 @@
     "cors": "^2.8.6",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.3.0",
-    "eslint": "^8.57.0",
-    "eslint-plugin-react-hooks": "^4.6.0",
-    "eslint-plugin-react-refresh": "^0.4.7",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.0",
     "framer-motion": "^12.29.2",
     "globals": "^17.2.0",
     "input-otp": "^1.4.2",
@@ -70,6 +72,7 @@
     "next-themes": "^0.4.6",
     "postcss": "^8.5.6",
     "prettier": "^3.8.1",
+    "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-day-picker": "^9.13.0",
     "react-dom": "^19.2.4",
