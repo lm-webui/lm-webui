@@ -11,7 +11,7 @@ RUN npm run build
 
 # --- Stage 2: Runtime Environment (Python 3.12) ---
 # Using 3.12 for stable llama-cpp-python wheels
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim-trixie
 
 WORKDIR /backend
 
