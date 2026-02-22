@@ -6,26 +6,27 @@ WORKDIR /backend
 
 # Check if required tools exist, install only if missing
 RUN command -v python3 >/dev/null 2>&1 || { echo "Python3 not found"; exit 1; }
-RUN command -v pip3 >/dev/null 2>&1 || python3 -m ensurepip --upgrade || true
+RUN python3 -m ensurepip --upgrade 2>/dev/null || true
+RUN command -v pip3 >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1 || { apt-get update && apt-get install -y python3-pip; } || true
 
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
 
-RUN pip3 install --no-cache-dir --upgrade pip
+RUN python3 -m pip install --no-cache-dir --upgrade pip
 
 # 3. Install PyTorch with ROCm support
-RUN pip3 install --no-cache-dir \
+RUN python3 -m pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/rocm5.7
 
 # 4. Install llama-cpp-python with ROCm support
 # Note: ROCm support requires building from source or using pre-built wheels
-RUN pip3 install --no-cache-dir \
+RUN python3 -m pip install --no-cache-dir \
     llama-cpp-python==0.3.16 \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
 
 # 6. Copy Application Code
 COPY backend/ ./backend/
