@@ -1,6 +1,6 @@
 # CPU-only variant - lightweight, works everywhere
 # Use this for servers without GPU or testing
-FROM python:3.13-slim-bookworm
+FROM python:3.13-slim-trixie
 
 WORKDIR /backend
 

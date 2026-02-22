@@ -1,6 +1,6 @@
 # ROCm variant - optimized for AMD GPUs (RX 7000+, CDNA architectures)
 # Requires ROCm 5.6+
-FROM rocm/ubuntu:22.04
+FROM rocm/rocm-terminal:latest
 
 WORKDIR /backend
 
