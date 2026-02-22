@@ -4,30 +4,29 @@ FROM rocm/rocm-terminal:latest
 
 WORKDIR /backend
 
-# 1. Install system dependencies + Python
+# 1. System Dependencies (no Python - use base image Python)
 RUN apt-get update && apt-get install -y \
-    python3.11 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
 
-RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir --upgrade pip
 
 # 3. Install PyTorch with ROCm support
-RUN pip install --no-cache-dir \
+RUN pip3 install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/rocm5.7
 
 # 4. Install llama-cpp-python with ROCm support
 # Note: ROCm support requires building from source or using pre-built wheels
-RUN pip install --no-cache-dir \
+RUN pip3 install --no-cache-dir \
     llama-cpp-python==0.3.16 \
     --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 # 6. Copy Application Code
 COPY backend/ ./backend/
