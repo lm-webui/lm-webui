@@ -1,7 +1,7 @@
 {
   "name": "lm-webui",
   "private": true,
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "All-in-one Local AI Interface and LLM Runtime, with Multimodal-RAG System, and Multi-Provider Support.",
 
   "scripts": {
@@ -31,8 +31,8 @@
   "keywords": [
     "llm",
     "ai",
-    "react",
-    "vite",
+    "webui",
+    "gguf",
     "fastapi",
     "typescript"
   ],

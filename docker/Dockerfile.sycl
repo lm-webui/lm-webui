@@ -1,6 +1,6 @@
 # SYCL variant - optimized for Intel Arc GPUs (Discrete)
 # Requires Intel oneAPI Base Toolkit
-FROM intel/oneapi-basekit:debian12
+FROM intel/oneapi-basekit:devel-ubuntu22.04
 
 WORKDIR /backend
 
