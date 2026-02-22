@@ -65,8 +65,34 @@ check_prerequisites() {
     
     # Check if Docker daemon is running
     if ! docker info &> /dev/null; then
-        log_error "Docker daemon is not running. Please start Docker."
-        exit 1
+        log_warning "Docker daemon is not accessible. Attempting to fix permissions..."
+        
+        # Check if user is in docker group
+        if groups | grep -q '\bdocker\b'; then
+            log_error "User is in docker group but still cannot access Docker. Try restarting your terminal session."
+            exit 1
+        fi
+        
+        # Try to add user to docker group
+        log_info "Adding user to docker group..."
+        if sudo usermod -aG docker $USER 2>/dev/null; then
+            log_success "Added to docker group!"
+            log_info "Please log out and log back in, or run: newgrp docker"
+            log_info "Alternatively, re-run this script with: newgrp docker"
+            
+            # Try with newgrp in a subshell
+            if newgrp docker -c "docker info" &>/dev/null; then
+                log_success "Docker is now accessible!"
+            else
+                log_error "Could not access Docker after group change."
+                log_info "Please log out and log back in, then run the installer again."
+                exit 1
+            fi
+        else
+            log_error "Failed to add user to docker group."
+            log_info "Try running with sudo: curl -sSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | sudo bash"
+            exit 1
+        fi
     fi
     
     log_success "All prerequisites satisfied"
@@ -175,14 +201,14 @@ start_application() {
     log_info "Starting LM WebUI..."
     
     # Check if containers are already running
-    if docker-compose ps 2>/dev/null | grep -q "llm-webui-v1"; then
+    if docker compose ps 2>/dev/null | grep -q "lm-webui"; then
         log_warning "LM WebUI is already running. Restarting..."
-        docker-compose down
+        docker compose down
     fi
     
     # Build and start
     log_info "Building Docker images (this may take a few minutes)..."
-    docker-compose up --build -d
+    docker compose up --build -d
     
     # Wait for application to start
     log_info "Waiting for application to start..."
