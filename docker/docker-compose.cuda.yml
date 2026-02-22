@@ -1,0 +1,23 @@
+# CUDA variant - NVIDIA GPUs
+# Usage: docker compose -f docker-compose.cuda.yml up -d
+# Or: docker compose -f docker-compose.yml -f docker/docker-compose.cuda.yml up -d
+services:
+  lm-webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cuda
+    image: ghcr.io/lm-webui/lm-webui:cuda-latest
+    # Use nvidia runtime for GPU access (doesn't require Swarm mode)
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - FORCED_BACKEND=cuda
+    # Alternative: use deploy for Swarm mode (requires nvidia-container-toolkit with CDI)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

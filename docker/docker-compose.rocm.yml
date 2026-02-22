@@ -1,0 +1,17 @@
+# ROCm variant - AMD GPUs
+services:
+  lm-webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.rocm
+    image: ghcr.io/lm-webui/lm-webui:rocm-latest
+    environment:
+      - FORCED_BACKEND=rocm
+      - HIP_VISIBLE_DEVICES=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: amd
+              count: 1
+              capabilities: [gpu]

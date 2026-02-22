@@ -1,0 +1,11 @@
+# Metal variant - macOS (Apple Silicon)
+# Note: Docker on macOS doesn't support Metal GPU acceleration
+# For best performance, use native installation instead
+services:
+  lm-webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.metal
+    image: ghcr.io/lm-webui/lm-webui:metal-latest
+    environment:
+      - FORCED_BACKEND=cpu # Metal not available in Docker

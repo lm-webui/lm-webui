@@ -1,0 +1,50 @@
+# SYCL variant - optimized for Intel Arc GPUs (Discrete)
+# Requires Intel oneAPI Base Toolkit
+FROM intel/oneapi-basekit:debian12
+
+WORKDIR /backend
+
+# 1. Install system dependencies + Python
+RUN apt-get update && apt-get install -y \
+    python3.11 python3-pip python3-venv \
+    libgomp1 libstdc++6 curl git \
+    && rm -rf /var/lib/apt/lists/*
+
+# 2. Python Environment
+ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
+
+RUN pip3 install --upgrade pip
+
+# 3. Install PyTorch with SYCL support (Intel IPEX)
+RUN pip install --no-cache-dir \
+    torch torchvision --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
+
+# 4. Install llama-cpp-python with SYCL support
+# Note: SYCL support may require building from source
+RUN pip install --no-cache-dir llama-cpp-python==0.3.16
+
+# 5. Install Python dependencies
+COPY backend/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# 6. Copy Application Code
+COPY backend/ ./backend/
+
+# 7. Create Persistent Directories
+RUN mkdir -p /backend/data/qdrant_db \
+             /backend/media/uploads \
+             /backend/data/memory \
+             /backend/data/models \
+             /backend/app/persistent_build
+
+# 8. Environment
+ENV PYTHONPATH=/backend
+ENV CONFIG_PATH=/backend/config.yaml
+ENV FORCED_BACKEND=sycl
+ENV SYCL_CACHE_DISABLE=0
+
+EXPOSE 8000
+
+COPY docker-entrypoint.sh /
+RUN chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]

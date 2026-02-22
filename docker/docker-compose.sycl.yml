@@ -1,0 +1,17 @@
+# SYCL variant - Intel Arc GPUs
+services:
+  lm-webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sycl
+    image: ghcr.io/lm-webui/lm-webui:sycl-latest
+    environment:
+      - FORCED_BACKEND=sycl
+      - SYCL_CACHE_DISABLE=0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: intel
+              count: 1
+              capabilities: [gpu]

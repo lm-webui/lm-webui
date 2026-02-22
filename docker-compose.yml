@@ -2,11 +2,11 @@ services:
   lm-webui:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile.cuda
     image: lm-webui:production
     container_name: lm-webui-v1
     ports:
-      - "7070:8000" # Expose port 8000 (FastAPI backend) to host port 7070
+      - "7070:8000"
     volumes:
       # Persistent System Data (Qdrant, SQLite, Models)
       - app_data:/backend/data
@@ -16,7 +16,7 @@ services:
       - ./backend/config.yaml:/backend/config.yaml
       # Persistent Build Cache (for JIT compilation speedups)
       - build_cache:/app/persistent_build
-      # Mount models directory for easier model management (Optional, from previous setup)
+      # Mount models directory for easier model management
       - ./backend/models:/backend/data/models
       # Mount secrets directory for encryption keys
       - ./backend/.secrets:/backend/.secrets
@@ -25,14 +25,13 @@ services:
       - CONFIG_PATH=/backend/config.yaml
       - APP_PATHS_DATA_DIR=/backend/data
       - APP_PATHS_MEDIA_DIR=/backend/media
+      - FORCED_BACKEND=auto
+      # NVIDIA GPU settings
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    # Use nvidia runtime for GPU access (works without Swarm mode)
+    runtime: nvidia
     restart: unless-stopped
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
 volumes:
   app_data:

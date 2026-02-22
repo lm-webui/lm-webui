@@ -1,0 +1,9 @@
+# CPU variant - No GPU / Server
+services:
+  lm-webui:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.cpu
+    image: ghcr.io/lm-webui/lm-webui:cpu-latest
+    environment:
+      - FORCED_BACKEND=cpu

@@ -1,0 +1,29 @@
+# Docker Compose variants for different GPU backends
+# Usage:
+#   docker compose -f docker-compose.variants.yml -f docker-compose.cuda.yml up -d
+#   docker compose -f docker-compose.variants.yml -f docker-compose.rocm.yml up -d
+
+# Base configuration for all variants
+services:
+  lm-webui:
+    container_name: lm-webui-v1
+    ports:
+      - "7070:8000"
+    volumes:
+      - app_data:/backend/data
+      - app_media:/backend/media
+      - ./backend/config.yaml:/backend/config.yaml
+      - build_cache:/backend/app/persistent_build
+      - ./backend/models:/backend/data/models
+      - ./backend/.secrets:/backend/.secrets
+    environment:
+      - HF_HOME=/backend/data/models
+      - CONFIG_PATH=/backend/config.yaml
+      - APP_PATHS_DATA_DIR=/backend/data
+      - APP_PATHS_MEDIA_DIR=/backend/media
+    restart: unless-stopped
+
+volumes:
+  app_data:
+  app_media:
+  build_cache:

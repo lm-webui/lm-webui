@@ -176,6 +176,9 @@ EOF
 setup_repository() {
     log_info "Setting up repository..."
     
+    # Determine GitHub org/user for GHCR images
+    ORG_OR_USER="lm-webui"  # Default - change to your org/user
+    
     # Check if we're already in the lm-webui directory
     if [ -f "docker-compose.yml" ] && [ -f "Dockerfile" ]; then
         log_info "Already in lm-webui directory"
@@ -206,9 +209,60 @@ start_application() {
         docker compose down
     fi
     
-    # Build and start
-    log_info "Building Docker images (this may take a few minutes)..."
-    docker compose up --build -d
+    # Detect GPU and use appropriate image
+    log_info "Detecting GPU for optimal image..."
+    GPU_IMAGE=""
+    
+    if command -v nvidia-smi &> /dev/null; then
+        GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
+        log_info "NVIDIA GPU detected: $GPU_NAME"
+        GPU_VARIANT="cuda"
+        
+        # Check if nvidia-container-toolkit is installed
+        if ! command -v nvidia-container-cli &> /dev/null; then
+            log_warning "NVIDIA Container Toolkit not found!"
+            log_info "Installing NVIDIA Container Toolkit..."
+            distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+            curl -fsSL https://nvidia.github.io/nvidia-docker/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-docker-keyring.gpg
+            echo "deb [signed-by=/usr/share/keyrings/nvidia-docker-keyring.gpg] https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list" | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+            sudo apt-get update
+            sudo apt-get install -y nvidia-container-toolkit
+            sudo systemctl restart docker
+            log_success "NVIDIA Container Toolkit installed!"
+        fi
+    elif [[ "$OSTYPE" == "darwin*" ]] && [[ "$(uname -m)" == "arm64" ]]; then
+        log_info "Apple Silicon detected (Metal)"
+        log_warning "Note: Metal acceleration requires native installation, not Docker"
+        GPU_VARIANT="metal"
+    elif command -v rocm-smi &> /dev/null; then
+        log_info "AMD GPU detected (ROCm)"
+        GPU_VARIANT="rocm"
+    else
+        log_info "No GPU detected - using CPU image"
+        GPU_VARIANT="cpu"
+    fi
+    
+    # Check if pre-built images are available on GHCR
+    GHCR_IMAGE="ghcr.io/$ORG_OR_USER/lm-webui:$GPU_VARIANT-latest"
+    
+    # Try to pull pre-built image first (faster)
+    if docker pull "$GHCR_IMAGE" &>/dev/null; then
+        log_success "Pulled pre-built image: $GHCR_IMAGE"
+        # Use pulled image instead of building
+        export IMAGE="$GHCR_IMAGE"
+        # Remove build section from compose
+        if [ -f "docker-compose.yml" ]; then
+            # Update compose to use image without building
+            sed -i 's/^\( *image:.*\)/# \1  # Using pre-built image/; s/^\( *build:\)/# \1  # Using pre-built image/' docker-compose.yml 2>/dev/null || true
+        fi
+        docker compose up -d
+    else
+        log_info "Pre-built image not available, building locally..."
+        log_info "Tip: Star the repo to trigger image builds!"
+        # Fall back to local build
+        docker compose build -t "lm-webui:$GPU_VARIANT" || docker build -t lm-webui:production .
+        docker compose up -d
+    fi
     
     # Wait for application to start
     log_info "Waiting for application to start..."
