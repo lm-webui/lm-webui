@@ -4,10 +4,9 @@ FROM rocm/rocm-terminal:latest
 
 WORKDIR /backend
 
-# 1. System Dependencies (no Python - use base image Python)
-RUN apt-get update && apt-get install -y \
-    libgomp1 libstdc++6 curl git \
-    && rm -rf /var/lib/apt/lists/*
+# Check if required tools exist, install only if missing
+RUN command -v python3 >/dev/null 2>&1 || { echo "Python3 not found"; exit 1; }
+RUN command -v pip3 >/dev/null 2>&1 || python3 -m ensurepip --upgrade || true
 
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
