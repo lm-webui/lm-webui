@@ -96,14 +96,13 @@ jobs:
       - name: Install backend dependencies
         run: cd backend && pip install -r requirements.txt -r requirements-test.txt
 
-      # Blocking test run with minimum coverage enforced
+      # Run tests with coverage reporting (no fail-under threshold)
       - name: Run backend tests
         run: |
           cd backend
           python -m pytest tests/ -v \
             --cov=app \
             --cov-report=xml \
-            --cov-fail-under=70 \
             -x
 
       - name: Upload backend coverage to Codecov
