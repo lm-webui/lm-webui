@@ -178,9 +178,14 @@ EOF
         log_info ".env file already exists"
     fi
     
-    # Create models directory
+    # Create required persistent directories
     mkdir -p ./backend/models
-    log_info "Created models directory at ./backend/models"
+    mkdir -p ./backend/rag/embed ./backend/rag/ocr ./backend/rag/rerank ./backend/rag/vision
+    mkdir -p ./backend/data/sql_db ./backend/data/qdrant_db ./backend/data/memory
+    mkdir -p ./backend/media/generated ./backend/media/uploads
+    mkdir -p ./backend/.secrets
+    
+    log_info "Created required data and model directories"
     
     # Note: Docker uses volumes for data and media, not host directories
     log_info "Docker volumes will be created automatically for data and media storage"
@@ -189,9 +194,6 @@ EOF
 # Clone or use existing repository
 setup_repository() {
     log_info "Setting up repository..."
-    
-    # Determine GitHub org/user for GHCR images
-    ORG_OR_USER="lm-webui"  # Default - change to your org/user
     
     # Check if we're already in the lm-webui directory
     if [ -f "docker-compose.yml" ] && [ -f "Dockerfile" ]; then
@@ -235,14 +237,23 @@ start_application() {
         # Check if nvidia-container-toolkit is installed
         if ! command -v nvidia-container-cli &> /dev/null; then
             log_warning "NVIDIA Container Toolkit not found!"
-            log_info "Installing NVIDIA Container Toolkit..."
-            distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-            curl -fsSL https://nvidia.github.io/nvidia-docker/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-docker-keyring.gpg
-            echo "deb [signed-by=/usr/share/keyrings/nvidia-docker-keyring.gpg] https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list" | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+            log_info "Installing NVIDIA Container Toolkit using official repository..."
+            
+            # Official NVIDIA Container Toolkit installation for 2024/2025
+            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
+              && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+                sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+                sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+            
             sudo apt-get update
             sudo apt-get install -y nvidia-container-toolkit
+            
+            # Configure and restart Docker
+            log_info "Configuring NVIDIA Container Runtime..."
+            sudo nvidia-container-toolkit runtime configure --runtime=docker
             sudo systemctl restart docker
-            log_success "NVIDIA Container Toolkit installed!"
+            
+            log_success "NVIDIA Container Toolkit installed and configured!"
         fi
     elif [[ "$OSTYPE" == "darwin*" ]] && [[ "$(uname -m)" == "arm64" ]]; then
         log_info "Apple Silicon detected (Metal)"
@@ -260,18 +271,13 @@ start_application() {
     fi
     
     # Check if pre-built images are available on GHCR
-    GHCR_IMAGE="ghcr.io/$ORG_OR_USER/lm-webui:$GPU_VARIANT-latest"
+    GHCR_IMAGE="ghcr.io/lm-webui/lm-webui:$GPU_VARIANT-latest"
     
     # Try to pull pre-built image first (faster)
     if docker pull "$GHCR_IMAGE" &>/dev/null; then
         log_success "Pulled pre-built image: $GHCR_IMAGE"
         # Use pulled image instead of building
-        export IMAGE="$GHCR_IMAGE"
-        # Remove build section from compose
-        if [ -f "docker-compose.yml" ]; then
-            # Update compose to use image without building
-            sed -i 's/^\( *image:.*\)/# \1  # Using pre-built image/; s/^\( *build:\)/# \1  # Using pre-built image/' docker-compose.yml 2>/dev/null || true
-        fi
+        export IMAGE_NAME="$GHCR_IMAGE"
         
         # Determine compose files based on GPU
         COMPOSE_FILES="-f docker-compose.yml"
@@ -283,14 +289,13 @@ start_application() {
             COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
         fi
         
+        # We use env variable to override image in compose if needed, but the override files 
+        # already point to the correct ghcr.io images.
         docker compose $COMPOSE_FILES up -d
     else
-        log_info "Pre-built image not available, building locally..."
-        log_info "Tip: Star the repo to trigger image builds!"
+        log_info "Pre-built image not available locally or on registry, building..."
         
         # Fall back to local build
-        docker compose build -t "lm-webui:$GPU_VARIANT" || docker build -t lm-webui:production .
-        
         # Determine compose files based on GPU
         COMPOSE_FILES="-f docker-compose.yml"
         if [ "$GPU_VARIANT" == "cuda" ]; then
@@ -299,8 +304,11 @@ start_application() {
             COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.rocm.yml"
         elif [ "$GPU_VARIANT" == "sycl" ]; then
             COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
+        elif [ "$GPU_VARIANT" == "metal" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.metal.yml"
         fi
-        
+
+        docker compose $COMPOSE_FILES build
         docker compose $COMPOSE_FILES up -d
     fi
     

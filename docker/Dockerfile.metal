@@ -59,10 +59,17 @@ COPY backend/ ./
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 # 8. Create Persistent Directories
-RUN mkdir -p /backend/data/qdrant_db \
-             /backend/media/uploads \
+RUN mkdir -p /backend/data/sql_db \
+             /backend/data/qdrant_db \
              /backend/data/memory \
-             /backend/data/models \
+             /backend/media/generated \
+             /backend/media/uploads \
+             /backend/models \
+             /backend/rag/embed \
+             /backend/rag/ocr \
+             /backend/rag/rerank \
+             /backend/rag/vision \
+             /backend/.secrets \
              /backend/app/persistent_build
 
 # 9. Environment

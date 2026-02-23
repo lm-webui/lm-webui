@@ -18,8 +18,9 @@ services:
       - app_media:/backend/media
       - ./backend/config.yaml:/backend/config.yaml
       - build_cache:/backend/app/persistent_build
-      - ./backend/models:/backend/data/models
-      - ./backend/.secrets:/backend/.secrets # Removed :ro to allow app to generate secrets
+      - ./backend/models:/backend/models
+      - ./backend/rag:/backend/rag
+      - ./backend/.secrets:/backend/.secrets
 
     environment:
       - HF_HOME=/backend/data/models
