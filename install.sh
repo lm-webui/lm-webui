@@ -290,7 +290,8 @@ start_application() {
     GHCR_IMAGE="ghcr.io/lm-webui/lm-webui:$GPU_VARIANT-latest"
     
     # Try to pull pre-built image first (faster)
-    if docker pull "$GHCR_IMAGE" &>/dev/null; then
+    log_info "Downloading pre-built image from GHCR (this may take a while)..."
+    if docker pull "$GHCR_IMAGE"; then
         log_success "Pulled pre-built image: $GHCR_IMAGE"
         # Use pulled image instead of building
         export IMAGE_NAME="$GHCR_IMAGE"
