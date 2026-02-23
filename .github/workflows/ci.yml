@@ -193,6 +193,8 @@ jobs:
           curl -f http://localhost:8000/api/chat/completions -X POST -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"test"}]}' || echo "AI endpoint may require authentication"
           echo "Container health verification passed"
       - name: Run Docker Compose integration test
+        env:
+          FORCED_BACKEND: cpu
         run: |
           docker compose up -d
           sleep 30
