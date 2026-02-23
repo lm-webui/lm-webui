@@ -6,7 +6,7 @@ WORKDIR /backend
 
 # 1. Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.13 python3-pip python3-venv \
+    python3.12 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git \
     && rm -rf /var/lib/apt/lists/* || true
 

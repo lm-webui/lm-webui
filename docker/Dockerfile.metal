@@ -2,7 +2,7 @@
 # Note: Docker on macOS doesn't support Metal GPU acceleration in containers
 # For best performance on Apple Silicon, use native installation instead of Docker
 # This variant provides CPU-only fallback for Docker Desktop on macOS
-FROM python:3.13-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 WORKDIR /backend
 
