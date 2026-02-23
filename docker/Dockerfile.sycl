@@ -1,47 +1,77 @@
-# SYCL variant - optimized for Intel Arc GPUs (Discrete)
-# Requires Intel oneAPI Base Toolkit
-FROM intel/oneapi-runtime:latest
+# ==============================================================================
+# SYCL / INTEL ARC DOCKERFILE
+# ==============================================================================
+# Optimized for Intel Arc GPUs (Discrete) using Intel oneAPI Base Toolkit
+# ==============================================================================
+
+# --- Stage 1: Build Frontend (Static Assets) ---
+FROM node:24-alpine AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend/package*.json ./
+# Install dependencies for build
+RUN npm ci
+COPY frontend/ ./ 
+# Output: /frontend/dist
+RUN npm run build
+
+# --- Stage 2: Runtime Environment (SYCL Optimized) ---
+FROM intel/oneapi-basekit:2024.0.0-devel-ubuntu22.04
 
 WORKDIR /backend
 
-# Check if required tools exist, install only if missing
-RUN command -v python3 >/dev/null 2>&1 || { echo "Python3 not found"; exit 1; }
-RUN python3 -m ensurepip --upgrade 2>/dev/null || true
-RUN command -v pip3 >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1 || { apt-get update && apt-get install -y python3-pip; } || true
+# 1. System Dependencies
+# Ensure we have Python and build tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
+    libgomp1 libstdc++6 curl git build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment
-ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
+ENV PYTHONUNBUFFERED=1 \
+    PIP_ROOT_USER_ACTION=ignore \
+    PIP_NO_CACHE_DIR=1
 
-# Try to upgrade pip, but don't fail if it doesn't work
-RUN python3 -m pip install --no-cache-dir --upgrade pip --break-system-packages || python3 -m pip install --no-cache-dir --upgrade pip || true
+# Upgrade pip (allow system break since we are in a container)
+RUN python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
 
-# 3. Install PyTorch with SYCL support (Intel IPEX)
-RUN python3 -m pip install --no-cache-dir --break-system-packages \
+# 3. Install PyTorch with SYCL/XPU support (Intel Extension for PyTorch)
+# Using the stable XPU release wheel
+RUN python3 -m pip install --break-system-packages \
     torch torchvision --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
 
-# 4. Install llama-cpp-python with SYCL support
-# Note: SYCL support may require building from source
-RUN python3 -m pip install --no-cache-dir --break-system-packages llama-cpp-python==0.3.16
+# 4. Build llama-cpp-python from source with SYCL support
+# We must compile it against the oneAPI headers provided by the base image
+ENV CMAKE_ARGS="-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
+ENV FORCE_CMAKE=1
+
+RUN python3 -m pip install --break-system-packages llama-cpp-python==0.3.16
 
 # 5. Install Python dependencies
-COPY backend/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
+COPY backend/requirements.txt ./requirements.txt
+RUN python3 -m pip install --break-system-packages -r requirements.txt
 
 # 6. Copy Application Code
-COPY backend/ ./backend/
+COPY backend/ ./
 
-# 7. Create Persistent Directories
+# 7. Copy Frontend Assets from Builder Stage
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+
+# 8. Create Persistent Directories
 RUN mkdir -p /backend/data/qdrant_db \
              /backend/media/uploads \
              /backend/data/memory \
              /backend/data/models \
              /backend/app/persistent_build
 
-# 8. Environment
+# 9. Hardware Acceleration Variables
 ENV PYTHONPATH=/backend
 ENV CONFIG_PATH=/backend/config.yaml
 ENV FORCED_BACKEND=sycl
-ENV SYCL_CACHE_DISABLE=0
+# Enable persistent cache for faster startup on subsequent runs
+ENV SYCL_CACHE_PERSISTENT=1
+# Use Level Zero as the default backend for Arc GPUs
+ENV ONEAPI_DEVICE_SELECTOR=level_zero:gpu
 
 EXPOSE 8000
 

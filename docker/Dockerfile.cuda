@@ -1,52 +1,63 @@
-# CUDA variant - optimized for NVIDIA GPUs (RTX/GTX/Ada Lovelace)
-# Requires NVIDIA Container Toolkit
+# --- Stage 1: Build Frontend (Static Assets) ---
+FROM node:24-alpine AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend/package*.json ./
+# Install dependencies for build
+RUN npm ci
+COPY frontend/ ./ 
+# Output: /frontend/dist
+RUN npm run build
+
+# --- Stage 2: Runtime Environment (CUDA Optimized) ---
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 WORKDIR /backend
 
-# 1. System Dependencies - use what base image provides
-# Try apt first, but don't fail if it doesn't work
-RUN apt-get update --allow-insecure-repositories 2>/dev/null || true \
-    && apt-get install -y --allow-unauthenticated \
+# 1. System Dependencies
+# Install Python 3.10+ (Ubuntu 22.04 has 3.10 by default)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
-    libgomp1 libstdc++6 curl git 2>/dev/null || true \
-    && rm -rf /var/lib/apt/lists/* || true
-
-# Check for Python, use what's available
-RUN command -v python3 >/dev/null 2>&1 || command -v python >/dev/null 2>&1 || { echo "Python not found"; exit 1; }
-RUN python3 --version >/dev/null 2>&1 || python --version >/dev/null 2>&1
-
-# Try to get pip
-RUN python3 -m ensurepip --upgrade 2>/dev/null || python -m ensurepip --upgrade 2>/dev/null || true
-RUN command -v pip3 >/dev/null 2>&1 || command -v pip >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1 || python -m pip --version >/dev/null 2>&1 || true
+    libgomp1 libstdc++6 curl git build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment
-ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
+ENV PYTHONUNBUFFERED=1 \
+    PIP_ROOT_USER_ACTION=ignore \
+    PIP_NO_CACHE_DIR=1
 
-RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel || python -m pip install --no-cache-dir --upgrade pip setuptools wheel || true
+# Upgrade pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
 
-# 3. Install PyTorch with CUDA 12.1
-RUN python3 -m pip install --no-cache-dir \
-    torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# 3. Install PyTorch with CUDA support (CUDA 12.4)
+# Using index-url to force CUDA version
+RUN python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 
 # 4. Install llama-cpp-python with CUDA support
-RUN python3 -m pip install --no-cache-dir llama-cpp-python
+# We must set CMAKE_ARGS to enable CUBLAS/CUDA support if compiling from source,
+# but using the wheel is preferred if available.
+# Since we want production stability, we try the wheel first.
+RUN python3 -m pip install llama-cpp-python==0.3.16 \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
 
 # 5. Install Python dependencies
-COPY backend/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
+COPY backend/requirements.txt ./requirements.txt
+RUN python3 -m pip install -r requirements.txt
 
 # 6. Copy Application Code
-COPY backend/ ./backend/
+COPY backend/ ./
 
-# 7. Create Persistent Directories
+# 7. Copy Frontend Assets from Builder Stage
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
+
+# 8. Create Persistent Directories
 RUN mkdir -p /backend/data/qdrant_db \
              /backend/media/uploads \
              /backend/data/memory \
              /backend/data/models \
              /backend/app/persistent_build
 
-# 8. Environment
+# 9. Environment
 ENV PYTHONPATH=/backend
 ENV CONFIG_PATH=/backend/config.yaml
 ENV FORCED_BACKEND=cuda
@@ -55,4 +66,5 @@ EXPOSE 8000
 
 COPY docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh
+
 ENTRYPOINT ["/docker-entrypoint.sh"]

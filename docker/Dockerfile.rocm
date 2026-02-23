@@ -1,46 +1,73 @@
-# 1. Use a stable development base for ROCm 7.2
+# --- Stage 1: Build Frontend (Static Assets) ---
+FROM node:24-alpine AS frontend-builder
+
+WORKDIR /frontend
+COPY frontend/package*.json ./
+# Install dependencies for build
+RUN npm ci
+COPY frontend/ ./ 
+# Output: /frontend/dist
+RUN npm run build
+
+# --- Stage 2: Runtime Environment (ROCm Optimized) ---
+# Use a stable development base for ROCm (currently targeting 6.x/7.x compatibility)
+# NOTE: user was using rocm/dev-ubuntu-22.04:latest, we stick to it for max compatibility
 FROM rocm/dev-ubuntu-22.04:latest
 
 WORKDIR /backend
 
-# 2. Install modern Python and Build Essentials
-RUN apt-get update && apt-get install -y \
-    python3.12 python3-pip python3-venv \
+# 1. System Dependencies
+# Install Python 3.10+ (Ubuntu 22.04 has 3.10 by default)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python3-venv \
     cmake git build-essential \
+    libgomp1 libstdc++6 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# 3. Set Environment Variables for AMD Hardware
+# 2. Python Environment
 ENV PYTHONUNBUFFERED=1 \
-    PYTORCH_ROCM_ARCH="gfx1100;gfx1101;gfx1030" \
-    CMAKE_ARGS="-DGGML_HIP=ON" \
-    FORCE_CMAKE=1
+    PIP_ROOT_USER_ACTION=ignore \
+    PIP_NO_CACHE_DIR=1
 
-# 4. Install PyTorch for ROCm 7.2
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# 3. Install PyTorch for ROCm
 # The index URL must match the ROCm version for hardware acceleration
-RUN pip3 install --no-cache-dir \
-    torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm7.2
+RUN python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.0
 
-# 5. Build llama-cpp-python from source 
+# 4. Build llama-cpp-python from source 
 # Building from source ensures it compiles against the exact ROCm headers in the image
-RUN pip3 install --no-cache-dir llama-cpp-python==0.3.20
+# We enable HIP (ROCm) support via CMAKE_ARGS
+ENV CMAKE_ARGS="-DGGML_HIP=BLAS -DGGML_HIP_UMA=ON"
+ENV FORCE_CMAKE=1
+# Target GFX architectures: 
+# gfx1100 (7900 XTX), gfx1101 (7800 XT), gfx1030 (6800/6900 XT), gfx1102 (7600)
+ENV HIP_VISIBLE_DEVICES=0 
+ENV GYP_DEFINES="hip_arch=gfx1100,gfx1101,gfx1030,gfx1102"
 
-# 6. Install App Dependencies
-COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m pip install llama-cpp-python==0.3.16
 
-# 7. Copy Application Code
-COPY backend/ ./backend/
+# 5. Install Python dependencies
+COPY backend/requirements.txt ./requirements.txt
+RUN python3 -m pip install -r requirements.txt
+
+# 6. Copy Application Code
+COPY backend/ ./
+
+# 7. Copy Frontend Assets from Builder Stage
+COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 # 8. Create Persistent Directories
 RUN mkdir -p /backend/data/qdrant_db \
              /backend/media/uploads \
-             /backend/data/models
+             /backend/data/memory \
+             /backend/data/models \
+             /backend/app/persistent_build
 
 # 9. Hardware Acceleration Variables
 ENV PYTHONPATH=/backend
+ENV CONFIG_PATH=/backend/config.yaml
 ENV FORCED_BACKEND=rocm
-# Use HSA_OVERRIDE if using a card not "officially" supported by ROCm (e.g. RX 6700)
-# ENV HSA_OVERRIDE_GFX_VERSION=10.3.0 
 
 EXPOSE 8000
 

@@ -1,3 +1,14 @@
+# ==============================================================================
+# DEFAULT DOCKERFILE (CPU OPTIMIZED)
+# ==============================================================================
+# NOTE: This is the default CPU-only image. 
+# For GPU acceleration, use the specialized Dockerfiles in the `docker/` folder:
+#   - docker/Dockerfile.cuda  (NVIDIA GPUs)
+#   - docker/Dockerfile.rocm  (AMD GPUs)
+#   - docker/Dockerfile.sycl  (Intel ARC GPUs)
+#   - docker/Dockerfile.metal (Apple Silicon - use natively, not recommended in Docker)
+# ==============================================================================
+
 # --- Stage 1: Build Frontend (Static Assets) ---
 FROM node:24-alpine AS frontend-builder
 
@@ -9,108 +20,59 @@ COPY frontend/ ./
 # Output: /frontend/dist
 RUN npm run build
 
-# --- Stage 2: Runtime Environment ---
-# Using NVIDIA CUDA base for GPU support (falls back to CPU if no GPU)
-FROM nvidia/cuda:runtime-ubuntu22.04 AS runtime
+# --- Stage 2: Runtime Environment (CPU Optimized) ---
+FROM python:3.12-slim-bookworm
 
 WORKDIR /backend
 
-# 1. Install system dependencies + Python
+# 1. System Dependencies
+# libgomp1: OpenMP support for llama.cpp
+# libstdc++6: Standard C++ library
+# curl/git: Utility tools
 RUN apt-get update && apt-get install -y \
-    python3.12 python3-pip python3-venv \
-    libgomp1 libstdc++6 curl git \
-    # NVIDIA Container Toolkit for GPU detection
-    gnupg ca-certificates wget && \
-    wget -qO - https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub | apt-key add - && \
-    echo "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /" > /etc/apt/sources.list.d/cuda.list && \
-    echo "deb https://developer.download.nvidia.com/compute/machine-learning/repos/ubuntu2204/x86_64/ /" > /etc/apt/sources.list.d/nvidia-ml.list && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-    libnvidia-container-tools libnvidia-container1 && \
-    rm -rf /var/lib/apt/lists/*
+    libgomp1 libstdc++6 curl git build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# 2. Python Environment Setup
+# 2. Python Environment
 ENV PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
     PIP_NO_CACHE_DIR=1
 
-RUN pip3 install --upgrade pip
+RUN pip install --upgrade pip setuptools wheel
 
-# Install PyTorch with CUDA support
-RUN pip3 install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+# 3. Install CPU-only PyTorch + dependencies FIRST
+# This ensures we don't accidentally pull down CUDA versions
+RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
-# 3. Copy Application Code
-COPY backend/requirements.txt ./backend/
+# 4. Install llama-cpp-python CPU only
+# Pre-installing this ensures it's compiled correctly for the current arch
+RUN pip install llama-cpp-python==0.3.16 \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
 
-# Install llama-cpp-python with CUDA support
-RUN pip3 install llama-cpp-python[cuda]==0.3.16
+# 5. Install Python dependencies
+COPY backend/requirements.txt ./requirements.txt
+RUN pip install -r requirements.txt
 
-# Install other dependencies (filter out platform-specific torch/llama-cpp)
-RUN pip3 install \
-    fastapi \
-    uvicorn[standard] \
-    pydantic \
-    "requests>=2.32.0" \
-    psutil \
-    "aiohttp>=3.11.0" \
-    aiofiles \
-    websockets \
-    sse-starlette \
-    passlib[bcrypt] \
-    pyjwt \
-    "cryptography>=44.0.0" \
-    python-jose[cryptography] \
-    python-dotenv \
-    python-multipart \
-    tiktoken \
-    huggingface-hub \
-    "urllib3>=2.0.0" \
-    ddgs \
-    openai \
-    anthropic \
-    xai-sdk \
-    google-genai==1.62.0 \
-    qdrant-client==1.16.2 \
-    easyocr==1.7.2 \
-    "transformers[torch]==4.49.0" \
-    "accelerate>=0.30.0" \
-    sentence-transformers>=5.2.2 \
-    rank-bm25 \
-    pdfplumber \
-    python-docx \
-    python-pptx \
-    pylightxl \
-    xlrd \
-    markdown \
-    beautifulsoup4>=4.12.0 \
-    "Pillow>=11.0.0" \
-    "torchvision>=0.20.0"
+# 6. Copy Application Code
+COPY backend/ ./
 
-# 4. Copy Backend Code
-COPY backend/ ./backend/
-
-# 5. Copy Frontend Assets
+# 7. Copy Frontend Assets from Builder Stage
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
-# 6. Create Persistent Directories
+# 8. Create Persistent Directories
 RUN mkdir -p /backend/data/qdrant_db \
              /backend/media/uploads \
              /backend/data/memory \
              /backend/data/models \
              /backend/app/persistent_build
 
-# 7. Environment Setup
+# 9. Environment
 ENV PYTHONPATH=/backend
 ENV CONFIG_PATH=/backend/config.yaml
-ENV FORCED_BACKEND=auto
-
-# 8. Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8000/api/health || exit 1
+ENV FORCED_BACKEND=cpu
 
 EXPOSE 8000
 
-# 9. Entrypoint with GPU detection
 COPY docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh
 

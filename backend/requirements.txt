@@ -42,31 +42,8 @@ beautifulsoup4>=4.12.0
 
 # Image & OCR
 Pillow>=11.0.0
-torchvision>=0.20.0
 
 
-# --- CPU / DEFAULT ---
-torch>=2.1.0; platform_system != "Linux" and platform_system != "Darwin"
-llama-cpp-python==0.3.16
-
-# --- APPLE SILICON (M1/M2/M3/M4) ---
-torch>=2.1.0; platform_system == "Darwin"
-llama-cpp-python==0.3.16; platform_system == "Darwin"
-
-# --- LINUX CPU (Docker/Container) ---
---extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-llama-cpp-python==0.3.16; platform_system == "Linux"
-
-# --- NVIDIA CUDA (RTX 3000/4000/5000) ---
---extra-index-url https://download.pytorch.org/whl/cu128
-torch>=2.1.0; platform_system == "Linux" or platform_system == "Windows"
-llama-cpp-python[cuda]==0.3.16; platform_system == "Linux" or platform_system == "Windows"
-
-# --- AMD ROCm (RDNA3/RDNA4) ---
---extra-index-url https://download.pytorch.org/whl/rocm7.2
-torch>=2.1.0; platform_system == "Linux" or platform_system == "Windows"
-llama-cpp-python==0.3.16; platform_system == "Linux" or platform_system == "Windows"
-
-# --- INTEL ARC / SYCL (Arc A/B) ---
---extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
-torch>=2.1.0; platform_system == "Linux" and "xpu" in sys_platform
+# NOTE: Hardware-specific dependencies (torch, torchvision, llama-cpp-python)
+# have been moved to their respective Dockerfiles to prevent conflicts
+# and ensure the correct hardware acceleration libraries are used.
