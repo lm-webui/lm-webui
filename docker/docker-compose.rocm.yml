@@ -1,3 +1,4 @@
+# ROCm variant - AMD RX 7000+ GPUs
 services:
   lm-webui:
     build:
