@@ -11,13 +11,13 @@ RUN npm run build
 
 # --- Stage 2: Runtime Environment ---
 # Using NVIDIA CUDA base for GPU support (falls back to CPU if no GPU)
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04 AS runtime
+FROM nvidia/cuda:runtime-ubuntu22.04 AS runtime
 
 WORKDIR /backend
 
 # 1. Install system dependencies + Python
 RUN apt-get update && apt-get install -y \
-    python3.11 python3-pip python3-venv \
+    python3.12 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git \
     # NVIDIA Container Toolkit for GPU detection
     gnupg ca-certificates wget && \

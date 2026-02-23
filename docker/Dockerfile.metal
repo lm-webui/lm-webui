@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # 4. Install llama-cpp-python (CPU fallback)
-RUN pip install --no-cache-dir llama-cpp-python==0.3.16
+RUN pip install --no-cache-dir llama-cpp-python
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt
