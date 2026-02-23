@@ -10,12 +10,12 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: Runtime Environment (CUDA Optimized) ---
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Using Ubuntu 24.04 as base to provide Python 3.12 by default
+FROM nvidia/cuda:12.4.1-runtime-ubuntu24.04
 
 WORKDIR /backend
 
 # 1. System Dependencies
-# Install Python 3.10+ (Ubuntu 22.04 has 3.10 by default)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git build-essential \

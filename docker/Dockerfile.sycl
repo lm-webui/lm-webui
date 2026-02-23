@@ -16,14 +16,18 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: Runtime Environment (SYCL Optimized) ---
-FROM intel/oneapi-basekit:2024.0.0-devel-ubuntu22.04
+FROM intel/oneapi-basekit:2025.3.1-0-devel-ubuntu22.04
 
 WORKDIR /backend
 
 # 1. System Dependencies
-# Ensure we have Python and build tools
+# Install Python 3.12 explicitly as Ubuntu 22.04 defaults to 3.10
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv \
+    software-properties-common && \
+    add-apt-repository ppa:deadsnakes/ppa -y && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3.12 python3.12-dev python3.12-venv \
     libgomp1 libstdc++6 curl git build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,12 +36,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
     PIP_NO_CACHE_DIR=1
 
-# Upgrade pip (allow system break since we are in a container)
-RUN python3 -m pip install --upgrade pip setuptools wheel --break-system-packages
+# Use Python 3.12 for all subsequent steps
+RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
+    curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
 
 # 3. Install PyTorch with SYCL/XPU support (Intel Extension for PyTorch)
 # Using the stable XPU release wheel
-RUN python3 -m pip install --break-system-packages \
+RUN python3 -m pip install \
     torch torchvision --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
 
 # 4. Build llama-cpp-python from source with SYCL support
@@ -45,11 +50,11 @@ RUN python3 -m pip install --break-system-packages \
 ENV CMAKE_ARGS="-DGGML_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
 ENV FORCE_CMAKE=1
 
-RUN python3 -m pip install --break-system-packages llama-cpp-python==0.3.16
+RUN python3 -m pip install llama-cpp-python==0.3.16
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt ./requirements.txt
-RUN python3 -m pip install --break-system-packages -r requirements.txt
+RUN python3 -m pip install -r requirements.txt
 
 # 6. Copy Application Code
 COPY backend/ ./

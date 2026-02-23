@@ -10,14 +10,12 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: Runtime Environment (ROCm Optimized) ---
-# Use a stable development base for ROCm (currently targeting 6.x/7.x compatibility)
-# NOTE: user was using rocm/dev-ubuntu-22.04:latest, we stick to it for max compatibility
-FROM rocm/dev-ubuntu-22.04:latest
+# Using Ubuntu 24.04 as base to provide Python 3.12 by default
+FROM rocm/dev-ubuntu-24.04:latest
 
 WORKDIR /backend
 
 # 1. System Dependencies
-# Install Python 3.10+ (Ubuntu 22.04 has 3.10 by default)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 python3-pip python3-venv \
     cmake git build-essential \

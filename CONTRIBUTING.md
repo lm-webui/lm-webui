@@ -11,7 +11,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 ### Prerequisites
 
 - Node.js 18+ (for frontend development)
-- Python 3.11+ (for backend development)
+- Python 3.12 (standardized version for backend development)
 - Docker and Docker Compose (for containerized development)
 - Git
 
