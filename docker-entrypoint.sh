@@ -71,12 +71,13 @@ case $FORCED_BACKEND in
         ;;
 esac
 
-# Final Permission Check
-if [[ "$FORCED_BACKEND" != "cpu" ]] && [ ! -w "/dev/dri/renderD128" ] && [ ! -w "/dev/kfd" ]; then
-    echo "❌ ERROR: Hardware detected but PERMISSION DENIED."
-    echo "   Ensure you ran the container with --group-add video --device /dev/dri"
-    # Don't exit, try to fall back
-    export FORCED_BACKEND=cpu
+# Final Permission Check (Only if a hardware backend was selected/detected)
+if [[ "$FORCED_BACKEND" != "cpu" ]]; then
+    if [ ! -w "/dev/dri/renderD128" ] && [ ! -w "/dev/kfd" ] && [ ! -c "/dev/nvidiactl" ]; then
+        echo "❌ ERROR: Hardware backend ($FORCED_BACKEND) requested but device nodes are not accessible."
+        echo "   Falling back to CPU mode."
+        export FORCED_BACKEND=cpu
+    fi
 fi
 
 # 5. Start Backend

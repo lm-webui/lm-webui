@@ -195,14 +195,16 @@ jobs:
       - name: Run Docker Compose integration test
         env:
           FORCED_BACKEND: cpu
+          DOCKERFILE_PATH: docker/Dockerfile.cpu
         run: |
           docker compose up -d
           sleep 30
           docker compose ps
+          # Debug logs if startup fails
+          docker compose logs lm-webui
           # Test through docker compose
           echo "Testing docker compose health..."
           curl --fail http://localhost:7070/health
-          docker compose logs --tail=20 backend
       - name: Cleanup
         if: always()
         run: |
