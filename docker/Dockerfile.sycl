@@ -40,9 +40,6 @@ ENV PYTHONUNBUFFERED=1 \
 # Use Python 3.12 for all subsequent steps
 RUN ln -sf /usr/bin/python3.12 /usr/bin/python3 && \
     curl -sS https://bootstrap.pypa.io/get-pip.py | python3.12
-    
-# Upgrade basic tools
-RUN python3 -m pip install --upgrade pip setuptools wheel
 
 # 3. Install PyTorch with SYCL/XPU support (Intel Extension for PyTorch)
 # Using the stable XPU release wheel

@@ -39,7 +39,7 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
-RUN pip install --upgrade pip setuptools wheel
+# 3. Install CPU-only PyTorch + dependencies FIRST
 
 # 3. Install CPU-only PyTorch + dependencies FIRST
 # This ensures we don't accidentally pull down CUDA versions

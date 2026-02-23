@@ -27,9 +27,6 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_BREAK_SYSTEM_PACKAGES=1
 
-# Upgrade pip
-RUN python3 -m pip install --upgrade pip setuptools wheel
-
 # 3. Install PyTorch with CUDA support (CUDA 12.4)
 # Using index-url to force CUDA version
 RUN python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
