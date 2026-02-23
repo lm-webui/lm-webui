@@ -320,10 +320,6 @@ MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/thumbnails", StaticFiles(directory=MEDIA_DIR / "thumbnails"), name="thumbnails")
 app.mount("/generated", StaticFiles(directory=MEDIA_DIR / "generated"), name="generated")
 
-@app.get("/")
-async def root():
-    return {"message": "LM WebUI Backend - Streamlined Open Source Version"}
-
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "auth": "jwt", "encryption": "fernet"}
