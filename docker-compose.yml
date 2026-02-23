@@ -19,7 +19,7 @@ services:
       - ./backend/config.yaml:/backend/config.yaml
       - build_cache:/backend/app/persistent_build
       - ./backend/models:/backend/data/models
-      - ./backend/.secrets:/backend/.secrets:ro # Added :ro for security
+      - ./backend/.secrets:/backend/.secrets # Removed :ro to allow app to generate secrets
 
     environment:
       - HF_HOME=/backend/data/models

@@ -81,5 +81,5 @@ if [[ "$FORCED_BACKEND" != "cpu" ]]; then
 fi
 
 # 5. Start Backend
-echo "🔥 Launching Uvicorn on $FORCED_BACKEND..."
+echo "Launching Uvicorn on $FORCED_BACKEND..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
