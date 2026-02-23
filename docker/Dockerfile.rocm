@@ -32,17 +32,11 @@ ENV PYTHONUNBUFFERED=1 \
 # The index URL must match the ROCm version for hardware acceleration
 RUN python3 -m pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.0
 
-# 4. Build llama-cpp-python from source 
-# Building from source ensures it compiles against the exact ROCm headers in the image
-# We enable HIP (ROCm) support via CMAKE_ARGS
-ENV CMAKE_ARGS="-DGGML_HIP=BLAS -DGGML_HIP_UMA=ON"
-ENV FORCE_CMAKE=1
-# Target GFX architectures: 
-# gfx1100 (7900 XTX), gfx1101 (7800 XT), gfx1030 (6800/6900 XT), gfx1102 (7600)
-ENV HIP_VISIBLE_DEVICES=0 
-ENV GYP_DEFINES="hip_arch=gfx1100,gfx1101,gfx1030,gfx1102"
-
-RUN python3 -m pip install llama-cpp-python==0.3.16
+# 4. Install llama-cpp-python with ROCm support
+# Using pre-built wheels for ROCm to avoid complex compilation issues
+# Targeting ROCm 6.0 compatible wheels
+RUN python3 -m pip install llama-cpp-python==0.3.16 \
+    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/rocm60
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt ./requirements.txt
