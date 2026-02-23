@@ -194,13 +194,13 @@ jobs:
           echo "Container health verification passed"
       - name: Run Docker Compose integration test
         run: |
-          docker-compose up -d
+          docker compose up -d
           sleep 30
-          docker-compose ps
-          # Test through docker-compose
-          echo "Testing docker-compose health..."
+          docker compose ps
+          # Test through docker compose
+          echo "Testing docker compose health..."
           curl --fail http://localhost:7070/health
-          docker-compose logs --tail=20 backend
+          docker compose logs --tail=20 backend
       - name: Cleanup
         if: always()
         run: |
