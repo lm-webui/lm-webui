@@ -36,7 +36,8 @@ RUN apt-get update && apt-get install -y \
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
 
 RUN pip install --upgrade pip setuptools wheel
 
