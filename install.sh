@@ -105,9 +105,23 @@ check_gpu() {
     if command -v nvidia-smi &> /dev/null; then
         log_success "NVIDIA GPU detected"
         HAS_NVIDIA_GPU=true
-    else
-        log_info "No NVIDIA GPU detected - using CPU mode"
+        HAS_AMD_GPU=false
+        HAS_INTEL_GPU=false
+    elif command -v rocm-smi &> /dev/null; then
+        log_success "AMD GPU detected"
         HAS_NVIDIA_GPU=false
+        HAS_AMD_GPU=true
+        HAS_INTEL_GPU=false
+    elif command -v clinfo &> /dev/null && clinfo | grep -q "Intel.*Graphics"; then
+        log_success "Intel GPU detected"
+        HAS_NVIDIA_GPU=false
+        HAS_AMD_GPU=false
+        HAS_INTEL_GPU=true
+    else
+        log_info "No supported GPU detected - using CPU mode"
+        HAS_NVIDIA_GPU=false
+        HAS_AMD_GPU=false
+        HAS_INTEL_GPU=false
     fi
     
     # Check for Apple Silicon (macOS)
@@ -237,6 +251,9 @@ start_application() {
     elif command -v rocm-smi &> /dev/null; then
         log_info "AMD GPU detected (ROCm)"
         GPU_VARIANT="rocm"
+    elif command -v clinfo &> /dev/null && clinfo | grep -q "Intel.*Graphics"; then
+        log_info "Intel GPU detected (SYCL)"
+        GPU_VARIANT="sycl"
     else
         log_info "No GPU detected - using CPU image"
         GPU_VARIANT="cpu"
@@ -255,13 +272,36 @@ start_application() {
             # Update compose to use image without building
             sed -i 's/^\( *image:.*\)/# \1  # Using pre-built image/; s/^\( *build:\)/# \1  # Using pre-built image/' docker-compose.yml 2>/dev/null || true
         fi
-        docker compose up -d
+        
+        # Determine compose files based on GPU
+        COMPOSE_FILES="-f docker-compose.yml"
+        if [ "$GPU_VARIANT" == "cuda" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.cuda.yml"
+        elif [ "$GPU_VARIANT" == "rocm" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.rocm.yml"
+        elif [ "$GPU_VARIANT" == "sycl" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
+        fi
+        
+        docker compose $COMPOSE_FILES up -d
     else
         log_info "Pre-built image not available, building locally..."
         log_info "Tip: Star the repo to trigger image builds!"
+        
         # Fall back to local build
         docker compose build -t "lm-webui:$GPU_VARIANT" || docker build -t lm-webui:production .
-        docker compose up -d
+        
+        # Determine compose files based on GPU
+        COMPOSE_FILES="-f docker-compose.yml"
+        if [ "$GPU_VARIANT" == "cuda" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.cuda.yml"
+        elif [ "$GPU_VARIANT" == "rocm" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.rocm.yml"
+        elif [ "$GPU_VARIANT" == "sycl" ]; then
+            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
+        fi
+        
+        docker compose $COMPOSE_FILES up -d
     fi
     
     # Wait for application to start

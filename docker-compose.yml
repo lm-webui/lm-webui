@@ -9,21 +9,6 @@ services:
     ports:
       - "7070:8000"
 
-    # 1. Hardware Access (The Modern Way)
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: ${GPU_DRIVER:-nvidia} # Swaps between nvidia/amd
-              count: all
-              capabilities: [gpu]
-
-    # 2. Add these for AMD/Intel Compatibility
-    # These nodes are ignored by NVIDIA but REQUIRED for ROCm/SYCL
-    devices:
-      - "/dev/kfd:/dev/kfd"
-      - "/dev/dri:/dev/dri"
-
     # 3. Increase Shared Memory
     # Crucial for ROCm and Intel Arc to prevent "Bus Error" crashes
     shm_size: "8gb"

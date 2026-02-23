@@ -43,6 +43,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >>${GITHUB_ENV}
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -61,7 +67,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}
           tags: |
             type=ref,event=branch
             type=sha,prefix=
@@ -93,8 +99,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Lowercase image name
+        run: |
+          echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >>${GITHUB_ENV}
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+
       - name: Pull and retag CPU variant as latest
         run: |
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cpu-latest
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:cpu-latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:cpu-latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:cpu-latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:latest
+          docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_LC }}:latest
