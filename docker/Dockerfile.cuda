@@ -11,7 +11,7 @@ RUN npm run build
 
 # --- Stage 2: Runtime Environment (CUDA Optimized) ---
 # Using Ubuntu 24.04 as base to provide Python 3.12 by default
-FROM nvidia/cuda:12.4.1-runtime-ubuntu24.04
+FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 
 WORKDIR /backend
 
