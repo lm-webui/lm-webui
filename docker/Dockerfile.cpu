@@ -1,6 +1,6 @@
 # CPU-only variant - lightweight, works everywhere
 # Use this for servers without GPU or testing
-FROM python:3.13-slim-trixie
+FROM python:3.13-slim-bookworm
 
 WORKDIR /backend
 
@@ -12,14 +12,14 @@ RUN apt-get update && apt-get install -y \
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
 
-RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # 3. Install CPU-only PyTorch + dependencies
 RUN pip install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cpu
 
 # 4. Install llama-cpp-python CPU only
-RUN pip install --no-cache-dir llama-cpp-python==0.3.16
+RUN pip install --no-cache-dir llama-cpp-python
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt

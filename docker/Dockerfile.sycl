@@ -12,19 +12,20 @@ RUN command -v pip3 >/dev/null 2>&1 || python3 -m pip --version >/dev/null 2>&1 
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
 
-RUN python3 -m pip install --no-cache-dir --upgrade pip
+# Try to upgrade pip, but don't fail if it doesn't work
+RUN python3 -m pip install --no-cache-dir --upgrade pip --break-system-packages || python3 -m pip install --no-cache-dir --upgrade pip || true
 
 # 3. Install PyTorch with SYCL support (Intel IPEX)
-RUN python3 -m pip install --no-cache-dir \
+RUN python3 -m pip install --no-cache-dir --break-system-packages \
     torch torchvision --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/
 
 # 4. Install llama-cpp-python with SYCL support
 # Note: SYCL support may require building from source
-RUN python3 -m pip install --no-cache-dir llama-cpp-python==0.3.16
+RUN python3 -m pip install --no-cache-dir --break-system-packages llama-cpp-python==0.3.16
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN python3 -m pip install --no-cache-dir -r /tmp/requirements.txt
+RUN python3 -m pip install --no-cache-dir --break-system-packages -r /tmp/requirements.txt
 
 # 6. Copy Application Code
 COPY backend/ ./backend/

@@ -2,35 +2,48 @@ services:
   lm-webui:
     build:
       context: .
-      dockerfile: docker/Dockerfile.cuda
+      # Tip: Use a build argument to switch between Dockerfile.cuda and Dockerfile.rocm
+      dockerfile: ${DOCKERFILE_PATH:-docker/Dockerfile.cuda}
     image: lm-webui:production
     container_name: lm-webui-v1
     ports:
       - "7070:8000"
+
+    # 1. Hardware Access (The Modern Way)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: ${GPU_DRIVER:-nvidia} # Swaps between nvidia/amd
+              count: all
+              capabilities: [gpu]
+
+    # 2. Add these for AMD/Intel Compatibility
+    # These nodes are ignored by NVIDIA but REQUIRED for ROCm/SYCL
+    devices:
+      - "/dev/kfd:/dev/kfd"
+      - "/dev/dri:/dev/dri"
+
+    # 3. Increase Shared Memory
+    # Crucial for ROCm and Intel Arc to prevent "Bus Error" crashes
+    shm_size: "8gb"
+
     volumes:
-      # Persistent System Data (Qdrant, SQLite, Models)
       - app_data:/backend/data
-      # Persistent User Media (Uploads, Generated Images, Thumbnails)
       - app_media:/backend/media
-      # Config Override (allows changing config without rebuilding)
       - ./backend/config.yaml:/backend/config.yaml
-      # Persistent Build Cache (for JIT compilation speedups)
-      - build_cache:/app/persistent_build
-      # Mount models directory for easier model management
+      - build_cache:/backend/app/persistent_build
       - ./backend/models:/backend/data/models
-      # Mount secrets directory for encryption keys
-      - ./backend/.secrets:/backend/.secrets
+      - ./backend/.secrets:/backend/.secrets:ro # Added :ro for security
+
     environment:
       - HF_HOME=/backend/data/models
       - CONFIG_PATH=/backend/config.yaml
-      - APP_PATHS_DATA_DIR=/backend/data
-      - APP_PATHS_MEDIA_DIR=/backend/media
-      - FORCED_BACKEND=auto
-      # NVIDIA GPU settings
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-    # Use nvidia runtime for GPU access (works without Swarm mode)
-    runtime: nvidia
+      - FORCED_BACKEND=${FORCED_BACKEND:-auto}
+      # Hardware specific tuning
+      - HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION:-}
+      - ONEAPI_DEVICE_SELECTOR=level_zero:gpu
+
     restart: unless-stopped
 
 volumes:

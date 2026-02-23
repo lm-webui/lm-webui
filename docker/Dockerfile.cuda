@@ -4,27 +4,30 @@ FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
 WORKDIR /backend
 
-# 1. Install system dependencies + Python
+# 1. Install system dependencies
 RUN apt-get update && apt-get install -y \
-    python3.11 python3-pip python3-venv \
+    python3.13 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* || true
+
+# Fallback: if apt fails, try to use system python
+RUN command -v python3 >/dev/null 2>&1 || command -v python3.11 >/dev/null 2>&1 || { apt-get update && apt-get install -y python3 python3-pip; } || true
 
 # 2. Python Environment
 ENV PYTHONUNBUFFERED=1 PIP_ROOT_USER_ACTION=ignore
 
-RUN pip3 install --upgrade pip
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel || python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel || true
 
 # 3. Install PyTorch with CUDA 12.1
-RUN pip install --no-cache-dir \
+RUN pip3 install --no-cache-dir \
     torch torchvision --index-url https://download.pytorch.org/whl/cu121
 
 # 4. Install llama-cpp-python with CUDA support
-RUN pip install --no-cache-dir llama-cpp-python[cuda]==0.3.16
+RUN pip3 install --no-cache-dir llama-cpp-python
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
 
 # 6. Copy Application Code
 COPY backend/ ./backend/

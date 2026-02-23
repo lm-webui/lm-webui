@@ -1,120 +1,84 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Starting Container Entrypoint..."
+echo "🚀 Starting Container Entrypoint (2026 Edition)..."
 
-# 1. Environment Validation
+# Environment Validation
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "⚠️  Warning: Config file not found at $CONFIG_PATH. Using defaults."
 fi
 
-# 2. Auto-detect GPU and set backend
+# Hardware Detection Logic
 detect_gpu() {
     echo "🔍 Detecting GPU hardware..."
     
-    # Priority order: NVIDIA > Intel Arc > AMD ROCm > Apple Silicon > CPU
-    
-    # Check for NVIDIA GPU (via nvidia-smi or nvidia-container-cli)
+    # --- NVIDIA ---
     if command -v nvidia-smi &> /dev/null; then
-        GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1 || echo "NVIDIA GPU")
-        echo "✅ NVIDIA GPU detected: $GPU_NAME"
-        echo "   Using CUDA backend for optimal performance"
-        return 0  # 0 = GPU detected
-    elif nvidia-container-cli -l &> /dev/null 2>&1; then
-        echo "✅ NVIDIA GPU detected via nvidia-container-cli"
+        echo "✅ NVIDIA GPU detected via nvidia-smi"
         return 0
     fi
     
-    # Check for Intel Arc GPU (via sysfs or oneAPI tools)
-    if [ -d "/sys/class/drm/card0" ]; then
-        # Check for Intel GPU in device info
-        if lspci 2>/dev/null | grep -qi "intel.*arc\|intel.*gpu"; then
-            echo "✅ Intel Arc GPU detected"
-            echo "   Using SYCL backend for Intel Arc optimization"
-            return 2  # 2 = Intel Arc
-        fi
+    # --- INTEL ARC / BATTLEMAGE ---
+    # Check for the Level Zero loader or the device nodes
+    if [ -c "/dev/dri/renderD128" ] && lspci 2>/dev/null | grep -qi "Intel"; then
+        echo "✅ Intel GPU detected (dri/render nodes found)"
+        return 2
     fi
-    
-    # Check for oneAPI/SYCL runtime
-    if command -v sycl-ls &> /dev/null; then
-        if sycl-ls 2>/dev/null | grep -qi "intel"; then
-            echo "✅ Intel GPU detected via oneAPI"
-            return 2
-        fi
-    fi
-    
-    # Check for AMD GPU (ROCm)
-    if command -v rocm-smi &> /dev/null; then
-        ROCM_GPU=$(rocm-smi --showproductname 2>/dev/null | grep -i "card\|gpu" | head -1 || echo "AMD GPU")
-        echo "✅ AMD GPU detected (ROCm): $ROCM_GPU"
-        echo "   Using ROCm backend for AMD GPU optimization"
-        return 3  # 3 = AMD ROCm
-    fi
-    
-    # Check for Apple Silicon (macOS - Metal)
-    if [[ "$OSTYPE" == "darwin"* ]] && [[ "$(uname -m)" == "arm64" ]]; then
-        echo "🍎 Apple Silicon detected"
-        echo "   Note: Metal acceleration requires native installation (not Docker)"
-        echo "   Using CPU backend for Docker container"
-        return 4  # 4 = Apple Silicon (CPU fallback)
+
+    # --- AMD ROCm (RDNA3/4) ---
+    # In ROCm 7.x, checking for /dev/kfd is the most reliable "is compute ready" test
+    if [ -c "/dev/kfd" ]; then
+        echo "✅ AMD ROCm hardware detected (/dev/kfd is active)"
+        return 3
     fi
     
     # No GPU detected
-    echo "💻 No GPU detected - using CPU mode"
-    return 5  # 5 = CPU only
+    echo "💻 No hardware acceleration nodes found - using CPU mode"
+    return 5
 }
 
-# Detect and configure
-detect_gpu
-GPU_TYPE=$?
-
-# Set backend based on detection
-if [ "$FORCED_BACKEND" != "auto" ]; then
-    echo "⚡ Using forced backend: $FORCED_BACKEND"
-else
+# Auto-detect if set to auto
+if [ "$FORCED_BACKEND" = "auto" ] || [ -z "$FORCED_BACKEND" ]; then
+    detect_gpu
+    GPU_TYPE=$?
     case $GPU_TYPE in
-        0)
-            export FORCED_BACKEND=cuda
-            echo "⚡ Backend: CUDA (NVIDIA)"
-            ;;
-        2)
-            export FORCED_BACKEND=sycl
-            echo "⚡ Backend: SYCL (Intel Arc)"
-            ;;
-        3)
-            export FORCED_BACKEND=rocm
-            echo "⚡ Backend: ROCm (AMD)"
-            ;;
-        4)
-            export FORCED_BACKEND=cpu
-            echo "⚡ Backend: CPU (Apple Silicon - Metal not available in Docker)"
-            ;;
-        5|*)
-            export FORCED_BACKEND=cpu
-            echo "⚡ Backend: CPU"
-            ;;
+        0) export FORCED_BACKEND=cuda ;;
+        2) export FORCED_BACKEND=sycl ;;
+        3) export FORCED_BACKEND=rocm ;;
+        *) export FORCED_BACKEND=cpu ;;
     esac
 fi
 
-# 3. Set GPU-specific environment variables
+echo "⚡ Target Backend: $FORCED_BACKEND"
+
+# Apply 2026-Specific Optimizations
 case $FORCED_BACKEND in
     cuda)
         export NVIDIA_VISIBLE_DEVICES=all
         export NVIDIA_DRIVER_CAPABILITIES=compute,utility
         ;;
     sycl)
-        export SYCL_CACHE_DISABLE=0
-        export SYCL_DEVICE_FILTER=level_zero
+        # Modern Intel oneAPI 2025/2026 variable
+        export ONEAPI_DEVICE_SELECTOR=level_zero:gpu
+        export SYCL_CACHE_PERSISTENT=1
         ;;
     rocm)
         export HIP_VISIBLE_DEVICES=0
+        # Helpful for non-officially supported cards (RX 6700, etc.)
+        if [ -z "$HSA_OVERRIDE_GFX_VERSION" ]; then
+            echo "💡 Tip: If GPU isn't responding, try setting HSA_OVERRIDE_GFX_VERSION"
+        fi
         ;;
 esac
 
-# 4. Start Backend (Uvicorn)
-echo "🔥 Starting Uvicorn Server (backend: $FORCED_BACKEND)..."
-exec uvicorn app.main:app \
-    --host 0.0.0.0 \
-    --port 8000 \
-    --workers 1 \
-    --log-level info
+# Final Permission Check
+if [[ "$FORCED_BACKEND" != "cpu" ]] && [ ! -w "/dev/dri/renderD128" ] && [ ! -w "/dev/kfd" ]; then
+    echo "❌ ERROR: Hardware detected but PERMISSION DENIED."
+    echo "   Ensure you ran the container with --group-add video --device /dev/dri"
+    # Don't exit, try to fall back
+    export FORCED_BACKEND=cpu
+fi
+
+# 5. Start Backend
+echo "🔥 Launching Uvicorn on $FORCED_BACKEND..."
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
