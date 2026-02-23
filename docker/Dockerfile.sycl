@@ -22,13 +22,19 @@ WORKDIR /backend
 
 # 1. System Dependencies
 # Install Python 3.12 explicitly as Ubuntu 22.04 defaults to 3.10
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Singapore
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     software-properties-common && \
     add-apt-repository ppa:deadsnakes/ppa -y && \
     apt-get update && \
     apt-get install -y --no-install-recommends \
     python3.12 python3.12-dev python3.12-venv \
     libgomp1 libstdc++6 curl git build-essential \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment

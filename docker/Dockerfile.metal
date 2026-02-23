@@ -24,8 +24,14 @@ FROM python:3.12-slim-bookworm
 WORKDIR /backend
 
 # 1. System Dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Singapore
+
 RUN apt-get update && apt-get install -y \
+    tzdata \
     libgomp1 libstdc++6 curl git build-essential \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment

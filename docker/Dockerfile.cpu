@@ -18,8 +18,14 @@ WORKDIR /backend
 # libgomp1: OpenMP support for llama.cpp
 # libstdc++6: Standard C++ library
 # curl/git: Utility tools
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Singapore
+
 RUN apt-get update && apt-get install -y \
+    tzdata \
     libgomp1 libstdc++6 curl git build-essential \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment

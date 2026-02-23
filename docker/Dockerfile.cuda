@@ -16,9 +16,15 @@ FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 WORKDIR /backend
 
 # 1. System Dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Asia/Singapore
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    tzdata \
     python3 python3-pip python3-venv \
     libgomp1 libstdc++6 curl git build-essential \
+    && ln -fs /usr/share/zoneinfo/$TZ /etc/localtime \
+    && dpkg-reconfigure --frontend noninteractive tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Python Environment
