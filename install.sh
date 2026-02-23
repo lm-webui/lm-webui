@@ -102,7 +102,15 @@ check_prerequisites() {
 check_gpu() {
     log_info "Checking for GPU support..."
     
+    # Check for NVIDIA
     if command -v nvidia-smi &> /dev/null; then
+        # Check for driver mismatch (common update issue)
+        if nvidia-smi 2>&1 | grep -q "Driver/library version mismatch"; then
+            log_error "NVIDIA driver/library version mismatch detected!"
+            log_info "This usually happens after a driver update. Please reboot your system and try again."
+            exit 1
+        fi
+        
         log_success "NVIDIA GPU detected"
         HAS_NVIDIA_GPU=true
         HAS_AMD_GPU=false
@@ -235,11 +243,11 @@ start_application() {
         GPU_VARIANT="cuda"
         
         # Check if nvidia-container-toolkit is installed
-        if ! command -v nvidia-container-cli &> /dev/null; then
+        if ! command -v nvidia-ctk &> /dev/null; then
             log_warning "NVIDIA Container Toolkit not found!"
             log_info "Installing NVIDIA Container Toolkit using official repository..."
             
-            # Official NVIDIA Container Toolkit installation for 2024/2025
+            # Official NVIDIA Container Toolkit installation
             curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
               && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
                 sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
@@ -248,12 +256,20 @@ start_application() {
             sudo apt-get update
             sudo apt-get install -y nvidia-container-toolkit
             
-            # Configure and restart Docker
+            # Configure Docker runtime using nvidia-ctk
             log_info "Configuring NVIDIA Container Runtime..."
-            sudo nvidia-container-toolkit runtime configure --runtime=docker
-            sudo systemctl restart docker
+            sudo nvidia-ctk runtime configure --runtime=docker
+            
+            # Restart Docker to apply changes
+            if command -v systemctl &> /dev/null; then
+                sudo systemctl restart docker
+            else
+                log_warning "Systemd not found. Please restart Docker manually."
+            fi
             
             log_success "NVIDIA Container Toolkit installed and configured!"
+        else
+            log_info "NVIDIA Container Toolkit (nvidia-ctk) is already installed"
         fi
     elif [[ "$OSTYPE" == "darwin*" ]] && [[ "$(uname -m)" == "arm64" ]]; then
         log_info "Apple Silicon detected (Metal)"
