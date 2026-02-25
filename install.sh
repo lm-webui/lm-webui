@@ -39,7 +39,7 @@ print_banner() {
 ██       ██  ███  ██     ██ ████ ██ ██      ██    ██ ██    ██ ██
  ███████ ██       ██      ███  ███  ███████ ███████   ██████  ██
 
-v0.1.1 - All-in-one LLM Runtime & AI Interface
+v1 - All-in-one LLM Runtime & AI Interface
 https://lmwebui.com
 EOF
     echo -e "${NC}"

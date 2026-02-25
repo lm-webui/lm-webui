@@ -79,7 +79,7 @@ print(
 ██       ██  ███  ██     ██ ████ ██ ██      ██    ██ ██    ██ ██
  ███████ ██       ██      ███  ███  ███████ ███████   ██████  ██
 
-v0.1.1 - All-in-one LLM Runtime & AI Interface .
+v1 - All-in-one LLM Runtime & AI Interface .
 https://lmwebui.com
 """)
 
@@ -356,22 +356,44 @@ async def debug_context(request: Request):
     }
 
 # --- Serve Frontend (SPA) ---
-# Inside Docker:/backend/frontend/dist
-frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+# Resolve the frontend dist path
+# Order of preference:
+# 1. Environment variable FRONTEND_PATH
+# 2. Standard Docker path: /backend/frontend/dist
+# 3. Development path relative to this file
+env_frontend_path = os.environ.get("FRONTEND_PATH")
+docker_frontend_path = Path("/backend/frontend/dist")
+local_frontend_path = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
-if frontend_dist.exists():
+frontend_dist = None
+if env_frontend_path and Path(env_frontend_path).exists():
+    frontend_dist = Path(env_frontend_path)
+elif docker_frontend_path.exists():
+    frontend_dist = docker_frontend_path
+elif local_frontend_path.exists():
+    frontend_dist = local_frontend_path
+
+if frontend_dist:
+    print(f"✅ Frontend SPA detected at: {frontend_dist}")
     app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
     
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        if full_path.startswith("api/") or full_path.startswith("health") or full_path.startswith("thumbnails") or full_path.startswith("generated"):
+        # Prevent API calls from being caught by the SPA router
+        if full_path.startswith("api/") or full_path.startswith("health") or \
+           full_path.startswith("thumbnails") or full_path.startswith("generated") or \
+           full_path.startswith("docs") or full_path.startswith("redoc") or \
+           full_path.startswith("openapi.json"):
             return JSONResponse(status_code=404, content={"error": "Not found"})
         
         file_path = frontend_dist / full_path
         if file_path.is_file():
             return FileResponse(file_path)
         
+        # Fallback to index.html for SPA routing
         return FileResponse(frontend_dist / "index.html")
+else:
+    print("⚠️  WARNING: Frontend SPA distribution NOT FOUND. UI will be unavailable.")
 
 if __name__ == "__main__":
     import uvicorn
