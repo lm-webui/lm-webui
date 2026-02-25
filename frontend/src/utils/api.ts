@@ -2,7 +2,9 @@ import { PROVIDER_MAPPING } from './modelProviders';
 import { useAuth } from '../hooks/useAuth';
 import { SSEService } from '../services/SSEService';
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+// In production, we use relative paths since the backend serves the frontend.
+// In development, VITE_BACKEND_URL can be used for HMR/cross-origin.
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // Helper function to handle token refresh
 async function handleTokenRefresh(): Promise<void> {
