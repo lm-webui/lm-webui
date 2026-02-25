@@ -39,9 +39,10 @@ detect_gpu() {
 
 # Auto-detect if set to auto
 if [ "$FORCED_BACKEND" = "auto" ] || [ -z "$FORCED_BACKEND" ]; then
-    detect_gpu
-    GPU_TYPE=$?
-    case $GPU_TYPE in
+    # We use || true to prevent set -e from exiting the script when detect_gpu returns non-zero
+    detect_gpu || GPU_TYPE=$?
+    
+    case ${GPU_TYPE:-5} in
         0) export FORCED_BACKEND=cuda ;;
         2) export FORCED_BACKEND=sycl ;;
         3) export FORCED_BACKEND=rocm ;;
@@ -81,5 +82,10 @@ if [[ "$FORCED_BACKEND" != "cpu" ]]; then
 fi
 
 # 5. Start Backend
-echo "Launching Uvicorn on $FORCED_BACKEND..."
+echo "🚀 Launching Uvicorn on $FORCED_BACKEND..."
+echo "Current directory: $(pwd)"
+echo "Python version: $(python3 --version 2>&1 || python --version 2>&1)"
+echo "Environment: CONFIG_PATH=$CONFIG_PATH, PYTHONPATH=$PYTHONPATH"
+
+# Run with -u for unbuffered output to see logs immediately
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

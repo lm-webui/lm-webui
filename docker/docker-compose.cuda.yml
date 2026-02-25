@@ -1,6 +1,4 @@
 # CUDA variant - NVIDIA GPUs
-# Usage: docker compose -f docker-compose.cuda.yml up -d
-# Or: docker compose -f docker-compose.yml -f docker/docker-compose.cuda.yml up -d
 services:
   lm-webui:
     build:

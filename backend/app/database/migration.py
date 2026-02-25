@@ -174,7 +174,15 @@ class DatabaseMigration:
         """Initialize database - create if not exists, adjust schema if needed"""
         try:
             # Ensure data directory exists
-            os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+            db_dir = os.path.dirname(self.db_path)
+            if not os.path.exists(db_dir):
+                logger.info(f"📁 Creating database directory: {db_dir}")
+                os.makedirs(db_dir, exist_ok=True)
+
+            # Check write permissions
+            if not os.access(db_dir, os.W_OK):
+                logger.error(f"❌ ERROR: Database directory is NOT writable: {db_dir}")
+                return False
 
             # Check if database exists
             db_exists = os.path.exists(self.db_path)

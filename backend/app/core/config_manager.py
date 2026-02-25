@@ -52,12 +52,12 @@ class SecurityConfig(BaseModel):
     allowed_origins: List[str] = Field(
         default=[
             "http://localhost:5178",
-            "http://localhost:5179", 
+            "http://localhost:5179",
+            "http://localhost:7070",
             "http://localhost:8000",
-            "http://19.16.11.60:5178",
-            "http://19.16.11.60:5179",
-            "http://19.16.11.60:8000",
-            "http://19.16.11.60"
+            "http://172.0.0.1:5178",
+            "http://172.0.0.1:7070",
+            "http://170.0.0.1:8000",
         ],
         description="Allowed CORS origins"
     )

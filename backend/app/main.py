@@ -8,6 +8,7 @@ import time
 import datetime
 import asyncio
 from contextlib import asynccontextmanager
+import sys
 import yaml
 from enum import Enum
 from pathlib import Path
@@ -27,6 +28,7 @@ from app.core.config_manager import (
     get_server_config,
     get_media_dir,
     get_data_dir,
+    get_database_path,
     setup_logging,
     is_development
 )
@@ -83,7 +85,7 @@ https://lmwebui.com
 
 
 def initialize_timezone():
-    """Auto-detect and set system timezone for consistent timestamp storage"""
+    """Auto-detect and set system timezone for storage timestamp"""
 
     # 1. Check if TZ is already explicitly set (respect deployment config)
     if os.environ.get('TZ'):
@@ -163,7 +165,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# --- Helper: Load Config --- (Deprecated - use config_manager instead)
+# --- Helper: Load Config ---
 def load_config():
     """Deprecated: Use config_manager instead"""
     import warnings
@@ -204,7 +206,7 @@ async def initialize_app():
         kg_manager = KGManager(os.path.join(memory_dir, "memory.db"), qdrant_path=qdrant_path)
         app.state.kg_manager = kg_manager
         
-        # Phase 3: AI Models (The Heavy Lift)
+        # AI Models load
         app_state["status"] = InitStatus.LOADING_MODELS
         app_state["message"] = f"Loading {model_name}... (This may take a moment)"
         app_state["progress"] = 50
@@ -218,7 +220,7 @@ async def initialize_app():
         (MEDIA_DIR / "generated/exports").mkdir(parents=True, exist_ok=True)
         (MEDIA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
 
-        # Pass explicit path to RAGProcessor to prevent it from guessing
+        # Pass explicit path to RAGProcessor
         rag_processor = RAGProcessor(qdrant_path=qdrant_path) 
         app.state.rag_processor = rag_processor
         
@@ -277,12 +279,22 @@ app.add_middleware(
 )
 
 # Initialize database (Synchronous part)
-init_db()
+try:
+    print(f"🔄 Initializing database at {get_database_path()}...")
+    init_db()
+    print("✅ Database initialization successful")
+except Exception as e:
+    print(f"❌ CRITICAL ERROR during database initialization: {e}")
+    if not is_development():
+        print("🚨 Production environment detected - exiting to trigger container restart")
+        sys.exit(1)
+    else:
+        print("⚠️ Development mode: continuing with degraded functionality")
 
 # Include routes
 app.include_router(auth.router)
 app.include_router(api_keys.router)
-app.include_router(chat.router)  # Single chat endpoint with streaming and RAG integration
+app.include_router(chat.router)
 app.include_router(context.router)
 app.include_router(history.router)
 app.include_router(sessions.router)
@@ -298,19 +310,16 @@ app.include_router(gguf.router)
 app.include_router(image_generation.router)
 app.include_router(inference.router)
 app.include_router(semantic_search.router)
-app.include_router(rag.router)  # OCR and vision processing endpoints
-# app.include_router(rag_chat.router)  # Deprecated - use chat_enhanced with use_rag=true instead
+app.include_router(rag.router)
 app.include_router(web_search.router)
-app.include_router(title_updates.router)  # SSE for real-time title updates
-app.include_router(websocket.router)  # WebSocket for real-time streaming
+app.include_router(title_updates.router)
+app.include_router(websocket.router)
 
-# Ensure required directories exist
-# Note: Media directories are created in initialize_app using MEDIA_DIR
+# Media directories are created in initialize_app using MEDIA_DIR
 os.makedirs(str(BASE_DIR / "app/files"), exist_ok=True)
 os.makedirs(str(BASE_DIR / ".secrets"), exist_ok=True)
 
 # Ensure media directories exist before mounting static files
-# This ensures they exist even if async initialization hasn't completed yet
 MEDIA_DIR.mkdir(parents=True, exist_ok=True)
 (MEDIA_DIR / "thumbnails").mkdir(parents=True, exist_ok=True)
 (MEDIA_DIR / "generated").mkdir(parents=True, exist_ok=True)
@@ -347,10 +356,8 @@ async def debug_context(request: Request):
     }
 
 # --- Serve Frontend (SPA) ---
-# Resolve the frontend dist path relative to this file
-# Backend main at /app/backend/app/main.py
-# Frontend dist at /app/frontend/dist
-frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+# Inside Docker:/backend/frontend/dist
+frontend_dist = Path(__file__).resolve().parent.parent / "frontend" / "dist"
 
 if frontend_dist.exists():
     app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
