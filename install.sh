@@ -152,22 +152,6 @@ setup_environment() {
     if [ ! -f ".env" ]; then
         cat > .env << EOF
 # LM WebUI Environment Configuration
-# Add your API keys here for cloud models
-
-# OpenAI
-# OPENAI_API_KEY=your_openai_key_here
-
-# Anthropic (Claude)
-# ANTHROPIC_API_KEY=your_anthropic_key_here
-
-# Google Gemini
-# GEMINI_API_KEY=your_gemini_key_here
-
-# Grok (xAI)
-# XAI_API_KEY=your_xai_key_here
-
-# DeepSeek
-# DEEPSEEK_API_KEY=your_deepseek_key_here
 
 # Local Models Directory
 LOCAL_MODELS_DIR=./backend/models
