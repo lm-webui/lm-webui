@@ -1,7 +1,7 @@
 {
   "name": "lm-webui",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "All-in-one Local AI Interface and LLM Runtime, with Multimodal-RAG System, and Multi-Provider Support.",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
