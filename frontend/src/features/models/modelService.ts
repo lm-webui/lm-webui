@@ -25,19 +25,23 @@ export class ModelService {
 // Load GGUF models from local API
   private static async loadGGUFModels(): Promise<ModelFetchResult> {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const ggufModels: any[] = await authFetch(`${API_BASE_URL}/api/models/local`);
-      const modelNames = ggufModels.map((model: any) => model.name);
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+      const response = await authFetch(`${API_BASE_URL}/api/models/local`);
+      
+      // Robust handling for both wrapped {"models": [...]} and direct [...] responses
+      const ggufModels = response?.models || (Array.isArray(response) ? response : []);
+      
+      const modelNames = ggufModels.map((model: any) => model.name || model.id || 'Unknown');
 
       // Transform GGUF models to ModelInfo format
       const modelInfos: ModelInfo[] = ggufModels.map((model: any) => ({
-        id: model.name,
-        name: model.name
+        id: model.name || model.id || 'unknown',
+        name: model.name || model.id || 'Unknown Model'
       }));
 
       return {
         models: modelInfos,
-        modelMapping: Object.fromEntries(modelNames.map(name => [name, name])),
+        modelMapping: Object.fromEntries(modelNames.map((name: string) => [name, name])),
         modelNames
       };
     } catch (error) {

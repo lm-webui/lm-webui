@@ -31,15 +31,23 @@ log_error() {
 
 # Banner
 print_banner() {
+    # Try to extract version from package.json if it exists
+    local version="v1"
+    if [ -f "package.json" ]; then
+        version="v$(grep '"version":' package.json | cut -d'"' -f4)"
+    elif [ -f "LM-WebUI/package.json" ]; then
+        version="v$(grep '"version":' LM-WebUI/package.json | cut -d'"' -f4)"
+    fi
+
     echo -e "${BLUE}"
-    cat << "EOF"
+    cat << EOF
 ██       ███     ███     ██      ██ ███████ ███████  ██    ██ ██
 ██       ████   ████     ██      ██ ██      ██    ██ ██    ██ ██
 ██       ██ ██ ██ ██     ██  ██  ██ █████   ███████  ██    ██ ██
 ██       ██  ███  ██     ██ ████ ██ ██      ██    ██ ██    ██ ██
  ███████ ██       ██      ███  ███  ███████ ███████   ██████  ██
 
-v1 - All-in-one LLM Runtime & AI Interface
+$version - All-in-one LLM Runtime & AI Interface
 https://lmwebui.com
 EOF
     echo -e "${NC}"
@@ -187,23 +195,23 @@ EOF
 setup_repository() {
     log_info "Setting up repository..."
     
-    # Check if we're already in the lm-webui directory
+    # Check if we're already in the installation directory
     if [ -f "docker-compose.yml" ] && [ -f "Dockerfile" ]; then
-        log_info "Already in lm-webui directory"
+        log_info "Already in installation directory"
         return
     fi
     
     # Check if directory exists
-    if [ -d "lm-webui" ]; then
-        log_info "lm-webui directory already exists"
-        cd lm-webui
+    if [ -d "LM-WebUI" ]; then
+        log_info "LM-WebUI directory already exists"
+        cd LM-WebUI
         return
     fi
     
-    # Clone repository
-    log_info "Cloning lm-webui repository..."
-    git clone https://github.com/lm-webui/lm-webui.git
-    cd lm-webui
+    # Clone repository into LM-WebUI folder
+    log_info "Cloning LM-WebUI repository..."
+    git clone https://github.com/lm-webui/lm-webui.git LM-WebUI
+    cd LM-WebUI
     log_success "Repository cloned successfully"
 }
 

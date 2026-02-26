@@ -9,6 +9,7 @@ import datetime
 import asyncio
 from contextlib import asynccontextmanager
 import sys
+import json
 import yaml
 from enum import Enum
 from pathlib import Path
@@ -49,6 +50,17 @@ server_config = get_server_config()
 # Define Base Paths using configuration manager
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+def get_app_version():
+    """Extract version from package.json in repository root"""
+    try:
+        package_json_path = BASE_DIR.parent / "package.json"
+        with open(package_json_path, "r") as f:
+            return json.load(f).get("version", "v1")
+    except Exception:
+        return "v1"
+
+APP_VERSION = get_app_version()
+
 # Get media and data directories from configuration
 MEDIA_DIR = get_media_dir()
 DATA_DIR_DEFAULT = get_data_dir()
@@ -79,7 +91,7 @@ print(
 ██       ██  ███  ██     ██ ████ ██ ██      ██    ██ ██    ██ ██
  ███████ ██       ██      ███  ███  ███████ ███████   ██████  ██
 
-v1 - All-in-one LLM Runtime & AI Interface .
+{APP_VERSION} - All-in-one LLM Runtime & AI Interface .
 https://lmwebui.com
 """)
 

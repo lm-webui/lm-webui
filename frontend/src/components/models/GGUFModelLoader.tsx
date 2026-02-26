@@ -103,7 +103,10 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await axios.get(`${API_BASE_URL}/api/models/local`);
-      setLocalModels(response.data);
+      
+      // Robust handling for both wrapped {"models": [...]} and direct [...] responses
+      const modelsData = response.data?.models || (Array.isArray(response.data) ? response.data : []);
+      setLocalModels(modelsData);
     } catch (error: any) {
       toast({
         title: "Error",

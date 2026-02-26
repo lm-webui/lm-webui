@@ -47,8 +47,9 @@ RUN python3 -m pip install llama-cpp-python==0.3.16 \
 COPY backend/requirements.txt ./requirements.txt
 RUN python3 -m pip install -r requirements.txt
 
-# 6. Copy Application Code
+# 6. Copy Application Code and Version Info
 COPY backend/ ./
+COPY package.json ../package.json
 
 # 7. Copy Frontend Assets from Builder Stage
 COPY --from=frontend-builder /frontend/dist ./frontend/dist

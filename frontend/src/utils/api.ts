@@ -413,14 +413,13 @@ export async function fetchModels(
       if (provider === 'gguf') {
         const response = await authFetch(`${API_BASE_URL}/api/models/local`);
         
-        if (Array.isArray(response.models)) {
-          const models = response.models.map((model: any) => 
-            typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
-          );
-          return models;
-        }
+        // Handle both standard {"models": [...]} and raw [...] responses
+        const modelsData = response?.models || (Array.isArray(response) ? response : []);
         
-        return [];
+        const models = modelsData.map((model: any) => 
+          typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
+        );
+        return models;
       }
       
       // Use centralized provider mapping
@@ -460,6 +459,7 @@ export async function fetchModels(
       const backendProvider = (providerMapping as any)[provider!] || provider;
       
       // Try dynamic endpoint first if enabled
+      // Try dynamic endpoint first if enabled
       if (dynamic) {
         try {
           const dynamicUrl = new URL(`${API_BASE_URL}/api/models/api/dynamic`);
@@ -468,13 +468,13 @@ export async function fetchModels(
           console.log(`🔄 Fetching dynamic models for ${provider} (backend: ${backendProvider})`);
           const response = await authFetch(dynamicUrl.toString());
           
-          if (Array.isArray(response.models)) {
-            const models = response.models.map((model: any) => 
-              typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
-            );
-            console.log(`✅ Dynamic models fetched for ${provider}: (${models.length})`, models);
-            return models;
-          }
+          const modelsData = response?.models || (Array.isArray(response) ? response : []);
+          
+          const models = modelsData.map((model: any) => 
+            typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
+          );
+          console.log(`✅ Dynamic models fetched for ${provider}: (${models.length})`, models);
+          return models;
         } catch (error) {
           console.warn(`⚠️ Dynamic model fetch failed for ${provider}, falling back to static models:`, error);
         }
@@ -486,13 +486,13 @@ export async function fetchModels(
 
       const response = await authFetch(staticUrl.toString());
       
-      if (Array.isArray(response.models)) {
-        const models = response.models.map((model: any) => 
-          typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
-        );
-        console.log(`📋 Static models fetched for ${provider}: (${models.length})`, models);
-        return models;
-      }
+      const modelsData = response?.models || (Array.isArray(response) ? response : []);
+      
+      const models = modelsData.map((model: any) => 
+        typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
+      );
+      console.log(`📋 Static models fetched for ${provider}: (${models.length})`, models);
+      return models;
       
       return [];
     } finally {

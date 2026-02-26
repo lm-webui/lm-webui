@@ -338,9 +338,10 @@ async def list_local_gguf_models():
     """
     List local GGUF models (delegates to existing local_models endpoint)
     
-    Response: Same as existing /api/models/local endpoint
+    Response: {"models": [...]}
     """
-    return list_local_models()
+    models = list_local_models()
+    return {"models": models}
 
 # Import logger at module level
 import logging
