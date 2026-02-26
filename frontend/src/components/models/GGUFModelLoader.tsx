@@ -101,7 +101,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
   const loadLocalModels = async () => {
     setIsLoadingModels(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await axios.get(`${API_BASE_URL}/api/models/local`);
       setLocalModels(response.data);
     } catch (error: any) {
@@ -129,7 +129,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
     setResolvedData(null);
     
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await axios.post(`${API_BASE_URL}/api/models/resolve`, {
         input: input.trim()
       });
@@ -158,7 +158,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
 
     setIsDownloading(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await axios.post(`${API_BASE_URL}/api/models/download`, {
         file_url: file.url,
         filename: file.filename
@@ -185,8 +185,10 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
   };
 
   const connectWebSocket = (taskId: string) => {
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
-    const wsUrl = API_BASE_URL.replace('http', 'ws') + `/api/models/download-ws/${taskId}`;
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+    // If API_BASE_URL is empty (relative path), construct WS URL from window.location
+    const baseUrl = API_BASE_URL || window.location.origin;
+    const wsUrl = baseUrl.replace(/^http/, 'ws') + `/api/models/download-ws/${taskId}`;
     
     if (wsRef.current) {
       wsRef.current.close();
@@ -283,7 +285,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
 
   const handleDeleteModel = async (modelName: string) => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       
       if (confirm(`Are you sure you want to delete ${modelName}? This action cannot be undone.`)) {
         await axios.delete(`${API_BASE_URL}/api/models/${encodeURIComponent(modelName)}`);
@@ -327,7 +329,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
 
     setIsUploading(true);
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const formData = new FormData();
       formData.append('file', file);
 
