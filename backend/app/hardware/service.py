@@ -189,9 +189,18 @@ class UnifiedHardwareManager:
                 settings["n_gpu_layers"] = -1 if profile.vram_mb > 4096 else 0
         
         # Thread optimization
-        settings["n_threads"] = max(1, profile.cpu_cores - 2)
-        settings["n_threads_batch"] = max(1, profile.cpu_cores - 2)
+        # Reuse detailed detection logic
+        settings["n_threads"] = get_llamacpp_settings()["n_threads"]
+        settings["n_threads_batch"] = get_llamacpp_settings()["n_threads_batch"]
         
+        # Flash Attention
+        settings["flash_attn"] = get_llamacpp_settings()["flash_attn"]
+
+        # mlock optimization (lock model in RAM)
+        # Only enable if we have plenty of RAM (e.g. > 16GB system RAM)
+        if profile.system_ram_mb > 16384:
+             settings["use_mlock"] = True
+
         # Batch size optimization
         if profile.backend == AccelerationBackend.METAL:
             # Metal benefits from smaller batches
@@ -200,6 +209,7 @@ class UnifiedHardwareManager:
         elif profile.backend in [AccelerationBackend.CUDA, AccelerationBackend.ROCM]:
             # CUDA/ROCm can handle larger batches
             settings["n_batch"] = 2048
+            # Optimizing ubatch to match batch size for high-throughput
             settings["n_ubatch"] = 2048
         else:
             # CPU default

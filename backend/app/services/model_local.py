@@ -266,6 +266,7 @@ class GGUFStrategy(BaseProviderStrategy):
                 main_gpu=settings.get("main_gpu", 0),
                 use_mmap=settings.get("use_mmap", True),
                 use_mlock=settings.get("use_mlock", False),
+                flash_attn=settings.get("flash_attn", False), # Enable Flash Attention if supported
                 verbose=False
             )
             
@@ -351,6 +352,9 @@ class GGUFStrategy(BaseProviderStrategy):
                     n_gpu_layers=settings["n_gpu_layers"],
                     use_mmap=settings.get("use_mmap", True),
                     use_mlock=settings.get("use_mlock", False),
+                    flash_attn=settings.get("flash_attn", False),
+                    n_batch=settings.get("n_batch", 512),
+                    n_ubatch=settings.get("n_ubatch", 512),
                     verbose=False
                 )
                 

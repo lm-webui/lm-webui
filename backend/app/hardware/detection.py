@@ -247,16 +247,27 @@ class HardwareDetector:
         if not self._detected_hardware: self.detect_hardware()
         backend = self._detected_hardware["backend"]
         
+        # Optimize thread count: Use physical cores if possible
+        # psutil.cpu_count(logical=False) returns physical cores
+        # If None (failure), fall back to logical count
+        physical_cores = psutil.cpu_count(logical=False) or psutil.cpu_count()
+        # Reserve 1-2 cores for OS/Python overhead
+        n_threads = max(1, physical_cores - 2 if physical_cores > 4 else physical_cores - 1)
+
         settings = {
             "n_gpu_layers": 0,
             "main_gpu": 0,
             "use_mmap": True,
             "use_mlock": False,
-            "n_threads": max(1, psutil.cpu_count() - 2)
+            "n_threads": n_threads,
+            "n_threads_batch": n_threads, # Use same threads for batch processing
+            "flash_attn": False # Default off, enabled by service based on backend
         }
         
         if backend in ["cuda", "rocm", "metal", "sycl", "vulkan"]:
             settings["n_gpu_layers"] = -1  # Offload all layers
+            # Enable Flash Attention for GPU backends (massive speedup)
+            settings["flash_attn"] = True
             
         return settings
 
