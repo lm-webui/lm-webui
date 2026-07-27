@@ -1,0 +1,48 @@
+{
+  "name": "lm-webui",
+  "private": true,
+  "version": "0.5.0",
+  "description": "Self-hosted AI workspace for local and cloud models. Multi-provider chat, image generation, model and runtime management.",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
+    "dev:web": "cd web && npm run dev",
+    "dev:backend": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload",
+    "build": "npm run build:web",
+    "build:web": "cd web && npm run build",
+    "build:backend": "echo 'Python backend does not require build'",
+    "start": "npm run dev",
+    "start:prod": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000",
+    "lint": "cd web && npm run lint",
+    "lint:fix": "cd web && npm run lint:fix",
+    "format": "cd web && npm run format",
+    "format:check": "cd web && npm run format:check",
+    "typecheck": "cd web && npm run typecheck",
+    "test": "cd web && npm run test",
+    "clean": "cd web && npm run clean",
+    "install:all": "npm install && cd backend && pip install -r requirements.txt",
+    "docker:dev": "docker compose up",
+    "docker:build": "docker compose build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "."
+  },
+  "keywords": [
+    "llm",
+    "ai",
+    "webui",
+    "gguf",
+    "fastapi",
+    "typescript"
+  ],
+  "author": "lm-webui",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3"
+  }
+}

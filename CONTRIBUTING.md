@@ -10,7 +10,7 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
 ### Prerequisites
 
-- Node.js 18+ (for frontend development)
+- Node.js 20+ (for frontend development)
 - Python 3.12 (standardized version for backend development)
 - Docker and Docker Compose (for containerized development)
 - Git
@@ -29,18 +29,22 @@ By participating in this project, you agree to abide by our Code of Conduct. Ple
 
    ```bash
    # Using Docker (recommended)
-   ./install.sh
+   docker compose up --build
 
    # Or manually
    # Frontend
-   cd frontend
+   cd web
    npm install
 
    # Backend
    cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    pip install -r requirements.txt
+
+   # Start both backend and frontend
+   cd ..
+   npm run dev
    ```
 
 ## Development Workflow
@@ -86,7 +90,7 @@ docs: update installation instructions
 
 ```
 lm-webui/
-├── frontend/           # React + TypeScript frontend
+├── web/                # React + TypeScript frontend
 │   ├── src/
 │   │   ├── components/ # Reusable UI components
 │   │   ├── features/   # Feature-based modules
@@ -96,8 +100,10 @@ lm-webui/
 │   ├── app/
 │   │   ├── routes/     # API endpoints
 │   │   ├── services/   # Business logic
-│   │   ├── rag/        # RAG engine
+│   │   ├── providers/  # AI providers (remote + local)
+│   │   ├── orchestrator/ # Chat flow and streaming
 │   │   └── hardware/   # Hardware abstraction
+└── docs/              # Documentation
 ├── docs/              # Documentation
 └── tests/             # Test files
 ```
