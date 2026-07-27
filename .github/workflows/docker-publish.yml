@@ -1,4 +1,4 @@
-name: Build and Push Docker Images
+name: Build and Push Docker Image
 
 on:
   push:
@@ -20,37 +20,15 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    strategy:
-      matrix:
-        variant:
-          - name: cpu
-            dockerfile: docker/Dockerfile.cpu
-            tags: cpu-latest, cpu-${{ github.sha }}
-          - name: cuda
-            dockerfile: docker/Dockerfile.cuda
-            tags: cuda-latest, cuda-${{ github.sha }}
-          - name: rocm
-            dockerfile: docker/Dockerfile.rocm
-            tags: rocm-latest, rocm-${{ github.sha }}
-          - name: sycl
-            dockerfile: docker/Dockerfile.sycl
-            tags: sycl-latest, sycl-${{ github.sha }}
-          - name: metal
-            dockerfile: docker/Dockerfile.metal
-            tags: metal-latest, metal-${{ github.sha }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Lowercase image name
-        run: |
-          echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >>${GITHUB_ENV}
+        run: echo "IMAGE_NAME_LC=${IMAGE_NAME,,}" >>${GITHUB_ENV}
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -71,15 +49,13 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,prefix=
-            type=raw,value=latest,enable=${{ matrix.variant.name == 'cpu' && github.ref == 'refs/heads/main' }}
-            type=raw,value=${{ matrix.variant.name }}-latest
-            type=raw,value=${{ matrix.variant.name }}-${{ github.sha }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
 
-      - name: Build and push ${{ matrix.variant.name }} variant
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ${{ matrix.variant.dockerfile }}
+          file: Dockerfile
           platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}

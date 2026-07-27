@@ -11,13 +11,12 @@
 /backend/tests/ @lm-webui/qa
 
 # Frontend
-/frontend/ @lm-webui/frontend @lm-webui/core
-/frontend/src/components/ @lm-webui/frontend
-/frontend/src/services/ @lm-webui/frontend
-/frontend/__tests__/ @lm-webui/qa
+/web/ @lm-webui/frontend @lm-webui/core
+/web/src/components/ @lm-webui/frontend
+/web/src/services/ @lm-webui/frontend
+/web/__tests__/ @lm-webui/qa
 
 # Infrastructure
-/docker/ @lm-webui/infra
 /docker-compose.yml @lm-webui/infra
 /.github/workflows/ @lm-webui/infra
 
@@ -33,9 +32,6 @@ README.md @lm-webui/docs
 # Installer
 install.sh @lm-webui/infra @lm-webui/security
 *.sh @lm-webui/infra
-
-# llama.cpp submodule
-/backend/llama.cpp/ @lm-webui/llama-team
 
 # Release management
 CHANGELOG.md @lm-webui/release

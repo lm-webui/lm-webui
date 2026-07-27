@@ -1,0 +1,66 @@
+# --- Git & CI ---
+.git
+.github
+.gitignore
+.dockerignore
+README.md
+
+# --- Dependencies (Installed inside container) ---
+node_modules
+**/node_modules
+backend/venv
+frontend/node_modules
+
+# --- Build Artifacts ---
+dist
+build
+frontend/dist
+
+# --- Environment & Secrets ---
+.env
+.env.*
+secrets
+.secrets
+cookies.txt
+
+# --- Data & Models (Mounted via Volume) ---
+backend/data
+backend/uploads
+backend/generated
+backend/thumbnails
+backend/models
+backend/app/files
+
+# --- Logs & Cache ---
+logs
+*.log
+__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache
+.coverage
+htmlcov
+.DS_Store
+.vscode
+.idea
+*.swp
+
+# --- Development & Planning Directories ---
+__dev__/
+__plans__/
+__implementation__/
+__internal__/
+__prompt___/
+__sample__/
+__test__/
+__backup__/
+
+# --- Local dev artifacts not needed for build ---
+landing/
+backend/llama.cpp/build/
+backend/llama.cpp/models/
+backend/tests/
+backend/coverage.xml
+backend/.env
+frontend/

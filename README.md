@@ -1,20 +1,41 @@
-# LM-WebUI
+# LM WebUI 🛡️
 
-LM-WebUI is a self-hosted AI workspace for local and cloud models. It combines multimodal chat, image generation, model and runtime management, file context, and provider orchestration in one interface.
+**LM-WebUI** is a self-hosted private multimodal AI workspace with runtime manager. It combines multimodal chat, and image generation with multi-model (local and cloud models) compatible, file context, and provider orchestration in one interface — built for privacy-first and sovereign AI systems.
 
-## What it includes
+<p align="center">
+  <img src="./assets/demo.png" width="1080" />
+</p>
 
-- Chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF, and MLX providers
-- Image generation through OpenAI, Gemini, and local ComfyUI integrations
-- GGUF and MLX model download and runtime management
-- Hardware detection for CPU, CUDA, ROCm, and Apple Metal
-- File uploads, context assembly, memory, and retrieval workflows
-- Projects, sessions, authentication, encrypted API-key storage, and persistent SQLite data
-- Docker deployment variants for CPU, CUDA, ROCm, Metal, and SYCL
+<p align="center">
+  <a href="https://github.com/lm-webui/lm-webui/actions">
+    <img src="https://img.shields.io/badge/development-active-green" />
+  </a>
+  <a href="https://github.com/lm-webui/lm-webui/releases">
+    <img src="https://img.shields.io/badge/release-v0.5.0-blue" />
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-black" />
+  </a>
+  <a href="https://lmwebui.com">
+    <img src="https://img.shields.io/badge/Website-lmwebui.com-orange" />
+  </a>
+</p>
 
-## Quick start
+<p align="center">
+  <b>Run AI on your control</b>
+</p>
 
-### Docker
+---
+
+Built open-source for the community, developers, system integrators, and organizations that require **local inference, reproducibility, and infrastructure-level control**, lm-webui bridges the power of modern cloud LLM features with the integrity of local data ownership.
+
+Run fully offline, integrate with cloud APIs when needed, and deploy across environments without sacrificing performance, privacy, or sovereignty.
+
+---
+
+## 🚀 Quick Start
+
+### Docker (Recommended)
 
 ```bash
 git clone https://github.com/lm-webui/lm-webui.git
@@ -27,73 +48,173 @@ Open `http://localhost:7070`.
 ### Development
 
 ```bash
+# 1. Install root dependencies
 npm install
-cd backend && python -m venv .venv && source .venv/bin/activate
+
+# 2. Backend setup
+cd backend
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+
+# 3. Start both backend and frontend
 cd ..
 npm run dev
 ```
 
 The web client runs on the configured Vite port and proxies API requests to the FastAPI backend on port `8000`.
 
-## Architecture
+---
 
-```text
-backend/                 FastAPI application
-  app/providers/         Remote and local model providers
-  app/orchestrator/      Chat orchestration and streaming flow
-  app/runtime/           Runtime detection and installation
-  app/routes/            HTTP and WebSocket API routes
-  app/services/          Models, images, files, and persistence services
-  app/database/          SQLite schema and connection management
-  app/security/          Authentication, encryption, and access control
-web/                     React 19 + TypeScript application
-landing/                 Public marketing and documentation website
-docs/                    Canonical documentation source
+## ⚡ Core Features
+
+| Feature | Capabilities |
+|---|---|
+| **Authentication** | Secure JWT-based authentication with httpOnly cookies, refresh tokens, session persistence, and role-based permissions. Remember-me toggle for session control. |
+| **Chat** | Multi-provider chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF (llama.cpp), and MLX. Streaming responses, code rendering, Mermaid diagrams, conversation management, and search. |
+| **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
+| **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
+| **File Context** | Upload files for conversation context. Image and document processing, upload status, file references with conversations, and citation display in chat. |
+| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Hardware-compatibility checking and local model registry. |
+| **MLX Runtime** | Model discovery, download, and management for Apple Silicon. Seamless integration with the chat interface. |
+| **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
+| **Runtime Manager** | Detect, register, and test local runtimes including Ollama, GGUF (llama.cpp), MLX, vLLM, and ComfyUI through the admin interface. |
+| **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
+| **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
+| **Self-Hosted Ready** | Single Docker container, zero external telemetry, offline-capable. Mount your models, data, and media as volumes. |
+
+---
+
+## 🤗 GGUF Runtime Highlights
+
+- **Model Management**: Upload and download GGUF models with progress tracking
+- **HuggingFace Integration**: Direct download from HuggingFace repositories
+- **Hardware Compatibility**: Automatic model validation for your system
+- **Local Registry**: Manage and organize local GGUF models
+- **Seamless Integration**: Use GGUF models directly in chat conversations
+
+---
+
+## 📖 Documentation
+
+For detailed documentation, see the [`docs/`](./docs/) directory:
+
+- **[Getting Started](./docs/getting-started.md)** — Complete setup guide
+- **[Features](./docs/features.md)** — Detailed feature documentation
+- **[Architecture](./docs/architecture.md)** — Backend, frontend, provider, and runtime design
+- **[Deployment](./docs/DEPLOYMENT.md)** — Production deployment guides
+- **[CLI](./docs/cli.md)** — Host CLI reference
+- **[Contributing](./CONTRIBUTING.md)** — How to contribute to the project
+- **[Security](./SECURITY.md)** — Security政策和 practices
+
+---
+
+## </> Architecture Overview
+
+LM-WebUI is a React + FastAPI application with a modular monolith backend and a feature-based frontend.
+
+```
+lm-webui/
+├── backend/               # FastAPI application
+│   ├── app/
+│   │   ├── routes/        # REST + WebSocket API endpoints
+│   │   ├── providers/     # AI provider implementations (remote + local)
+│   │   ├── orchestrator/  # Chat flow controller and streaming
+│   │   ├── services/      # Models, images, files, audit, usage tracking
+│   │   ├── chat/          # Session and message persistence
+│   │   ├── database/      # SQLite schema, migrations, connection pool
+│   │   ├── hardware/      # GPU/CPU detection and quantization
+│   │   ├── memory/        # Context assembly and conversation summarization
+│   │   ├── runtime/       # Runtime detection and metadata
+│   │   └── security/      # JWT authentication, encryption, RBAC
+│   └── tests/             # Backend tests
+├── web/                   # React 19 + TypeScript frontend
+│   ├── src/
+│   │   ├── components/    # UI components (shadcn/ui + custom)
+│   │   ├── features/      # Domain logic (chat, images, models, sessions)
+│   │   ├── store/         # Zustand state management
+│   │   ├── services/      # WebSocket client and API services
+│   │   └── utils/         # API client, providers, helpers
+│   └── dist/              # Built frontend (served by backend in production)
+└── docs/                  # Canonical documentation
 ```
 
 The backend is a modular monolith. Providers implement a shared interface, the orchestrator coordinates chat execution, and the frontend consumes REST and WebSocket APIs.
 
-## Documentation
+### Data Flow
 
-Read the full documentation at [lm-webui.com/docs](https://lm-webui.com/docs).
-
-- [Getting Started](docs/getting-started.md)
-- [Features](docs/features.md)
-- [Architecture](docs/architecture.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Contributing](CONTRIBUTING.md)
-- [Security](SECURITY.md)
-- [Changelog](CHANGELOG.md)
-
-The files in `docs/` are the canonical source used by both GitHub and the documentation website.
-
-## Development commands
-
-```bash
-npm run dev          # backend and web client
-npm run build        # build the web client
-npm run typecheck    # TypeScript checks
-npm run test         # frontend tests
-npm run lint         # frontend linting
+```
+Chat:     User → WebSocket/REST → Orchestrator → Provider → LLM → Stream → UI
+Images:   Studio → POST /api/images/generate → Handler → API/ComfyUI → Save → Gallery
+Models:   Model Selector → GET /api/models/* → Model Registry → Provider.list_models()
 ```
 
-## Deployment and runtimes
+---
 
-The recommended deployment is one LM-WebUI Docker container with runtimes installed outside the application container. Docker packages the web application, authentication, RBAC, projects, artifacts, and usage analytics; host runtimes provide hardware-specific inference.
+## 🔧 Development Commands
+
+```bash
+npm run dev          # Start both backend and web client
+npm run build        # Build the web client (output: web/dist/)
+npm run typecheck    # TypeScript checks
+npm run test         # Frontend tests
+npm run lint         # Frontend linting
+npm run format       # Format frontend code
+```
+
+---
+
+## 🚢 Deployment
+
+The recommended deployment is one LM-WebUI Docker container with runtimes installed outside the application container.
 
 ```bash
 docker compose up -d --build
 ```
 
-Use the Runtime Manager as an administrator to register and test Ollama or another OpenAI-compatible local endpoint. Install host runtimes with the separate `lm-webui-host` CLI; the application container does not install drivers or modify the host operating system.
+Docker packages the web application, authentication, RBAC, projects, artifacts, and usage analytics. Host runtimes provide hardware-specific inference.
 
-See [Host CLI](docs/cli.md) and [Deployment](docs/DEPLOYMENT.md) for setup, persistence, runtime endpoints, and troubleshooting.
+Use the Runtime Manager as an administrator to register and test Ollama or another OpenAI-compatible local endpoint. Install host runtimes with the separate `lm-webui-host` CLI — the application container does not install drivers or modify the host operating system.
 
-## Project status
+### Persistence
 
-LM-WebUI is under active development. Interfaces, providers, and deployment options may change between releases. Check the documentation and changelog for current behavior.
+| Data | Location |
+|---|---|
+| SQLite / application data | Docker volume → `/backend/data` |
+| Generated media / uploads | Docker volume → `/backend/media` |
+| Local models | `./backend/models` → `/backend/models` |
+| Secrets | `./backend/.secrets` → `/backend/.secrets` |
 
-## License
+See [Host CLI](./docs/cli.md) and [Deployment](./docs/DEPLOYMENT.md) for setup, runtime endpoints, and troubleshooting.
 
-LM-WebUI is released under the MIT License. See [LICENSE](LICENSE).
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests
+5. Submit a pull request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 🔗 Links
+
+- **Website**: [lmwebui.com](https://lmwebui.com)
+- **GitHub**: [github.com/lm-webui/lm-webui](https://github.com/lm-webui/lm-webui)
+- **Issues**: [GitHub Issues](https://github.com/lm-webui/lm-webui/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/lm-webui/lm-webui/discussions)
+
+---
+
+<p align="center">
+  <b>Let's shape the future of local AI together 🤜🤛</b>
+</p>

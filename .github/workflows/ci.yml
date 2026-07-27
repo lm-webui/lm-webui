@@ -50,13 +50,13 @@ jobs:
 
       # Frontend checks
       - name: Install frontend dependencies
-        run: cd frontend && npm install
+        run: cd web && npm install
 
       - name: Run TypeScript type check
-        run: cd frontend && npm run typecheck || echo "TypeScript type errors found"
+        run: cd web && npm run typecheck || echo "TypeScript type errors found"
 
       - name: Audit npm dependencies
-        run: cd frontend && npm audit --audit-level=high || echo "npm audit found security issues"
+        run: cd web && npm audit --audit-level=high || echo "npm audit found security issues"
 
   test:
     name: Unit & AI Tests
@@ -95,17 +95,13 @@ jobs:
               # Test model loading capability
               from app.services.model_registry import ModelRegistry
               print('✓ ModelRegistry import successful')
-              
-              # Test RAG components
-              from app.rag.processor import DocumentProcessor
-              print('✓ RAG components import successful')
-              
+
               # Test API routes exist
               from app.main import app
               routes = [route.path for route in app.routes]
-              ai_routes = [r for r in routes if 'chat' in r or 'rag' in r or 'inference' in r]
+              ai_routes = [r for r in routes if 'chat' in r or 'image' in r]
               print(f'✓ Found {len(ai_routes)} AI-related routes')
-              
+
               print('AI platform smoke test passed')
           except Exception as e:
               print(f'AI smoke test warning: {e}')
@@ -114,12 +110,12 @@ jobs:
       # Frontend tests
       - name: Run frontend tests
         run: |
-          cd frontend
+          cd web
           npm test -- --coverage || echo "Frontend tests failed - continuing"
       - name: Upload frontend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:
-          directory: frontend/coverage
+          directory: web/coverage
           flags: frontend
 
   # ----------------------------------------
@@ -193,9 +189,6 @@ jobs:
           curl -f http://localhost:8000/api/chat/completions -X POST -H "Content-Type: application/json" -d '{"messages":[{"role":"user","content":"test"}]}' || echo "AI endpoint may require authentication"
           echo "Container health verification passed"
       - name: Run Docker Compose integration test
-        env:
-          FORCED_BACKEND: cpu
-          DOCKERFILE_PATH: docker/Dockerfile.cpu
         run: |
           docker compose up -d
           sleep 30

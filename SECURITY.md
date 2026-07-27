@@ -4,8 +4,8 @@
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.3.x   | :white_check_mark: |
-| < 0.3   | :x:                |
+| 0.5.x   | :white_check_mark: |
+| < 0.5   | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -77,5 +77,4 @@ Security issues in the following areas are in scope:
 
 ## Known Limitations
 
-- RAG metadata handling should not contain sensitive data in untrusted deployments
 - Hardware acceleration features require appropriate driver permissions
