@@ -2,7 +2,7 @@
 GGUF Model Management Routes
 Unified GGUF model operations with WebSocket support
 """
-from fastapi import APIRouter, WebSocket, HTTPException, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, WebSocket, HTTPException, BackgroundTasks, UploadFile, File, Depends
 from fastapi.responses import JSONResponse
 import os
 import shutil
@@ -13,11 +13,12 @@ from app.services.gguf_resolver import gguf_resolver
 from app.services.gguf_downloader import gguf_downloader
 from app.services.gguf_manager import list_local_models, delete_local_model, validate_gguf_file, get_model_metadata
 from app.hardware.detection import check_gguf_compatibility
+from app.security.auth.dependencies import get_current_user, require_permission
 
 router = APIRouter(prefix="/api/models")
 
 @router.post("/resolve")
-async def resolve_gguf_model(resolve_request: dict):
+async def resolve_gguf_model(resolve_request: dict, _: dict = Depends(require_permission("models.install"))):
     """
     Resolve HuggingFace repo, tag, or URL to GGUF files
     
@@ -83,7 +84,7 @@ async def resolve_gguf_model(resolve_request: dict):
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.post("/download")
-async def start_gguf_download(download_request: dict):
+async def start_gguf_download(download_request: dict, _: dict = Depends(require_permission("models.install"))):
     """
     Start GGUF download with WebSocket progress tracking
     
@@ -136,7 +137,7 @@ async def start_gguf_download(download_request: dict):
         raise HTTPException(status_code=500, detail=f"Failed to start download: {str(e)}")
 
 @router.websocket("/download-ws/{task_id}")
-async def download_progress_websocket(websocket: WebSocket, task_id: str):
+async def download_progress_websocket(websocket: WebSocket, task_id: str, _: dict = Depends(require_permission("models.install"))):
     """
     WebSocket endpoint for real-time download progress
     
@@ -183,7 +184,7 @@ async def download_progress_websocket(websocket: WebSocket, task_id: str):
         gguf_downloader.unregister_websocket(task_id, websocket)
 
 @router.get("/download/status/{task_id}")
-async def get_download_status(task_id: str):
+async def get_download_status(task_id: str, _: dict = Depends(require_permission("models.install"))):
     """
     Get download task status via HTTP (alternative to WebSocket)
     
@@ -205,7 +206,7 @@ async def get_download_status(task_id: str):
     return status
 
 @router.delete("/{model_name}")
-async def delete_gguf_model(model_name: str):
+async def delete_gguf_model(model_name: str, _: dict = Depends(require_permission("models.install"))):
     """
     Delete local GGUF model
     
@@ -234,7 +235,7 @@ async def delete_gguf_model(model_name: str):
         raise HTTPException(status_code=500, detail=f"Failed to delete model: {str(e)}")
 
 @router.post("/upload")
-async def upload_gguf_model(file: UploadFile = File(...)):
+async def upload_gguf_model(file: UploadFile = File(...), _: dict = Depends(require_permission("models.install"))):
     """
     Upload GGUF model file
     
@@ -292,7 +293,7 @@ async def upload_gguf_model(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 @router.get("/compatibility/{model_name}")
-async def check_model_compatibility(model_name: str):
+async def check_model_compatibility(model_name: str, _: dict = Depends(require_permission("models.install"))):
     """
     Check hardware compatibility for local GGUF model
     
@@ -334,10 +335,10 @@ async def check_model_compatibility(model_name: str):
         raise HTTPException(status_code=500, detail=f"Compatibility check failed: {str(e)}")
 
 @router.get("/local")
-async def list_local_gguf_models():
+async def list_local_gguf_models(_: dict = Depends(require_permission("models.read"))):
     """
     List local GGUF models (delegates to existing local_models endpoint)
-    
+
     Response: {"models": [...]}
     """
     models = list_local_models()

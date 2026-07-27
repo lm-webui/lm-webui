@@ -8,10 +8,14 @@ This module provides the core authentication functionality including:
 """
 
 from datetime import datetime, timedelta
+from typing import Optional
 from jose import jwt
 from passlib.context import CryptContext
 from pathlib import Path
 import secrets
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Persistent secret key management
 def get_secret_key():
@@ -38,21 +42,60 @@ ALGORITHM = "HS256"
 # Password context - using pbkdf2_sha256 for better security
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
+def _get_token_expiry() -> tuple:
+    """Read token expiry settings from config_manager (fallback: 60 min / 7 days)."""
+    try:
+        from app.core.config_manager import get_security_config
+        cfg = get_security_config()
+        return cfg.access_token_expire_minutes, cfg.refresh_token_expire_days
+    except Exception:
+        logger.debug("config_manager not available, using default token expiry")
+        return 60, 7
+
 # Token functions
-def create_access_token(user_id: int) -> str:
-    """Create 60-minute access token"""
-    expire = datetime.utcnow() + timedelta(minutes=60)
-    return jwt.encode({"sub": str(user_id), "exp": expire}, SECRET_KEY, ALGORITHM)
+def create_access_token(user_id: int, role: str = "user", permissions: list = None,
+                        expires_delta: Optional[timedelta] = None) -> str:
+    """Create access token with role and permissions.
+    Default expiry: 60 minutes (configurable via APP_SECURITY_ACCESS_TOKEN_EXPIRE_MINUTES).
+    """
+    if expires_delta is None:
+        minutes, _ = _get_token_expiry()
+        expires_delta = timedelta(minutes=minutes)
+    expire = datetime.utcnow() + expires_delta
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "permissions": permissions or [],
+        "exp": expire,
+    }
+    return jwt.encode(payload, SECRET_KEY, ALGORITHM)
 
-def create_refresh_token(user_id: int) -> str:
-    """Create 7-day refresh token"""
-    expire = datetime.utcnow() + timedelta(days=7)
-    return jwt.encode({"sub": str(user_id), "exp": expire, "type": "refresh"}, SECRET_KEY, ALGORITHM)
+def create_refresh_token(user_id: int, role: str = "user", permissions: list = None,
+                         expires_delta: Optional[timedelta] = None) -> str:
+    """Create refresh token with role and permissions.
+    Default expiry: 7 days (configurable via APP_SECURITY_REFRESH_TOKEN_EXPIRE_DAYS).
+    """
+    if expires_delta is None:
+        _, days = _get_token_expiry()
+        expires_delta = timedelta(days=days)
+    expire = datetime.utcnow() + expires_delta
+    payload = {
+        "sub": str(user_id),
+        "role": role,
+        "permissions": permissions or [],
+        "exp": expire,
+        "type": "refresh",
+    }
+    return jwt.encode(payload, SECRET_KEY, ALGORITHM)
 
-def verify_token(token: str) -> int:
-    """Verify token and return user_id"""
+def verify_token(token: str) -> dict:
+    """Verify token and return payload with id, role, permissions."""
     payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    return int(payload["sub"])
+    return {
+        "id": int(payload["sub"]),
+        "role": payload.get("role", "user"),
+        "permissions": payload.get("permissions", []),
+    }
 
 # Password functions
 def hash_password(password: str) -> str:

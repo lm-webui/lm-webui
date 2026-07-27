@@ -106,52 +106,6 @@ check_prerequisites() {
     log_success "All prerequisites satisfied"
 }
 
-# Check for NVIDIA GPU
-check_gpu() {
-    log_info "Checking for GPU support..."
-    
-    # Check for NVIDIA
-    if command -v nvidia-smi &> /dev/null; then
-        # Check for driver mismatch (common update issue)
-        if nvidia-smi 2>&1 | grep -q "Driver/library version mismatch"; then
-            log_error "NVIDIA driver/library version mismatch detected!"
-            log_info "This usually happens after a driver update. Please reboot your system and try again."
-            exit 1
-        fi
-        
-        log_success "NVIDIA GPU detected"
-        HAS_NVIDIA_GPU=true
-        HAS_AMD_GPU=false
-        HAS_INTEL_GPU=false
-    elif command -v rocm-smi &> /dev/null; then
-        log_success "AMD GPU detected"
-        HAS_NVIDIA_GPU=false
-        HAS_AMD_GPU=true
-        HAS_INTEL_GPU=false
-    elif command -v clinfo &> /dev/null && clinfo | grep -q "Intel.*Graphics"; then
-        log_success "Intel GPU detected"
-        HAS_NVIDIA_GPU=false
-        HAS_AMD_GPU=false
-        HAS_INTEL_GPU=true
-    else
-        log_info "No supported GPU detected - using CPU mode"
-        HAS_NVIDIA_GPU=false
-        HAS_AMD_GPU=false
-        HAS_INTEL_GPU=false
-    fi
-    
-    # Check for Apple Silicon (macOS)
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        ARCH=$(uname -m)
-        if [[ "$ARCH" == "arm64" ]]; then
-            log_info "Apple Silicon (ARM64) detected"
-            # Note: Docker on macOS doesn't support Metal acceleration in containers
-            log_warning "Metal acceleration is not available in Docker containers on macOS"
-            log_info "For best performance on Apple Silicon, consider native installation"
-        fi
-    fi
-}
-
 # Create environment configuration
 setup_environment() {
     log_info "Setting up environment..."
@@ -161,19 +115,18 @@ setup_environment() {
         cat > .env << EOF
 # LM WebUI Environment Configuration
 
-# Local Models Directory
-LOCAL_MODELS_DIR=./backend/models
-
 # Server Configuration
-PORT=7070
-HOST=0.0.0.0
+# The container publishes port 7070 from its internal port 8000.
 
-# Data Persistence
-DATA_DIR=./data
-MEDIA_DIR=./media
+# Application container paths
+APP_ENVIRONMENT=production
+APP_PATHS_DATA_DIR=/backend/data
+APP_PATHS_MEDIA_DIR=/backend/media
+# Optional host runtime endpoint
+# APP_RUNTIME_DEFAULT_ENDPOINT=http://host.docker.internal:11434
 EOF
         log_success "Created .env file with template configuration"
-        log_info "Edit .env to add your API keys for cloud models"
+    log_info "Use the application settings for provider API keys and Runtime Manager for external runtimes"
     else
         log_info ".env file already exists"
     fi
@@ -187,8 +140,7 @@ EOF
     
     log_info "Created required data and model directories"
     
-    # Note: Docker uses volumes for data and media, not host directories
-    log_info "Docker volumes will be created automatically for data and media storage"
+    log_info "Data and media use Docker volumes; models use ./backend/models"
 }
 
 # Clone or use existing repository
@@ -218,120 +170,22 @@ setup_repository() {
 # Build and start the application
 start_application() {
     log_info "Starting LM WebUI..."
-    
-    # Check if containers are already running
-    if docker compose ps 2>/dev/null | grep -q "lm-webui"; then
-        log_warning "LM WebUI is already running. Restarting..."
-        docker compose down
-    fi
-    
-    # Detect GPU and use appropriate image
-    log_info "Detecting GPU for optimal image..."
-    GPU_IMAGE=""
-    
-    if command -v nvidia-smi &> /dev/null; then
-        GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -1)
-        log_info "NVIDIA GPU detected: $GPU_NAME"
-        GPU_VARIANT="cuda"
-        
-        # Check if nvidia-container-toolkit is installed
-        if ! command -v nvidia-ctk &> /dev/null; then
-            log_warning "NVIDIA Container Toolkit not found!"
-            log_info "Installing NVIDIA Container Toolkit using official repository..."
-            
-            # Official NVIDIA Container Toolkit installation
-            curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg \
-              && curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
-                sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
-                sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
-            
-            sudo apt-get update
-            sudo apt-get install -y nvidia-container-toolkit
-            
-            # Configure Docker runtime using nvidia-ctk
-            log_info "Configuring NVIDIA Container Runtime..."
-            sudo nvidia-ctk runtime configure --runtime=docker
-            
-            # Restart Docker to apply changes
-            if command -v systemctl &> /dev/null; then
-                sudo systemctl restart docker
-            else
-                log_warning "Systemd not found. Please restart Docker manually."
-            fi
-            
-            log_success "NVIDIA Container Toolkit installed and configured!"
-        else
-            log_info "NVIDIA Container Toolkit (nvidia-ctk) is already installed"
-        fi
-    elif [[ "$OSTYPE" == "darwin*" ]] && [[ "$(uname -m)" == "arm64" ]]; then
-        log_info "Apple Silicon detected (Metal)"
-        log_warning "Note: Metal acceleration requires native installation, not Docker"
-        GPU_VARIANT="metal"
-    elif command -v rocm-smi &> /dev/null; then
-        log_info "AMD GPU detected (ROCm)"
-        GPU_VARIANT="rocm"
-    elif command -v clinfo &> /dev/null && clinfo | grep -q "Intel.*Graphics"; then
-        log_info "Intel GPU detected (SYCL)"
-        GPU_VARIANT="sycl"
-    else
-        log_info "No GPU detected - using CPU image"
-        GPU_VARIANT="cpu"
-    fi
-    
-    # Check if pre-built images are available on GHCR
-    GHCR_IMAGE="ghcr.io/lm-webui/lm-webui:$GPU_VARIANT-latest"
-    
-    # Try to pull pre-built image first (faster)
-    log_info "Downloading pre-built image from GHCR (this may take a while)..."
-    if docker pull "$GHCR_IMAGE"; then
-        log_success "Pulled pre-built image: $GHCR_IMAGE"
-        # Use pulled image instead of building
-        export IMAGE_NAME="$GHCR_IMAGE"
-        
-        # Determine compose files based on GPU
-        COMPOSE_FILES="-f docker-compose.yml"
-        if [ "$GPU_VARIANT" == "cuda" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.cuda.yml"
-        elif [ "$GPU_VARIANT" == "rocm" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.rocm.yml"
-        elif [ "$GPU_VARIANT" == "sycl" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
-        fi
-        
-        # We use env variable to override image in compose if needed, but the override files 
-        # already point to the correct ghcr.io images.
-        docker compose $COMPOSE_FILES up -d
-    else
-        log_info "Pre-built image not available locally or on registry, building..."
-        
-        # Fall back to local build
-        # Determine compose files based on GPU
-        COMPOSE_FILES="-f docker-compose.yml"
-        if [ "$GPU_VARIANT" == "cuda" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.cuda.yml"
-        elif [ "$GPU_VARIANT" == "rocm" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.rocm.yml"
-        elif [ "$GPU_VARIANT" == "sycl" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.sycl.yml"
-        elif [ "$GPU_VARIANT" == "metal" ]; then
-            COMPOSE_FILES="$COMPOSE_FILES -f docker/docker-compose.metal.yml"
-        fi
-
-        docker compose $COMPOSE_FILES build
-        docker compose $COMPOSE_FILES up -d
-    fi
+    docker compose up -d --build
     
     # Wait for application to start
     log_info "Waiting for application to start..."
     sleep 10
     
     # Check health
-    if curl -s http://localhost:7070/api/health > /dev/null; then
-        log_success "LM WebUI is running and healthy!"
-    else
-        log_warning "Application is starting up... health check may take a moment"
-        sleep 10
-    fi
+    for attempt in {1..30}; do
+        if curl -fsS http://localhost:7070/api/health | grep -q '"ready":true'; then
+            log_success "LM WebUI is running and healthy!"
+            return
+        fi
+        sleep 2
+    done
+    log_error "LM WebUI did not become ready. Check: docker compose logs -f"
+    exit 1
 }
 
 # Display final instructions
@@ -346,13 +200,13 @@ show_instructions() {
     echo -e "  • API Docs: ${YELLOW}http://localhost:7070/docs${NC}"
     echo ""
     echo -e "${BLUE}Management commands:${NC}"
-    echo -e "  • Stop: ${YELLOW}docker-compose down${NC}"
-    echo -e "  • View logs: ${YELLOW}docker-compose logs -f${NC}"
-    echo -e "  • Restart: ${YELLOW}docker-compose restart${NC}"
+    echo -e "  • Stop: ${YELLOW}docker compose down${NC}"
+    echo -e "  • View logs: ${YELLOW}docker compose logs -f${NC}"
+    echo -e "  • Restart: ${YELLOW}docker compose restart${NC}"
     echo ""
     echo -e "${BLUE}Next steps:${NC}"
     echo -e "  1. Open ${YELLOW}http://localhost:7070${NC} in your browser"
-    echo -e "  2. Add API keys to ${YELLOW}.env${NC} file for cloud models"
+    echo -e "  2. Install the optional host CLI: ${YELLOW}python -m pip install -e cli${NC}"
     echo -e "  3. Place GGUF models in ${YELLOW}./backend/models/${NC} for local inference"
     echo ""
     echo -e "${BLUE}Useful directories:${NC}"
@@ -373,9 +227,6 @@ main() {
     
     # Check prerequisites
     check_prerequisites
-    
-    # Check GPU
-    check_gpu
     
     # Setup repository
     setup_repository

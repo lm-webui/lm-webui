@@ -1,0 +1,42 @@
+# Code Owners
+
+# Default owner for all files
+* @lm-webui/core
+
+# Backend
+/backend/ @lm-webui/backend @lm-webui/core
+/backend/app/services/ @lm-webui/backend
+/backend/app/routes/ @lm-webui/backend
+/backend/app/security/ @lm-webui/security
+/backend/tests/ @lm-webui/qa
+
+# Frontend
+/frontend/ @lm-webui/frontend @lm-webui/core
+/frontend/src/components/ @lm-webui/frontend
+/frontend/src/services/ @lm-webui/frontend
+/frontend/__tests__/ @lm-webui/qa
+
+# Infrastructure
+/docker/ @lm-webui/infra
+/docker-compose.yml @lm-webui/infra
+/.github/workflows/ @lm-webui/infra
+
+# Documentation
+/docs/ @lm-webui/docs
+README.md @lm-webui/docs
+
+# Configuration
+*.yaml @lm-webui/infra
+*.yml @lm-webui/infra
+.env* @lm-webui/infra @lm-webui/security
+
+# Installer
+install.sh @lm-webui/infra @lm-webui/security
+*.sh @lm-webui/infra
+
+# llama.cpp submodule
+/backend/llama.cpp/ @lm-webui/llama-team
+
+# Release management
+CHANGELOG.md @lm-webui/release
+SECURITY.md @lm-webui/security

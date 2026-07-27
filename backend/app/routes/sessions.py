@@ -14,8 +14,9 @@ router = APIRouter(prefix="/api/sessions")
 
 @router.post("")
 async def create_session(
-    title: str = "New Chat", 
+    title: str = "New Chat",
     conversation_id: Optional[str] = None,
+    metadata: Optional[str] = None,
     user_id: dict = Depends(get_current_user)
 ):
     """Create a new conversation (session) - Backend controls ID generation"""
@@ -42,9 +43,11 @@ async def create_session(
         }
     
     # Create conversation in database
+    import json
+    meta_value = metadata if metadata else "{}"
     db.execute(
-        "INSERT INTO conversations (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-        (conv_id, user_id["id"], title, datetime.now(), datetime.now())
+        "INSERT INTO conversations (id, user_id, title, metadata, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (conv_id, user_id["id"], title, meta_value, datetime.now(), datetime.now())
     )
     db.commit()
     

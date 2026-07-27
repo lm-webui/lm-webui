@@ -1,38 +1,27 @@
 services:
   lm-webui:
-    build:
-      context: .
-      # Tip: Use a build argument to switch between Dockerfile.cuda and Dockerfile.rocm
-      dockerfile: ${DOCKERFILE_PATH:-docker/Dockerfile.cuda}
-    image: lm-webui:production
-    container_name: lm-webui-v1
+    build: .
+    image: lm-webui:latest
+    container_name: lm-webui
     ports:
       - "7070:8000"
-
-    # 3. Increase Shared Memory
-    # Crucial for ROCm and Intel Arc to prevent "Bus Error" crashes
-    shm_size: "8gb"
-
     volumes:
-      - app_data:/backend/data
-      - app_media:/backend/media
-      - ./backend/config.yaml:/backend/config.yaml
-      - build_cache:/backend/app/persistent_build
+      - ./.lmwebui/data:/backend/data
+      - ./.lmwebui/media:/backend/media
       - ./backend/models:/backend/models
-      - ./backend/rag:/backend/rag
       - ./backend/.secrets:/backend/.secrets
-
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      - HF_HOME=/backend/data/models
-      - CONFIG_PATH=/backend/config.yaml
-      - FORCED_BACKEND=${FORCED_BACKEND:-auto}
-      # Hardware specific tuning
-      - HSA_OVERRIDE_GFX_VERSION=${HSA_OVERRIDE_GFX_VERSION:-}
-      - ONEAPI_DEVICE_SELECTOR=level_zero:gpu
-
+      - APP_ENVIRONMENT=production
+      - APP_PATHS_DATA_DIR=/backend/data
+      - APP_PATHS_MEDIA_DIR=/backend/media
+      - APP_RUNTIME_DEFAULT_ENDPOINT=${APP_RUNTIME_DEFAULT_ENDPOINT:-}
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/health')); raise SystemExit(0 if d.get('ready') else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
 
-volumes:
-  app_data:
-  app_media:
-  build_cache:

@@ -6,12 +6,16 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
-    role TEXT DEFAULT 'user',
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    permissions TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'disabled')),
     theme TEXT DEFAULT 'dark',
     language TEXT DEFAULT 'en',
     auto_refresh BOOLEAN DEFAULT 1,
     max_tokens INTEGER DEFAULT 8000,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_login_at DATETIME
 );
 
 -- API Keys table
@@ -33,11 +37,23 @@ CREATE TABLE IF NOT EXISTS user_settings (
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
--- Model Cache table
-CREATE TABLE IF NOT EXISTS model_cache (
-    user_id INTEGER PRIMARY KEY,
-    models TEXT NOT NULL,
-    expires_at DATETIME NOT NULL,
+-- Local, metadata-only AI usage events. Prompt and response content are never stored.
+CREATE TABLE IF NOT EXISTS usage_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    provider TEXT,
+    model TEXT,
+    execution_boundary TEXT DEFAULT 'unknown',
+    input_tokens INTEGER DEFAULT 0,
+    output_tokens INTEGER DEFAULT 0,
+    total_tokens INTEGER DEFAULT 0,
+    token_accuracy TEXT DEFAULT 'unknown',
+    duration_ms INTEGER,
+    success BOOLEAN NOT NULL DEFAULT 1,
+    error_code TEXT,
+    estimated_cost REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
 
@@ -55,6 +71,36 @@ CREATE TABLE IF NOT EXISTS conversations (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
+
+-- Projects table (workspaces with custom system prompts)
+CREATE TABLE IF NOT EXISTS projects (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    system_prompt TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS artifacts (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    project_id TEXT,
+    conversation_id TEXT,
+    title TEXT NOT NULL,
+    artifact_type TEXT NOT NULL DEFAULT 'document',
+    content_json TEXT NOT NULL,
+    format TEXT NOT NULL DEFAULT 'html',
+    version INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL DEFAULT 'active',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects (id) ON DELETE SET NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_artifacts_user_updated ON artifacts(user_id, updated_at DESC);
 
 -- Messages table (uses UUID for message IDs)
 CREATE TABLE IF NOT EXISTS messages (
@@ -117,6 +163,8 @@ CREATE TABLE IF NOT EXISTS media_library (
     file_size INTEGER NOT NULL,
     conversation_id TEXT,
     media_type TEXT,
+    extracted_text TEXT,
+    generation_params TEXT,
     uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
     FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE SET NULL
@@ -128,70 +176,6 @@ CREATE TABLE IF NOT EXISTS conversation_summaries (
     summary TEXT NOT NULL,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-);
-
--- Knowledge Graph table (long-term memory)
-CREATE TABLE IF NOT EXISTS knowledge_graph (
-    id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    type TEXT,
-    content TEXT NOT NULL,
-    confidence REAL DEFAULT 0.5,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
--- RAG Chunks table (optional local metadata)
-CREATE TABLE IF NOT EXISTS rag_chunks (
-    id TEXT PRIMARY KEY,
-    file_id TEXT,
-    conversation_id TEXT,
-    content TEXT,
-    FOREIGN KEY (file_id) REFERENCES files (id),
-    FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-);
-
--- Reasoning Sessions table
-CREATE TABLE IF NOT EXISTS reasoning_sessions (
-    id TEXT PRIMARY KEY,
-    conversation_id TEXT NOT NULL,
-    metadata JSON,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (conversation_id) REFERENCES conversations (id) ON DELETE CASCADE
-);
-
--- Reasoning Steps table
-CREATE TABLE IF NOT EXISTS reasoning_steps (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    step_index INTEGER NOT NULL,
-    step_type TEXT,
-    title TEXT,
-    content TEXT NOT NULL,
-    metadata JSON,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (session_id) REFERENCES reasoning_sessions (id) ON DELETE CASCADE
-);
-
--- Global Knowledge Base Documents (Admin Uploads)
-CREATE TABLE IF NOT EXISTS documents (
-    id TEXT PRIMARY KEY,
-    user_id INTEGER NOT NULL,
-    filename TEXT NOT NULL,
-    file_type TEXT,
-    chunk_count INTEGER DEFAULT 0,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-);
-
--- Vector Chunks Bridge Table
-CREATE TABLE IF NOT EXISTS vector_chunks (
-    id TEXT PRIMARY KEY,
-    document_id TEXT NOT NULL,
-    chunk_index INTEGER NOT NULL,
-    chunk_text TEXT,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (document_id) REFERENCES documents (id) ON DELETE CASCADE
 );
 
 -- Create indexes for better performance
@@ -217,18 +201,65 @@ CREATE INDEX IF NOT EXISTS idx_media_library_conv ON media_library (conversation
 
 CREATE INDEX IF NOT EXISTS idx_conversation_summaries_conv ON conversation_summaries (conversation_id);
 
-CREATE INDEX IF NOT EXISTS idx_kg_user ON knowledge_graph (user_id);
+CREATE INDEX IF NOT EXISTS idx_users_role ON users (role);
+CREATE INDEX IF NOT EXISTS idx_users_status ON users (status);
+CREATE INDEX IF NOT EXISTS idx_usage_user_time ON usage_events(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_usage_model_time ON usage_events(provider, model, created_at);
+CREATE INDEX IF NOT EXISTS idx_usage_boundary_time ON usage_events(execution_boundary, created_at);
 
-CREATE INDEX IF NOT EXISTS idx_kg_type ON knowledge_graph(type);
+-- Organizations (multi-tenant)
+CREATE TABLE IF NOT EXISTS organizations (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    owner_id INTEGER NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES users (id) ON DELETE CASCADE
+);
 
-CREATE INDEX IF NOT EXISTS idx_rag_chunks_file ON rag_chunks (file_id);
+CREATE TABLE IF NOT EXISTS organization_members (
+    org_id TEXT NOT NULL,
+    user_id INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('owner', 'admin', 'member')),
+    permissions TEXT DEFAULT '[]',
+    invited_by INTEGER,
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (org_id, user_id),
+    FOREIGN KEY (org_id) REFERENCES organizations (id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
 
-CREATE INDEX IF NOT EXISTS idx_rag_chunks_conv ON rag_chunks (conversation_id);
+-- API tokens for programmatic access
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    org_id TEXT,
+    name TEXT NOT NULL,
+    token_hash TEXT NOT NULL,
+    permissions TEXT DEFAULT '[]',
+    last_used_at DATETIME,
+    expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
 
-CREATE INDEX IF NOT EXISTS idx_reasoning_sessions_conv ON reasoning_sessions (conversation_id);
+-- Audit log
+CREATE TABLE IF NOT EXISTS audit_log (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER,
+    org_id TEXT,
+    action TEXT NOT NULL,
+    resource_type TEXT,
+    resource_id TEXT,
+    details TEXT,
+    ip_address TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 
-CREATE INDEX IF NOT EXISTS idx_reasoning_steps_session ON reasoning_steps (session_id);
-
-CREATE INDEX IF NOT EXISTS idx_documents_user ON documents (user_id);
-
-CREATE INDEX IF NOT EXISTS idx_vector_chunks_doc ON vector_chunks (document_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_log (action);
+CREATE INDEX IF NOT EXISTS idx_audit_time ON audit_log (created_at);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_user ON api_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_api_tokens_hash ON api_tokens (token_hash);
+CREATE INDEX IF NOT EXISTS idx_org_members_org ON organization_members (org_id);
+CREATE INDEX IF NOT EXISTS idx_org_members_user ON organization_members (user_id);

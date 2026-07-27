@@ -1,7 +1,0 @@
-{
-    "max_seq_length": 8192,
-    "do_lower_case": false,
-    "model_args": {
-        "safe_serialization": true
-    }
-}

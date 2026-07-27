@@ -8,81 +8,93 @@ This module provides the FastAPI routes for authentication including:
 """
 
 from fastapi import APIRouter, HTTPException, Response, Depends, Cookie, Request
+import os
 from pydantic import BaseModel
 from app.database import get_db
 from app.security.auth.core import create_access_token, create_refresh_token, verify_token, pwd_context, hash_password, verify_password
-from app.security.auth.dependencies import get_current_user
-from app.core.config_manager import is_development
+from app.security.auth.dependencies import get_current_user, get_permissions_for_role
+from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/auth")
 
 class LoginRequest(BaseModel):
     email: str
     password: str
+    remember_me: bool = True
 
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):
     """Login user and set JWT tokens as httpOnly cookies"""
     from app.database.sqlite.connection_pool import database_manager
-    
+
     with database_manager.transaction() as conn:
-        user = conn.execute("SELECT id, password_hash, role FROM users WHERE email = ?", (req.email,)).fetchone()
+        user = conn.execute("SELECT id, password_hash, role, COALESCE(status, 'active') FROM users WHERE email = ?", (req.email,)).fetchone()
         if not user or not verify_password(req.password, user[1]):
             raise HTTPException(401, "Invalid credentials")
-        
+
         user_id = user[0]
         role = user[2]
-        
-        # Generate tokens
-        access = create_access_token(user_id)
-        refresh = create_refresh_token(user_id)
-        
-        # Set both tokens as httpOnly cookies with security attributes
-        # Use secure=True in production, secure=False in development
-        secure_cookie = not is_development()
+        if user[3] == "disabled":
+            raise HTTPException(403, "Account disabled")
+        conn.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+
+        # Generate tokens with role and permissions
+        permissions = get_permissions_for_role(role)
+        access = create_access_token(user_id, role=role, permissions=permissions)
+        refresh = create_refresh_token(user_id, role=role, permissions=permissions)
+
+        # Set both tokens as httpOnly cookies
+        # remember_me=true: persistent cookies (survive browser restart)
+        # remember_me=false: session cookies (cleared on browser close)
+        access_max_age = 60*60 if req.remember_me else None
+        refresh_max_age = 7*24*60*60 if req.remember_me else None
+
         response.set_cookie(
             key="access_token",
             value=access,
             httponly=True,
-            secure=secure_cookie,
-            samesite="lax" if is_development() else "strict",
-            max_age=60*60  # 60 minutes
+            secure=False,
+            samesite="lax",
+            path="/",
+            max_age=access_max_age
         )
-        
+
         response.set_cookie(
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=secure_cookie,
-            samesite="lax" if is_development() else "strict",
-            max_age=7*24*60*60  # 7 days
+            secure=False,
+            samesite="lax",
+            path="/",
+            max_age=refresh_max_age
         )
-        
-        return {"user": {"id": user_id, "email": req.email, "role": role}}
+
+        log_action(user_id=user_id, action="user.login")
+        log_action(user_id=user_id, action="user.register")
+        return {"user": {"id": user_id, "email": req.email, "role": role}, "access_token": access}
 
 @router.post("/refresh")
 async def refresh(response: Response, refresh_token: str = Cookie(None)):
     """Refresh access token using refresh token cookie and set new access token as httpOnly cookie"""
     if not refresh_token:
         raise HTTPException(401, "No refresh token")
-    
+
     try:
-        user_id = verify_token(refresh_token)
-        new_access = create_access_token(user_id)
-        
-        # Set new access token as httpOnly cookie
-        # Use secure=True in production, secure=False in development
-        secure_cookie = not is_development()
+        payload = verify_token(refresh_token)
+        new_access = create_access_token(payload["id"], role=payload["role"], permissions=payload["permissions"])
+
+        # Set new access token as httpOnly cookie — works over HTTP on any local network
         response.set_cookie(
             key="access_token",
             value=new_access,
             httponly=True,
-            secure=secure_cookie,
-            samesite="lax" if is_development() else "strict",
-            max_age=60*60  # 60 minutes
+            secure=False,
+            samesite="lax",
+            path="/",
+            max_age=60*60
         )
-        
-        return {"message": "Token refreshed successfully"}
+
+        return {"message": "Token refreshed successfully", "access_token": new_access}
     except:
         raise HTTPException(401, "Invalid refresh token")
 
@@ -91,6 +103,7 @@ async def logout(response: Response):
     """Logout user by clearing both token cookies"""
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
+    log_action(action="user.logout")
     return {"message": "Logged out"}
 
 @router.post("/register")
@@ -99,6 +112,10 @@ async def register(req: LoginRequest, response: Response):
     from app.database.sqlite.connection_pool import database_manager
     
     with database_manager.transaction() as conn:
+        if os.getenv("APP_AUTH_ALLOW_REGISTRATION", "true").lower() == "false":
+            existing_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+            if existing_count > 0:
+                raise HTTPException(403, "Public registration is disabled")
         # Check if user already exists
         cursor = conn.execute("SELECT id FROM users WHERE email = ?", (req.email,))
         existing = cursor.fetchone()
@@ -118,32 +135,33 @@ async def register(req: LoginRequest, response: Response):
         )
         user_id = cursor.lastrowid
         
-        # Generate tokens
-        access = create_access_token(user_id)
-        refresh = create_refresh_token(user_id)
+        # Generate tokens with role and permissions
+        permissions = get_permissions_for_role(role)
+        access = create_access_token(user_id, role=role, permissions=permissions)
+        refresh = create_refresh_token(user_id, role=role, permissions=permissions)
         
-        # Set both tokens as httpOnly cookies with security attributes
-        # Use secure=True in production, secure=False in development
-        secure_cookie = not is_development()
+        # Set both tokens as httpOnly cookies — works over HTTP on any local network
         response.set_cookie(
             key="access_token",
             value=access,
             httponly=True,
-            secure=secure_cookie,
-            samesite="lax" if is_development() else "strict",
-            max_age=60*60  # 60 minutes
+            secure=False,
+            samesite="lax",
+            path="/",
+            max_age=60*60
         )
-        
+
         response.set_cookie(
             key="refresh_token",
             value=refresh,
             httponly=True,
-            secure=secure_cookie,
-            samesite="lax" if is_development() else "strict",
-            max_age=7*24*60*60  # 7 days
+            secure=False,
+            samesite="lax",
+            path="/",
+            max_age=7*24*60*60
         )
-        
-        return {"user": {"id": user_id, "email": req.email, "role": role}}
+
+        return {"user": {"id": user_id, "email": req.email, "role": role}, "access_token": access}
 
 @router.get("/me")
 async def get_current_user_info(user_id: dict = Depends(get_current_user)):
@@ -151,11 +169,11 @@ async def get_current_user_info(user_id: dict = Depends(get_current_user)):
     from app.database.sqlite.connection_pool import database_manager
     
     with database_manager.transaction() as conn:
-        user = conn.execute("SELECT id, email, role FROM users WHERE id = ?", (user_id["id"],)).fetchone()
+        user = conn.execute("SELECT id, email, role, COALESCE(status, 'active') FROM users WHERE id = ?", (user_id["id"],)).fetchone()
         if not user:
             raise HTTPException(404, "User not found")
 
-        return {"id": user[0], "email": user[1], "role": user[2]}
+        return {"id": user[0], "email": user[1], "role": user[2], "status": user[3]}
 
 @router.get("/status")
 async def get_auth_status():

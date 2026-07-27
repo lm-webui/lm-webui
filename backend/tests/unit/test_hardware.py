@@ -3,10 +3,13 @@ import pytest
 import tempfile
 import os
 from app.hardware.quantization import (
-    QuantizationManager,
     extract_quant_from_filename,
     recommended_quants_for_backend,
-    estimate_model_vram
+    estimate_model_vram,
+    pick_best_quant,
+    _quant_fits_vram,
+    _is_quant_supported,
+    _get_quant_size_factor,
 )
 
 
@@ -112,106 +115,78 @@ class TestRecommendedQuantsForBackend:
         assert "Q4_K_S" in quants
 
 
-class TestQuantizationManager:
-    """Test QuantizationManager class."""
-    
-    @pytest.fixture
-    def manager(self):
-        """Create a QuantizationManager instance."""
-        return QuantizationManager()
-    
-    def test_pick_best_quant_fits_vram(self, manager):
+class TestPickBestQuant:
+    """Test pick_best_quant function."""
+
+    def test_pick_best_quant_fits_vram(self):
         """Test picking best quant when it fits VRAM."""
-        # Large VRAM, should pick high quality
-        result = manager.pick_best_quant(
+        result = pick_best_quant(
             model_quant="Q4_K_M",
             backend="cuda",
             vram_mb=16000,
-            model_params=7_000_000_000  # 7B params
+            model_params=7_000_000_000
         )
-        
-        # Should return a valid quantization
         assert result in ["Q8_K_M", "Q6_K", "Q5_K_M", "Q4_K_M", "Q4_K_S", "Q4_0"]
-    
-    def test_pick_best_quant_limited_vram(self, manager):
+
+    def test_pick_best_quant_limited_vram(self):
         """Test picking quant with limited VRAM."""
-        # Small VRAM
-        result = manager.pick_best_quant(
+        result = pick_best_quant(
             model_quant="Q8_K_M",
             backend="cuda",
             vram_mb=4000,
-            model_params=7_000_000_000  # 7B params
+            model_params=7_000_000_000
         )
-        
-        # Should pick lighter quantization
         assert result in ["Q4_K_S", "Q4_0"]
-    
-    def test_pick_best_quant_no_model_params(self, manager):
+
+    def test_pick_best_quant_no_model_params(self):
         """Test picking quant without model params info."""
-        result = manager.pick_best_quant(
+        result = pick_best_quant(
             model_quant="Q4_K_M",
             backend="cuda",
             vram_mb=8000,
             model_params=None
         )
-        
-        # Without model params, should use provided quant
         assert result == "Q4_K_M"
-    
-    def test_quant_fits_vram_true(self, manager):
-        """Test VRAM check when quant fits."""
-        # 7B params at Q4_K_M needs ~4.5GB * 7 * 1.2 = ~38GB
-        # Actually: 4500MB/B params * 7B = 31.5GB + 20% = 37.8GB
-        # So 40GB should fit
-        fits = manager._quant_fits_vram(
-            quant="Q4_K_M",
-            vram_mb=40000,
-            model_params=7_000_000_000
-        )
-        
+
+
+class TestQuantFitsVram:
+    """Test _quant_fits_vram helper."""
+
+    def test_fits_vram_true(self):
+        fits = _quant_fits_vram(quant="Q4_K_M", vram_mb=40000, model_params=7_000_000_000)
         assert fits is True
-    
-    def test_quant_fits_vram_false(self, manager):
-        """Test VRAM check when quant doesn't fit."""
-        # 7B params at Q8_K_M needs ~8.5GB * 7 * 1.2 = ~71GB
-        fits = manager._quant_fits_vram(
-            quant="Q8_K_M",
-            vram_mb=8000,
-            model_params=7_000_000_000
-        )
-        
+
+    def test_fits_vram_false(self):
+        fits = _quant_fits_vram(quant="Q8_K_M", vram_mb=8000, model_params=7_000_000_000)
         assert fits is False
-    
-    def test_quant_fits_vram_no_params(self, manager):
-        """Test VRAM check without model params."""
-        fits = manager._quant_fits_vram(
-            quant="Q4_K_M",
-            vram_mb=8000,
-            model_params=None
-        )
-        
-        # Without params, assumes it fits
+
+    def test_fits_vram_no_params(self):
+        fits = _quant_fits_vram(quant="Q4_K_M", vram_mb=8000, model_params=None)
         assert fits is True
-    
-    def test_is_quant_supported_cpu(self, manager):
-        """Test quant support for CPU backend."""
-        # CPU supports all quants
-        assert manager._is_quant_supported("Q4_K_M", "cpu") is True
-        assert manager._is_quant_supported("Q8_K_M", "cpu") is True
-        assert manager._is_quant_supported("UNKNOWN", "cpu") is True
-    
-    def test_is_quant_supported_cuda(self, manager):
-        """Test quant support for CUDA backend."""
-        assert manager._is_quant_supported("Q4_K_M", "cuda") is True
-        assert manager._is_quant_supported("Q8_K_M", "cuda") is True
-        assert manager._is_quant_supported("UNKNOWN", "cuda") is False
-    
-    def test_get_quant_size_factor(self, manager):
-        """Test quantization size factors."""
-        assert manager._get_quant_size_factor("FP16") == 2.0
-        assert manager._get_quant_size_factor("Q4_K_M") == 0.5
-        assert manager._get_quant_size_factor("Q8_K_M") == 1.0
-        assert manager._get_quant_size_factor("UNKNOWN") == 1.0
+
+
+class TestIsQuantSupported:
+    """Test _is_quant_supported helper."""
+
+    def test_cpu_supports_all(self):
+        assert _is_quant_supported("Q4_K_M", "cpu") is True
+        assert _is_quant_supported("Q8_K_M", "cpu") is True
+        assert _is_quant_supported("UNKNOWN", "cpu") is True
+
+    def test_cuda_rejects_unknown(self):
+        assert _is_quant_supported("Q4_K_M", "cuda") is True
+        assert _is_quant_supported("Q8_K_M", "cuda") is True
+        assert _is_quant_supported("UNKNOWN", "cuda") is False
+
+
+class TestGetQuantSizeFactor:
+    """Test _get_quant_size_factor helper."""
+
+    def test_known_factors(self):
+        assert _get_quant_size_factor("FP16") == 2.0
+        assert _get_quant_size_factor("Q4_K_M") == 0.5
+        assert _get_quant_size_factor("Q8_K_M") == 1.0
+        assert _get_quant_size_factor("UNKNOWN") == 1.0
 
 
 class TestEstimateModelVram:

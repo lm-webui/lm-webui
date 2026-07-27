@@ -4,15 +4,20 @@ from typing import List, Optional
 
 class ChatRequest(BaseModel):
     message: str
-    provider: str  # 'ollama', 'openai', 'grok', 'claude', 'lmstudio'
+    provider: str
     model: str
     api_key: Optional[str] = None
-    endpoint: Optional[str] = None  # For configurable endpoints like LM Studio
-    conversation_history: Optional[list] = None  # List of previous messages for context
-    show_raw_response: bool = False  # Show raw unfiltered model output
-    deep_thinking_mode: bool = False  # Enable extended reasoning/deep thinking
-    user_id: Optional[int] = None  # User ID for context and auto-save
-    conversation_id: Optional[str] = None  # Conversation ID for organization
+    endpoint: Optional[str] = None
+    conversation_history: Optional[list] = None
+    show_raw_response: bool = False
+    deep_thinking_mode: bool = False
+    user_id: Optional[int] = None
+    conversation_id: Optional[str] = None
+    # Image generation fields
+    size: Optional[str] = None
+    quality: Optional[str] = "standard"
+    style: Optional[str] = "vivid"
+    metadata: Optional[dict] = None
 
 
 class ModelsResponse(BaseModel):

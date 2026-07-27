@@ -11,8 +11,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Models directory path
-MODELS_DIR = Path(__file__).parent.parent.parent / "models"
-MODELS_DIR.mkdir(exist_ok=True)
+MODELS_DIR = Path(__file__).parent.parent.parent / "models" / "gguf"
+MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 def list_local_models() -> List[Dict[str, str]]:
     """

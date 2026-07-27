@@ -18,7 +18,7 @@ class DatabaseMigration:
             self.db_path = db_path
         else:
             # Use consistent path resolution from config
-            from app.core.config import get_database_path
+            from app.core.config_manager import get_database_path
             self.db_path = get_database_path()
             
         self.schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
@@ -26,10 +26,11 @@ class DatabaseMigration:
     def check_missing_tables(self) -> list:
         """Check for missing tables in the database"""
         required_tables = [
-            'users', 'api_keys', 'user_settings', 'model_cache',
+            'users', 'api_keys', 'user_settings',
             'conversations', 'messages', 'files', 'file_references',
-            'media_library', 'conversation_summaries', 'knowledge_graph', 'rag_chunks',
-            'documents', 'vector_chunks'
+            'media_library', 'conversation_summaries',
+            'projects', 'usage_events',
+            'organizations', 'organization_members', 'api_tokens', 'audit_log', 'artifacts'
         ]
 
         try:
@@ -96,11 +97,31 @@ class DatabaseMigration:
             # Check users table for role column
             cursor.execute("PRAGMA table_info(users);")
             user_columns = [col[1] for col in cursor.fetchall()]
-            
+
             if "role" not in user_columns:
                 if "users" not in missing_columns:
                     missing_columns["users"] = []
                 missing_columns["users"].append("role")
+
+            for column in ("status", "updated_at", "last_login_at", "permissions"):
+                if column not in user_columns:
+                    if "users" not in missing_columns:
+                        missing_columns["users"] = []
+                    missing_columns["users"].append(column)
+
+            # Check media_library table for extracted_text column
+            cursor.execute("PRAGMA table_info(media_library);")
+            media_columns = [col[1] for col in cursor.fetchall()]
+
+            if "extracted_text" not in media_columns:
+                if "media_library" not in missing_columns:
+                    missing_columns["media_library"] = []
+                missing_columns["media_library"].append("extracted_text")
+
+            if "generation_params" not in media_columns:
+                if "media_library" not in missing_columns:
+                    missing_columns["media_library"] = []
+                missing_columns["media_library"].append("generation_params")
 
             conn.close()
             return missing_columns
@@ -176,6 +197,33 @@ class DatabaseMigration:
             if "users" in missing_columns and "role" in missing_columns["users"]:
                 cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
                 logger.info("✅ Added role column to users table")
+
+            if "users" in missing_columns and "status" in missing_columns["users"]:
+                cursor.execute("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active';")
+                logger.info("✅ Added status column to users table")
+
+            if "users" in missing_columns and "updated_at" in missing_columns["users"]:
+                cursor.execute("ALTER TABLE users ADD COLUMN updated_at DATETIME;")
+                cursor.execute("UPDATE users SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL;")
+                logger.info("✅ Added updated_at column to users table")
+
+            if "users" in missing_columns and "last_login_at" in missing_columns["users"]:
+                cursor.execute("ALTER TABLE users ADD COLUMN last_login_at DATETIME;")
+                logger.info("✅ Added last_login_at column to users table")
+
+            if "users" in missing_columns and "permissions" in missing_columns["users"]:
+                cursor.execute("ALTER TABLE users ADD COLUMN permissions TEXT NOT NULL DEFAULT '[]';")
+                logger.info("✅ Added permissions column to users table")
+
+            # Add extracted_text to media_library table
+            if "media_library" in missing_columns and "extracted_text" in missing_columns["media_library"]:
+                cursor.execute("ALTER TABLE media_library ADD COLUMN extracted_text TEXT;")
+                logger.info("✅ Added extracted_text column to media_library table")
+
+            # Add generation_params to media_library table
+            if "media_library" in missing_columns and "generation_params" in missing_columns["media_library"]:
+                cursor.execute("ALTER TABLE media_library ADD COLUMN generation_params TEXT;")
+                logger.info("✅ Added generation_params column to media_library table")
 
             conn.commit()
             return True

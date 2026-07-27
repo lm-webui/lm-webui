@@ -35,7 +35,9 @@ async def system_info():
     # Get CPU info
     cpu_percent = psutil.cpu_percent(interval=1)
     
+    from app.main import _APP_VERSION
     return {
+        "app_version": _APP_VERSION,
         "platform": {
             "system": platform.system(),
             "release": platform.release(),
@@ -88,17 +90,3 @@ async def system_stats():
         "timestamp": datetime.utcnow().isoformat()
     }
 
-@router.get("/logs")
-async def get_logs():
-    """Get recent application logs (placeholder)"""
-    # In a production system, this would read from log files
-    # For now, return a placeholder
-    return {
-        "logs": [
-            {
-                "timestamp": datetime.utcnow().isoformat(),
-                "level": "INFO",
-                "message": "System started successfully"
-            }
-        ]
-    }

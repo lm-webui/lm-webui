@@ -11,10 +11,10 @@
 FROM node:24-alpine AS frontend-builder
 
 WORKDIR /frontend
-COPY frontend/package*.json ./
+COPY web/package*.json ./
 # Install dependencies for build
 RUN npm ci
-COPY frontend/ ./ 
+COPY web/ ./
 # Output: /frontend/dist
 RUN npm run build
 
@@ -58,7 +58,7 @@ RUN pip install -r requirements.txt
 COPY backend/ ./
 
 # 7. Copy Frontend Assets from Builder Stage
-COPY --from=frontend-builder /frontend/dist ./frontend/dist
+COPY --from=frontend-builder /frontend/dist ./web/dist
 
 # 8. Create Persistent Directories
 RUN mkdir -p /backend/data/sql_db \

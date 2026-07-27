@@ -52,6 +52,7 @@ backend/.env
 frontend/.env
 secrets/
 .secrets/
+.dev
 cookies.txt
 
 # --- App Data & Models (Do Not Commit!) ---
@@ -104,3 +105,22 @@ __implementation__/
 __internal__/
 __test__/
 __backup__/
+
+# Agents
+.claude/
+.agents/
+AGENTS.md
+CHANGELOG.md
+skills-lock.json
+
+# Root data
+data/
+
+# Docker runtime data (host-mount volume)
+.lmwebui/
+
+# Landing page (separate Next.js project, never committed here)
+landing/
+
+# Local llama.cpp build artifacts
+backend/llama.cpp/build/

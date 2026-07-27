@@ -1,82 +1,42 @@
-# ==============================================================================
-# DEFAULT DOCKERFILE (CPU OPTIMIZED)
-# ==============================================================================
-# NOTE: This is the default CPU-only image. 
-# For GPU acceleration, use the specialized Dockerfiles in the `docker/` folder:
-#   - docker/Dockerfile.cuda  (NVIDIA GPUs)
-#   - docker/Dockerfile.rocm  (AMD GPUs)
-#   - docker/Dockerfile.sycl  (Intel ARC GPUs)
-#   - docker/Dockerfile.metal (Apple Silicon - use natively, not recommended in Docker)
-# ==============================================================================
-
-# --- Stage 1: Build Frontend (Static Assets) ---
+# --- Stage 1: Build Frontend ---
 FROM node:24-alpine AS frontend-builder
-
 WORKDIR /frontend
-COPY frontend/package*.json ./
-# Install dependencies for build
+COPY package.json /package.json
+COPY web/package*.json ./
 RUN npm ci
-COPY frontend/ ./ 
-# Output: /frontend/dist
+COPY web/ ./
 RUN npm run build
 
-# --- Stage 2: Runtime Environment (CPU Optimized) ---
+# --- Stage 2: Runtime ---
 FROM python:3.12-slim-bookworm
-
 WORKDIR /backend
 
-# 1. System Dependencies
-# libgomp1: OpenMP support for llama.cpp
-# libstdc++6: Standard C++ library
-# curl/git: Utility tools
 RUN apt-get update && apt-get install -y \
-    libgomp1 libstdc++6 curl git build-essential \
+    libgomp1 libstdc++6 curl git build-essential cmake \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Python Environment
 ENV PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
     PIP_NO_CACHE_DIR=1 \
-    PIP_BREAK_SYSTEM_PACKAGES=1
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    APP_PATHS_DATA_DIR=/backend/data \
+    APP_PATHS_MEDIA_DIR=/backend/media \
+    MEDIA_DIR=/backend/media
 
-# 3. Install CPU-only PyTorch + dependencies FIRST
-
-# 3. Install CPU-only PyTorch + dependencies FIRST
-# This ensures we don't accidentally pull down CUDA versions
-RUN pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# 4. Install llama-cpp-python CPU only
-# Pre-installing this ensures it's compiled correctly for the current arch
-RUN pip install llama-cpp-python==0.3.16 \
-    --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
-
-# 5. Install Python dependencies
-COPY backend/requirements.txt ./requirements.txt
-# Manually install LanceDB dependencies to ensure compatibility
-RUN pip install lancedb>=0.8.0 fastembed>=0.3.0 pyarrow>=15.0.0
+RUN pip install --upgrade pip
+COPY package.json /
+COPY backend/requirements.txt ./
 RUN pip install -r requirements.txt
 
-# 6. Copy Application Code
 COPY backend/ ./
+COPY --from=frontend-builder /frontend/dist ./web/dist
 
-# 7. Copy Frontend Assets from Builder Stage
-COPY --from=frontend-builder /frontend/dist ./frontend/dist
+RUN mkdir -p /backend/data /backend/media/generated/images /backend/media/generated/documents /backend/media/uploads /backend/models /backend/.secrets
 
-# 8. Create Persistent Directories
-RUN mkdir -p /backend/data/vectors \
-             /backend/media/uploads \
-             /backend/data/memory \
-             /backend/data/models \
-             /backend/app/persistent_build
-
-# 9. Environment
 ENV PYTHONPATH=/backend
-ENV CONFIG_PATH=/backend/config.yaml
-ENV FORCED_BACKEND=cpu
 
 EXPOSE 8000
 
 COPY docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh
-
 ENTRYPOINT ["/docker-entrypoint.sh"]

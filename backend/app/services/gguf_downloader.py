@@ -24,8 +24,8 @@ class GGUFDownloadManager:
     def __init__(self):
         self.download_tasks = {}
         self.websocket_connections = {}
-        self.models_dir = Path(__file__).parent.parent.parent / "models"
-        self.models_dir.mkdir(exist_ok=True)
+        self.models_dir = Path(__file__).parent.parent.parent / "models" / "gguf"
+        self.models_dir.mkdir(parents=True, exist_ok=True)
         self.allowed_domains = ['huggingface.co', 'hf.co', 'github.com', 'raw.githubusercontent.com']
     
     def _validate_url(self, url: str) -> bool:

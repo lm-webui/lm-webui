@@ -12,9 +12,10 @@ services:
     volumes:
       - app_data:/backend/data
       - app_media:/backend/media
+      - app_models:/backend/models
       - ./backend/config.yaml:/backend/config.yaml
       - build_cache:/backend/app/persistent_build
-      - ./backend/models:/backend/data/models
+      - ./backend/models:/backend/models
       - ./backend/.secrets:/backend/.secrets
     environment:
       - HF_HOME=/backend/data/models
@@ -26,4 +27,5 @@ services:
 volumes:
   app_data:
   app_media:
+  app_models:
   build_cache:

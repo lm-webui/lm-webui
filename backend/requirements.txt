@@ -7,30 +7,19 @@ psutil
 aiohttp>=3.11.0
 aiofiles
 websockets
-sse-starlette
 passlib[bcrypt]
-pyjwt
-cryptography>=44.0.0
 python-jose[cryptography]
+cryptography>=44.0.0
 python-dotenv
 python-multipart
 tiktoken
 huggingface-hub
 urllib3>=2.0.0
-ddgs
 
 # LLM Provider APIs
 openai
-anthropic
-xai-sdk
-google-genai==1.62.0
 
-# RAG System Dependencies
-easyocr==1.7.2
-lancedb>=0.8.0
-fastembed>=0.3.0
-pyarrow>=15.0.0
-rank-bm25
+# Document Processing (text extraction, no RAG/vector)
 pdfplumber
 python-docx
 python-pptx
@@ -39,9 +28,8 @@ xlrd
 markdown
 beautifulsoup4>=4.12.0
 
-# Image & OCR
+# Image
 Pillow>=11.0.0
-
 
 # NOTE: Hardware-specific dependencies (torch, torchvision, llama-cpp-python)
 # have been moved to their respective Dockerfiles to prevent conflicts

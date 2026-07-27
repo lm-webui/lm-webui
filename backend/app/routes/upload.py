@@ -17,7 +17,7 @@ import os
 import shutil
 from pathlib import Path
 
-from app.rag.processor import RAGProcessor
+from app.services.file_processor import FileProcessor
 from app.security.auth.dependencies import get_current_user
 from app.database import get_db
 from app.core.error_handlers import (
@@ -33,12 +33,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/upload", tags=["upload"])
 
-# Initialize processor (singleton)
+# Initialize service
 try:
-    rag_processor = RAGProcessor()
+    file_processor = FileProcessor()
 except Exception as e:
-    logger.error(f"Failed to initialize RAGProcessor: {e}")
-    rag_processor = None
+    logger.error(f"Failed to initialize FileProcessor: {e}")
+    file_processor = None
 
 # Supported file types for general uploads
 SUPPORTED_TYPES = {
@@ -217,17 +217,17 @@ async def _handle_general_upload(
         media_id = cursor.lastrowid
 
         # Trigger Background Processing
-        if rag_processor:
-            logger.info(f"Queueing RAG processing for {final_filename}")
+        if file_processor:
+            logger.info(f"Queueing text extraction for {final_filename}")
             background_tasks.add_task(
-                rag_processor.process_file,
+                file_processor.process_file,
                 str(file_path),
                 conversation_id or "global",
-                user_id=user_id["id"]
+                user_id["id"]
             )
             processing_queued = True
         else:
-            logger.warning(f"RAG Processor not initialized, skipping processing for {final_filename}")
+            logger.warning(f"FileProcessor not initialized, skipping processing for {final_filename}")
             processing_queued = False
 
         results.append({
@@ -446,4 +446,4 @@ async def delete_uploaded_file(filename: str, user_id: dict = Depends(get_curren
 
 @router.get("/health")
 async def health_check():
-    return {"status": "healthy", "rag_processor": "ready" if rag_processor else "not_initialized"}
+    return {"status": "healthy", "ingestion_service": "ready" if ingestion_service else "not_initialized"}

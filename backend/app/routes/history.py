@@ -146,6 +146,31 @@ async def update_conversation_title_endpoint(conversation_id: str, request: dict
     
     return {"message": "Title updated"}
 
+@router.patch("/conversation/{conversation_id}/metadata")
+async def update_conversation_metadata(
+    conversation_id: str, request: dict,
+    user_id: dict = Depends(get_current_user)
+):
+    """Update conversation metadata (e.g. project_id assignment)."""
+    import json
+    from datetime import datetime
+    db = get_db()
+
+    conv = db.execute(
+        "SELECT id FROM conversations WHERE id = ? AND user_id = ?",
+        (conversation_id, user_id["id"]),
+    ).fetchone()
+    if not conv:
+        raise HTTPException(404, "Conversation not found")
+
+    metadata = json.dumps(request.get("metadata", {}))
+    db.execute(
+        "UPDATE conversations SET metadata = ?, updated_at = ? WHERE id = ?",
+        (metadata, datetime.now(), conversation_id),
+    )
+    db.commit()
+    return {"message": "Metadata updated"}
+
 @router.post("/conversation/{conversation_id}/generate-title")
 async def generate_conversation_title(
     conversation_id: str, 
@@ -215,23 +240,8 @@ async def generate_title_background(conversation_id: str, user_messages: list, u
             db.commit()
             
             print(f"✅ Generated title for conversation {conversation_id}: {title}")
-            
-            # Broadcast title update via WebSocket
-            try:
-                from app.routes.websocket import broadcast_conversation_update
-                await broadcast_conversation_update(user_id, conversation_id, title)
-                print(f"📡 Broadcast title update for conversation {conversation_id}")
-            except Exception as ws_error:
-                print(f"⚠️ WebSocket broadcast failed: {ws_error}")
-                # Continue even if WebSocket fails
-            
-            # Also broadcast via SSE
-            try:
-                from app.routes.title_updates import broadcast_title_update
-                await broadcast_title_update(conversation_id, title)
-                print(f"📡 SSE broadcast title update for conversation {conversation_id}")
-            except Exception as sse_error:
-                print(f"⚠️ SSE broadcast failed: {sse_error}")
+
+            # Title is returned via REST response — no real-time broadcast needed
         else:
             print(f"⚠️ Failed to generate title for conversation {conversation_id}")
             
@@ -239,49 +249,32 @@ async def generate_title_background(conversation_id: str, user_messages: list, u
         print(f"❌ Title generation failed for conversation {conversation_id}: {e}")
 
 async def generate_title_with_llm(message: str, conversation_id: str, user_id: int) -> str:
-    """Generate a title using LLM with ModelRegistry"""
+    """Generate a title using the conversation's own provider, with fallback."""
     try:
-        # Force use of local GGUF model for title generation
-        provider = "gguf"
-        model = "Llama-3.2-1B-Instruct-Q4_K_L.gguf"
-        
-        # Use ModelRegistry to generate title
+        # Use the conversation's own provider for title generation
+        from app.database import get_db
+        db = get_db()
+        row = db.execute(
+            "SELECT provider, model FROM conversations WHERE id = ? AND user_id = ?",
+            (conversation_id, user_id),
+        ).fetchone()
+
+        provider = row[0] if row else "openai"
+        model = row[1] if row else "gpt-4o-mini"
+
         from app.services.model_registry import get_model_registry
         model_registry = get_model_registry()
         strategy = model_registry.get_strategy(provider, user_id)
-        
+
         if not strategy:
-            print(f"⚠️ No strategy found for provider {provider}, using fallback")
             return generate_fallback_title(message)
-        
-        # Get API key for the provider
+
         api_keys = model_registry.get_user_api_keys(user_id)
         api_key = api_keys.get(provider) or api_keys.get(strategy.get_backend_name())
-        
-        # For GGUF, api_key is not required
-        if not api_key and provider != "gguf":
-            print(f"⚠️ No API key found for provider {provider}, using fallback")
-            return generate_fallback_title(message)
-        
-        # Create title generation prompt
-        prompt = f"""Generate a concise, descriptive title (max 6 words) for a conversation that starts with this message:
-        
-        "{message}"
-        
-        The title should:
-        1. Be 2-6 words maximum
-        2. Capture the main topic or question
-        3. Be clear and descriptive
-        4. Not use quotes or special characters
-        
-        Examples:
-        - "Understanding Quantum Physics"
-        - "Python Code Debugging Help"
-        - "Travel Recommendations for Japan"
-        - "Deep Learning Model Architecture"
-        
-        Title:"""
-        
+
+        # Build a standalone prompt asking for a short title
+        prompt = f"Generate a concise title (max 6 words) for a conversation starting with: \"{message[:100]}\". Title:"
+
         messages = [
             {"role": "system", "content": "You are a helpful assistant that generates concise, descriptive titles for conversations."},
             {"role": "user", "content": prompt}

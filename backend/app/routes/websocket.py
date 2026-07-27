@@ -12,7 +12,7 @@ from typing import Dict, Any
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 
 from app.security.auth.dependencies import get_current_user
-from app.chat.controller import get_chat_controller
+from app.orchestrator.controller import get_orchestrator
 from app.chat.schemas import ChatRequest
 from app.chat.events import ModelEvent
 
@@ -20,69 +20,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws")
 
 
-@router.websocket("/multimodal")
-async def websocket_multimodal(
-    websocket: WebSocket,
-    user_id: int = Depends(get_current_user)
-):
-    """
-    WebSocket endpoint for multimodal content analysis
-    
-    Kept for backward compatibility with existing multimodal features.
-    """
-    await websocket.accept()
-
-    try:
-        while True:
-            data = await websocket.receive_json()
-            action = data.get("action")
-
-            if action == "analyze_image":
-                # Image analysis with streaming progress
-                await websocket.send_json({
-                    "type": "analysis_start",
-                    "message": "Starting multimodal analysis..."
-                })
-
-                # Simulate multimodal analysis
-                await asyncio.sleep(0.5)
-                await websocket.send_json({
-                    "type": "processing_step",
-                    "step": "OCR processing",
-                    "progress": 30
-                })
-
-                await asyncio.sleep(0.5)
-                await websocket.send_json({
-                    "type": "processing_step",
-                    "step": "Content analysis",
-                    "progress": 60
-                })
-
-                await asyncio.sleep(0.5)
-                await websocket.send_json({
-                    "type": "analysis_complete",
-                    "result": "Multimodal analysis completed (placeholder)"
-                })
-
-            elif action == "process_document":
-                await websocket.send_json({
-                    "type": "processing_start",
-                    "message": "Document analysis starting..."
-                })
-                # Document processing logic here
-                await websocket.send_json({
-                    "type": "processing_complete",
-                    "summary": "Document processed (placeholder)"
-                })
-
-    except WebSocketDisconnect:
-        logger.info("Multimodal WebSocket disconnected")
-    except Exception as e:
-        logger.error(f"Multimodal error: {str(e)}")
-
-
-@router.websocket("/chat")
 async def websocket_chat(
     websocket: WebSocket,
     user_id: int = Depends(get_current_user)
@@ -95,7 +32,7 @@ async def websocket_chat(
     - Send: {"type": "cancel", "sessionId": "..."}
     - Receive: ModelEvent objects (typing, token, error, done, cancelled)
     
-    Transport layer only - delegates all business logic to ChatController.
+    Transport layer only - delegates all business logic to OrchestratorController.
     """
     await websocket.accept()
     
@@ -104,8 +41,8 @@ async def websocket_chat(
     if isinstance(user_id, dict):
         user_id_int = user_id.get("id") or user_id.get("user_id")
     
-    # Get chat controller (RAGProcessor will be injected via app state)
-    controller = get_chat_controller()
+    # Get orchestrator
+    controller = get_orchestrator()
     
     try:
         # Send connection confirmation
@@ -189,7 +126,7 @@ async def _handle_chat_message(
         conversation_id = request.conversationId or data.get("conversationId")
         
         # Process through controller with user_id and conversation_id
-        async for event in controller.process_chat_request(request, user_id, conversation_id):
+        async for event in controller.process_request(request, user_id, conversation_id):
             await safe_send_json(websocket, event.to_dict())
             
     except Exception as e:
@@ -257,7 +194,7 @@ async def safe_send_json(websocket: WebSocket, data: Dict[str, Any]) -> bool:
 @router.get("/health")
 async def websocket_health():
     """WebSocket service health check"""
-    controller = get_chat_controller()
+    controller = get_orchestrator()
     
     return {
         "status": "healthy",

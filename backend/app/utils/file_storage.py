@@ -37,27 +37,13 @@ async def download_and_save_image(image_url: str, conversation_id: str, prompt: 
         
         filename = f"{conversation_id}_{timestamp}_{safe_prompt}_{file_hash}.jpg"
         
-        # Ensure generated/images directory exists
-        # Use absolute path relative to project root (backend/media)
-        # Or rely on MEDIA_DIR env var if set properly
-        base_media_path = os.getenv("MEDIA_DIR")
-        if not base_media_path:
-            # Default to backend/media relative to project root
-            # Assumption: running from project root or backend dir
-            if os.path.exists("backend/media"):
-                media_dir = Path("backend/media")
-            elif os.path.exists("media"): # running from backend dir
-                media_dir = Path("media")
-            else:
-                media_dir = Path("backend/media") # Fallback to create it
-        else:
-            media_dir = Path(base_media_path)
-
-        generated_dir = media_dir / "generated/images"
+        from app.core.config_manager import get_media_dir
+        media_dir = get_media_dir()
+        generated_dir = media_dir / "generated" / "images"
         generated_dir.mkdir(parents=True, exist_ok=True)
-        
+
         local_path = generated_dir / filename
-        
+
         # Download image
         response = requests.get(image_url, timeout=30)
         response.raise_for_status()
@@ -67,32 +53,14 @@ async def download_and_save_image(image_url: str, conversation_id: str, prompt: 
             f.write(response.content)
         
         logger.info(f"✅ Image saved locally: {local_path}")
-        
-        # Return full URL for frontend access
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8008")
-        # Ensure the URL matches the static mount point defined in main.py
-        # app.mount("/generated", ...)
-        full_url = f"{backend_url}/generated/images/{filename}"
-        return full_url
-        
+        return f"/generated/images/{filename}"
+
     except Exception as e:
         logger.error(f"❌ Failed to download and save image: {str(e)}")
         raise
 
 async def save_image_data(image_data: bytes, conversation_id: str, prompt: str, model: str) -> str:
-    """
-    Save image data directly to local file system
-    Handles both raw binary image data and base64 encoded data
-    
-    Args:
-        image_data: Image data (raw binary or base64 encoded)
-        conversation_id: Conversation ID for organization
-        prompt: Image generation prompt for filename
-        model: Model used for generation
-    
-    Returns:
-        Local file path relative to generated directory
-    """
+    """Save image data to local file system. Returns relative URL path."""
     try:
         # Generate unique filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -104,24 +72,13 @@ async def save_image_data(image_data: bytes, conversation_id: str, prompt: str, 
         
         filename = f"{conversation_id}_{timestamp}_{safe_prompt}_{file_hash}.png"
         
-        # Ensure generated/images directory exists
-        base_media_path = os.getenv("MEDIA_DIR")
-        if not base_media_path:
-            # Enforce backend/media/generated/images as requested
-            # Get project root (assuming we are running from project root)
-            if os.path.exists("backend"):
-                media_dir = Path("backend/media")
-            else:
-                # Fallback if running from backend dir
-                media_dir = Path("media")
-        else:
-            media_dir = Path(base_media_path)
-
-        generated_dir = media_dir / "generated/images"
+        from app.core.config_manager import get_media_dir
+        media_dir = get_media_dir()
+        generated_dir = media_dir / "generated" / "images"
         generated_dir.mkdir(parents=True, exist_ok=True)
-        
+
         local_path = generated_dir / filename
-        
+
         # Handle different data types
         if isinstance(image_data, bytes):
             # Check if it's already raw binary image data (PNG magic number: 0x89 0x50 0x4E 0x47)
@@ -168,12 +125,8 @@ async def save_image_data(image_data: bytes, conversation_id: str, prompt: str, 
             logger.info("✅ Base64 image data decoded and saved")
         
         logger.info(f"✅ Image saved locally: {local_path}")
-        
-        # Return full URL for frontend access
-        backend_url = os.getenv("BACKEND_URL", "http://localhost:8008")
-        full_url = f"{backend_url}/generated/images/{filename}"
-        return full_url
-        
+        return f"/generated/images/{filename}"
+
     except Exception as e:
         logger.error(f"❌ Failed to save image data: {str(e)}")
         raise
@@ -202,9 +155,9 @@ async def save_generated_document(content: bytes, conversation_id: str, file_typ
         
         filename = f"{conversation_id}_{timestamp}_{safe_title}_{file_hash}.{file_type}"
         
-        # Ensure generated/documents directory exists
-        media_dir = Path(os.getenv("MEDIA_DIR", "."))
-        generated_dir = media_dir / "generated/documents"
+        from app.core.config_manager import get_media_dir
+        media_dir = get_media_dir()
+        generated_dir = media_dir / "generated" / "documents"
         generated_dir.mkdir(parents=True, exist_ok=True)
         
         local_path = generated_dir / filename
@@ -250,24 +203,14 @@ async def save_file_to_database(
         
         db = get_db()
         
-        # Generate file ID
-        file_id = str(uuid.uuid4())
-        
-        # Prepare metadata JSON
         metadata_json = json.dumps(metadata) if metadata else "{}"
-        
-        # Insert into files table
-        db.execute("""
-            INSERT INTO files (
-                id, user_id, conversation_id, filename, file_path, file_type, 
-                file_size, status, metadata, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        """, (
-            file_id, user_id, conversation_id, filename, file_path, file_type,
-            file_size, "completed", metadata_json
-        ))
+        cur = db.execute("""
+            INSERT INTO files (user_id, conversation_id, filename, file_path, file_type,
+                file_size, status, summary, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        """, (user_id, conversation_id, filename, file_path, file_type, file_size, "completed", metadata_json))
         db.commit()
-        
+        file_id = cur.lastrowid
         logger.info(f"✅ Saved file metadata to database: {filename} (ID: {file_id})")
         return file_id
         
@@ -295,13 +238,13 @@ async def get_file_metadata(file_id: str) -> dict:
         
         result = db.execute("""
             SELECT id, user_id, conversation_id, filename, file_path, file_type,
-                   file_size, status, metadata, created_at, updated_at
+                   file_size, status, summary, created_at, updated_at
             FROM files WHERE id = ?
         """, (file_id,)).fetchone()
-        
+
         if not result:
             raise ValueError(f"File not found: {file_id}")
-        
+
         metadata = json.loads(result[8]) if result[8] else {}
         
         return {

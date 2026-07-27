@@ -1,295 +1,194 @@
-# 🚀 Core Features
-
-LM WebUI is a comprehensive multimodal LLM interface with enterprise-grade features designed for privacy-first, fully offline AI workflows. Below are the core capabilities that make this platform powerful and unique.
-
+---
+title: Core Features
+description: Learn how the LM-WebUI workspace handles chat, projects, images, models, files, and runtimes.
+section: Product
+order: 2
 ---
 
-## 1. 🔐 Authentication & User Management
+# Core Features
 
-### JWT-Based Authentication System
+LM-WebUI is a self-hosted AI workspace for working with local and cloud models from one application. The primary experience is a protected workspace where you can chat, organize conversations into projects, attach files, generate images, and manage the models and runtimes used by the application.
 
-- **Stateless authentication** using JSON Web Tokens for scalable performance
-- **Refresh tokens** stored as HTTP-only cookies for enhanced security
-- **Role-based access control** with user and administrator levels
-- **Session isolation** ensuring complete conversation privacy between users
+## The workspace
 
-### User Management Features
+After signing in, LM-WebUI opens a single workspace with:
 
-- **User registration and login** with email/password authentication
-- **Session management** with automatic expiration and renewal
-- **Conversation isolation** per user with strict access controls
-- **Secure password hashing** using bcrypt with configurable work factors
+- A sidebar for conversations, search, pinned items, projects, and navigation
+- A model and provider selector in the header
+- A central Chat view
+- An Image Studio for prompt-based generation
+- A Gallery for generated images
+- A Projects workspace for custom instructions and grouped conversations
+- Settings for API keys, models, runtimes, preferences, and account controls
 
-### Security Infrastructure
+The application is responsive and adapts the sidebar and workspace controls for smaller screens.
 
-- **Input validation and sanitization** on all API endpoints
-- **Rate limiting protection** against abuse and DDoS attacks
-- **CSRF protection** for form submissions and API requests
-- **Secure cookie handling** with SameSite and HttpOnly flags
-- **Audit logging** of authentication events and user activities
+## Chat
 
----
+Chat is the primary workflow. Create a conversation, choose an available provider and model, and send messages through the composer.
 
-## 2. 🌐 WebSocket Streaming with Reasoning Visualization
+Current chat capabilities include:
 
-### Real-time Communication
+- Conversation creation and persistence
+- Streaming responses over the application chat connection
+- Markdown and code rendering
+- Code blocks and Mermaid visualization where supported by the renderer
+- Conversation title generation
+- Rename, delete, pin, archive, and restore actions
+- Conversation search and recent-conversation navigation
+- Coding mode for programming-oriented prompts
+- Search mode with selectable search engine configuration
+- Image mode for image-aware or image-generation workflows
+- Stop/cancel controls while a response is being generated
 
-- **Bidirectional WebSocket communication** for instant updates without polling
-- **Token-by-token streaming** with controlled pacing (1-2 tokens per message)
-- **Connection health monitoring** with automatic reconnection logic
-- **Heartbeat mechanism** to detect and recover from disconnections
+Available behavior depends on the selected provider, model, configured credentials, and installed local runtimes.
 
-### Reasoning Visualization
+## Projects
 
-- **Step-by-step reasoning display** showing AI thinking process in real-time
-- **Expandable reasoning steps** with confidence scores and explanations
-- **Visual thinking animations** for better user experience and engagement
-- **Progress indicators** during generation with estimated completion times
+Projects group related conversations and apply a reusable system prompt.
 
-### Stream Management
+You can:
 
-- **Immediate cancellation** with state preservation for user control
-- **Stop/resume functionality** during generation without data loss
-- **Session management** for handling concurrent streams per user
-- **Resource cleanup** on connection close to prevent memory leaks
+1. Create a project with a name and custom instructions.
+2. Start or assign conversations to that project.
+3. Open a project to view its conversations.
+4. Edit or delete the project when its instructions change.
 
----
+Project instructions are intended for recurring workflows such as code review, research, writing, or a team-specific assistant configuration.
 
-## 3. 🔗 RAG (Retrieval-Augmented Generation)
+## Models and providers
 
-### Vector Store Integration
+LM-WebUI separates model providers from local runtimes. A provider is the interface used to communicate with a model; a runtime is the local software that executes or exposes models.
 
-- **Qdrant vector database** for efficient similarity search and retrieval
-- **Automatic embedding generation** for text and document content
-- **Metadata storage** for source attribution, versioning, and provenance
-- **Index optimization** with configurable parameters for fast retrieval
+### Supported provider integrations
 
-### Context Management
+| Provider | Category | Current use |
+|---|---|---|
+| OpenAI | Cloud | Chat and image generation |
+| Google Gemini | Cloud | Chat and image generation |
+| Anthropic | Cloud | Chat |
+| DeepSeek | Cloud | Chat |
+| xAI | Cloud | Chat |
+| vLLM | Local or self-hosted | Chat |
+| Ollama | Local | Chat and model discovery |
+| GGUF | Local | Chat through llama.cpp |
+| MLX | Local Apple Silicon | Chat |
+| ComfyUI | Local image runtime | Image generation |
 
-- **Intelligent context window management** with token optimization algorithms
-- **Cross-conversation retrieval** of relevant historical context and knowledge
-- **File reference integration** for multimodal content inclusion
-- **Automatic context pruning** to stay within model token limits
+Provider and model availability is dynamic. Cloud providers require configured credentials, while local providers require a reachable or installed runtime.
 
-### Retrieval Pipeline
+### Model management
 
-- **Semantic search** across conversation history and document collections
-- **Hybrid search** combining semantic vector matching with keyword search
-- **Relevance scoring** with configurable thresholds and ranking algorithms
-- **Source attribution** showing where retrieved information originated
-- **Confidence scoring** for retrieval results with explainable rankings
+The model interface supports:
 
----
+- Listing API models from configured providers
+- Refreshing model availability
+- Listing local GGUF models
+- Uploading and validating GGUF models
+- Downloading GGUF models
+- Listing and downloading MLX models
+- Discovering Ollama models
+- Checking model compatibility
+- Selecting a model for chat or image generation
 
-## 4. 👁️ Multimodal Processing
+## Files and context
 
-### Image Processing Capabilities
+Files can be attached to conversations through the multimodal composer.
 
-- **Image upload and validation** supporting PNG, JPG, WebP formats
-- **Automatic resizing and optimization** for efficient LLM consumption
-- **OCR text extraction** using EasyOCR integration for image content
-- **Base64 encoding** for seamless LLM integration and processing
-- **Metadata extraction** including dimensions, format, size, and color profiles
+The current file workflow includes:
 
-### Document Processing
+- General file uploads for conversation context
+- Image and document processing where supported
+- Upload status reporting
+- File references associated with conversations
+- Context retrieval for relevant conversation or file content
+- Citation and source display in the chat interface
+- File deletion through the upload management flow
 
-- **PDF parsing** with pypdf for accurate text extraction and structure preservation
-- **DOCX processing** with python-docx integration for Microsoft Office documents
-- **Content summarization** for large documents with configurable length
-- **Structured data preparation** optimized for LLM context and understanding
-- **File size limits** with intelligent truncation and compression
+The exact file types and processing behavior depend on the backend configuration and provider capabilities. Treat advanced retrieval behavior as provider- and deployment-dependent rather than assuming every model supports every file type.
 
-### Multimodal Integration
+## Image Studio and Gallery
 
-- **Automatic context inclusion** of file content in conversation threads
-- **File reference tracking** across conversations with version history
-- **Thumbnail generation** for visual previews in the user interface
-- **Progress tracking** during file processing with real-time updates
-- **Format conversion** between supported document types
+LM-WebUI provides two image workflows.
 
----
+### Generate from Chat
 
-## 5. ⚡ Hardware Acceleration
+Image generation can be initiated from a conversation. The chat displays an image-generation loading state, submits the request to the selected image provider, and stores the generated result with the conversation.
 
-### Automatic Hardware Detection
+### Image Studio
 
-- **CUDA detection** for NVIDIA GPUs with VRAM measurement and capability assessment
-- **ROCm detection** for AMD GPUs on Linux systems with performance profiling
-- **Metal detection** for Apple Silicon Macs with memory optimization
-- **CPU fallback** with optimization recommendations and performance tuning
-- **Cross-platform compatibility** checks and automatic configuration
+Studio provides a dedicated generation workspace where you can:
 
-### Intelligent Quantization
+- Write a prompt
+- Select an available image provider and model
+- Choose an aspect ratio or image size
+- Configure quality, steps, and seed where supported
+- Generate a batch of images
+- Use a negative prompt for compatible local workflows
+- Reuse generation settings from Gallery
 
-- **VRAM-aware quantization selection** based on available GPU memory
-- **Backend-specific quantization hierarchies** for optimal performance per platform
-- **Automatic fallback** to CPU-safe options when GPU resources are insufficient
-- **Performance optimization** based on hardware capabilities and model requirements
-- **Quantization presets** for different quality/performance trade-offs
+Current image integrations include OpenAI, Google image models, and local runtimes such as ComfyUI. Availability is shown from the provider and runtime status reported by the backend.
 
-### Optimization Features
+### Gallery
 
-- **Model loading optimization** for available hardware with parallel loading
-- **Memory management** with automatic cleanup and garbage collection
-- **Performance monitoring** with real-time feedback and resource utilization
-- **Hardware utilization display** in UI with detailed metrics and recommendations
-- **Energy efficiency** optimizations for battery-powered devices
+Gallery stores generated images for the authenticated user. It supports browsing results, deleting images, and loading a previous prompt and generation configuration back into Studio.
 
----
+## Runtime and hardware management
 
-## 6. 🤖 GGUF Runtime & Model Management ⭐
+The Runtime Manager detects and reports local runtime availability and provides installation or refresh actions where supported.
 
-### Complete GGUF Integration
+Recognized runtimes include:
 
-- **GGUF model management system** with full API support and UI controls
-- **HuggingFace integration** for direct model downloads from repositories
-- **Local model registry** for organizing and categorizing GGUF files
-- **Hardware compatibility checking** before model usage with validation
-- **Model metadata extraction** including architecture, parameters, and capabilities
+- Ollama
+- GGUF through llama.cpp
+- MLX
+- vLLM
+- ComfyUI
 
-### Model Operations
+The application also reports local hardware information for CPU, CUDA, ROCm, and Apple Metal environments. Hardware acceleration affects local execution only; cloud providers use their own infrastructure.
 
-- **Upload GGUF models** from local storage with progress tracking
-- **Download from HuggingFace** with resume capability and checksum verification
-- **Model validation** ensuring file integrity and format compliance
-- **Metadata extraction** from GGUF files for informed model selection
-- **Model deletion** with cleanup of associated files and configurations
+## Settings and account controls
 
-### WebSocket Progress Tracking
+Settings currently include:
 
-- **Real-time download progress** via WebSocket with percentage and speed
-- **Cancelable downloads** with cleanup of partial files
-- **Progress visualization** in UI with detailed statistics and estimates
-- **Error handling** with user-friendly messages and recovery options
-- **Background downloading** with notification system
+- Provider API key management
+- Provider connection tests
+- Default chat and image model preferences
+- Model management
+- Runtime management
+- Theme and interface preferences
+- Profile and account controls
 
----
+API keys are managed through the authenticated settings flow. Do not commit keys to the repository or place them in frontend source files.
 
-## 7. 🧠 Knowledge Graph & Memory System
+## Authentication and planned governance features
 
-### Conversation Memory
+Authentication currently protects registration, login, refresh, logout, user sessions, conversations, projects, files, settings, and generated media.
 
-- **Persistent conversation storage** with relationship tracking and linking
-- **Entity extraction** and relationship mapping for knowledge organization
-- **Semantic linking** between related conversations and topics
-- **Memory consolidation** over time with importance weighting
-- **Temporal context** preservation with timestamp tracking
+The following governance capabilities are planned for a future implementation phase and are intentionally listed here as roadmap items rather than completed features:
 
-### Knowledge Organization
+- Role-based user/admin management
+- Rate limiting and DDoS protection
+- CSRF protection
 
-- **Topic clustering** for better organization and retrieval
-- **Cross-reference creation** between related content and conversations
-- **Temporal tracking** of conversation evolution and knowledge growth
-- **Import/export functionality** for knowledge transfer between instances
-- **Knowledge graph visualization** for understanding relationships
+Until those capabilities are implemented and documented separately, deployments should follow the security guidance in [`SECURITY.md`](../SECURITY.md) and use appropriate network controls at the deployment layer.
 
-### Search Capabilities
+## Feature availability
 
-- **Semantic search** across stored knowledge with vector similarity
-- **Relationship traversal** through connected entities and concepts
-- **Context-aware retrieval** based on current conversation and intent
-- **Relevance ranking** of retrieved memories with confidence scores
-- **Temporal filtering** for time-sensitive information retrieval
+| Capability | Local runtimes | Cloud providers | Notes |
+|---|---:|---:|---|
+| Chat | Yes | Yes | Depends on runtime or provider availability |
+| Streaming | Yes | Yes | Uses the application chat streaming flow |
+| Image generation | ComfyUI and compatible local services | OpenAI and Google | Provider-dependent |
+| File upload | Yes | Yes | Processing depends on file type and model support |
+| Projects | Yes | Yes | Conversation organization and custom instructions |
+| Model downloads | GGUF and MLX | No | Managed through the model/runtime interface |
+| API keys | N/A | Yes | Managed in authenticated settings |
+| Hardware acceleration | CPU, CUDA, ROCm, Metal | N/A | Applies to local execution |
 
----
+## Where to go next
 
-## 8. 🔄 Real-time Collaboration Features
-
-### Multi-user Support
-
-- **Simultaneous user sessions** with isolated conversation spaces
-- **Shared context** for team collaboration on projects
-- **Permission management** for controlling access to conversations
-- **User presence indicators** showing active participants
-
-### Collaboration Tools
-
-- **Conversation sharing** with configurable access levels
-- **Comment and annotation** system for collaborative review
-- **Version history** for tracking changes and iterations
-- **Export capabilities** for sharing results with external stakeholders
-
----
-
-## 9. 📊 Analytics & Insights
-
-### Usage Analytics
-
-- **Conversation metrics** including length, duration, and token counts
-- **Model performance tracking** with response times and quality metrics
-- **User activity monitoring** for understanding usage patterns
-- **System performance metrics** for optimization and scaling
-
-### Insight Generation
-
-- **Trend analysis** across conversations and user groups
-- **Pattern recognition** for identifying common queries and needs
-- **Recommendation engine** for suggesting relevant models and approaches
-- **Performance benchmarking** against industry standards
-
----
-
-## 10. 🛡️ Enterprise Security & Compliance
-
-### Data Protection
-
-- **End-to-end encryption** for sensitive conversations and data
-- **Data retention policies** with automatic cleanup and archiving
-- **Access logging** for compliance and audit requirements
-- **Data sovereignty** controls for geographic compliance
-
-### Compliance Features
-
-- **GDPR compliance** with data subject access rights
-- **HIPAA readiness** for healthcare applications
-- **SOC 2 alignment** for enterprise security standards
-- **Custom compliance frameworks** for industry-specific requirements
-
----
-
-## Feature Comparison Matrix
-
-| Feature Category          | Core Capabilities                   | Enterprise Ready | Self-Hosted | Cloud Option |
-| ------------------------- | ----------------------------------- | ---------------- | ----------- | ------------ |
-| **Authentication**        | JWT, Refresh Tokens, RBAC           | ✅               | ✅          | ✅           |
-| **Real-time Streaming**   | WebSocket, Reasoning Display        | ✅               | ✅          | ✅           |
-| **RAG Engine**            | Vector Search, Hybrid Retrieval     | ✅               | ✅          | ✅           |
-| **Multimodal Processing** | Images, Documents, OCR              | ✅               | ✅          | ✅           |
-| **Hardware Acceleration** | CUDA, ROCm, Metal, CPU              | ✅               | ✅          | ⚠️ Limited   |
-| **GGUF Management**       | HuggingFace, Local Registry         | ✅               | ✅          | ✅           |
-| **Knowledge Graph**       | Entity Extraction, Semantic Search  | ✅               | ✅          | ✅           |
-| **Collaboration**         | Multi-user, Sharing, Permissions    | ✅               | ✅          | ✅           |
-| **Analytics**             | Usage Metrics, Performance Tracking | ✅               | ✅          | ✅           |
-| **Security**              | Encryption, Compliance, Audit       | ✅               | ✅          | ✅           |
-
----
-
-## Getting Started with Features
-
-### Quick Start Recommendations
-
-1. **Begin with authentication** to secure your instance
-2. **Configure hardware acceleration** for optimal performance
-3. **Download GGUF models** from HuggingFace or upload local models
-4. **Enable RAG** for document-based conversations
-5. **Explore multimodal capabilities** with image and document uploads
-
-### Advanced Configuration
-
-- **Custom model configurations** for specialized use cases
-- **API integration** with external systems and services
-- **Workflow automation** with scripting and batch processing
-- **Custom embeddings** for domain-specific knowledge
-
-### Support and Resources
-
-- **Documentation**: Complete feature guides and API references
-- **Community**: Active user community for questions and sharing
-- **Enterprise Support**: Professional support and consulting services
-- **Training**: Workshops and training materials for teams
-
----
-
-_LM WebUI is continuously evolving with new features and improvements. Check the [GitHub repository](https://github.com/lm-webui/lm-webui) for the latest updates and release notes._
-
----
+- [Getting Started](./getting-started.md) for installation and first-run setup
+- [Architecture](./architecture.md) for the backend, frontend, provider, and runtime design
+- [Deployment](./DEPLOYMENT.md) for Docker and hardware deployment
+- [Contributing](../CONTRIBUTING.md) for development and contribution guidance

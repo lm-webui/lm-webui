@@ -7,14 +7,24 @@ import re
 import time
 import datetime
 import asyncio
+import json
+import os
 from contextlib import asynccontextmanager
+
+# ── App version from single source (repo root package.json) ──
+_APP_VERSION = "0.0.0"
+_v_path = os.path.join(os.path.dirname(__file__), "..", "..", "package.json")
+try:
+    _APP_VERSION = json.load(open(_v_path))["version"]
+except Exception:
+    pass
 import sys
 import json
 import yaml
 from enum import Enum
 from pathlib import Path
 from app.middleware.context_middleware import attach_context_middleware
-from app.routes import auth, api_keys, chat, context, history, sessions, settings, system, download, hardware, intents, upload, models_api, gguf, image_generation, inference, semantic_search, rag, web_search, title_updates, websocket
+from app.routes import auth, api_keys, chat, context, history, sessions, settings, system, download, hardware, upload, models_api, gguf, image_generation, websocket, runtimes, mlx, projects, admin, usage, orgs, api_tokens, artifacts
 from app.database import init_db
 import os
 from dotenv import load_dotenv
@@ -84,7 +94,7 @@ app_state = {
 }
 
 print(
-        rf""" 
+        rf"""
 ██       ███     ███     ██      ██ ███████ ███████  ██    ██ ██
 ██       ████   ████     ██      ██ ██      ██    ██ ██    ██ ██
 ██       ██ ██ ██ ██     ██  ██  ██ █████   ███████  ██    ██ ██
@@ -160,22 +170,94 @@ for handler in logging.getLogger().handlers:
 # --- Lifespan Manager ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Run initialization in background so API remains responsive
+    # Run DB init synchronously first so tables exist before any request
+    from app.database import init_db
+    init_db()
+
+    # Startup: Run remaining initialization in background
     task = asyncio.create_task(initialize_app())
-    
-    # Ensure clean slate for streaming sessions
-    from app.streaming.session import clear_all_sessions
-    clear_all_sessions()
-    
+
     yield
-    
-    # Shutdown: Clean up all active sessions
-    clear_all_sessions()
-    
-    # if not task.done():
-    #     task.cancel()
+    # No per-session cleanup needed — orchestrator handles session lifecycle
 
 app = FastAPI(lifespan=lifespan)
+
+
+# Health check shortcut at /api/health (used by StartupGuard)
+@app.get("/api/health")
+async def health():
+    return {
+        "status": app_state.get("status", "initializing"),
+        "ready": app_state.get("status") == InitStatus.READY,
+        "message": app_state.get("message", "Starting..."),
+        "progress": app_state.get("progress", 0),
+        "version": _APP_VERSION,
+    }
+
+
+# CORS — allow any origin (safe for local AI tool with JWT auth)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "Authorization",
+        "Content-Type",
+        "Accept",
+        "Origin",
+        "X-Requested-With",
+        "Access-Control-Allow-Origin",
+        "Access-Control-Allow-Headers",
+        "Access-Control-Allow-Methods"
+    ],
+)
+
+# --- Router Registration ---
+app.include_router(auth.router)
+app.include_router(api_keys.router)
+app.include_router(chat.router)
+app.include_router(context.router)
+app.include_router(history.router)
+app.include_router(sessions.router)
+app.include_router(settings.router)
+app.include_router(system.router)
+app.include_router(download.router)
+app.include_router(hardware.router)
+app.include_router(upload.router)
+app.include_router(models_api.router)
+app.include_router(gguf.router)
+app.include_router(image_generation.router)
+app.include_router(websocket.router)
+app.include_router(runtimes.router)
+app.include_router(mlx.router)
+app.include_router(projects.router)
+app.include_router(admin.router)
+app.include_router(usage.router)
+app.include_router(orgs.router)
+app.include_router(api_tokens.router)
+app.include_router(artifacts.router)
+
+# Serve the active Vite build in the single production container. API routes
+# are registered first so /api/* is never shadowed by the SPA fallback.
+# SPA catch-all — serve index.html for any non-API path (React Router handles the rest).
+WEB_DIST = BASE_DIR / "web" / "dist"
+SPA_INDEX = WEB_DIST / "index.html"
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_serve(full_path: str):
+    # Let API routes handle their own paths
+    if full_path.startswith("api/") or full_path.startswith("_"):
+        raise HTTPException(status_code=404, detail="Not found")
+    # Serve static files with extension (css, js, images, etc.)
+    file_path = WEB_DIST / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(file_path)
+    # SPA fallback — return index.html for any other path
+    if SPA_INDEX.exists():
+        return FileResponse(SPA_INDEX)
+    raise HTTPException(status_code=404, detail="Not found")
 
 # --- Helper: Load Config ---
 def load_config():
@@ -192,55 +274,49 @@ async def initialize_app():
         app_state["status"] = InitStatus.LOADING_CONFIG
         app_state["progress"] = 10
         app_state["config"] = config_manager.to_dict()
-        
+
         # Use configuration from config_manager
         data_dir = str(DATA_DIR_DEFAULT)
         model_name = llm_config.model_name
-        
+
         await asyncio.sleep(0.5) # UI visual pacing
 
-        # Phase 2: Knowledge Graph / Database
+        # Phase 2: Ensure storage directories exist
         app_state["status"] = InitStatus.LOADING_DATABASE
-        app_state["message"] = f"Connecting to Knowledge Graph at {data_dir}..."
+        app_state["message"] = "Initializing storage directories..."
         app_state["progress"] = 30
-        
-        # Dynamic Import to prevent blocking main thread
-        from app.memory.kg_manager import KGManager
-        # Ensure directory exists
-        memory_dir = os.path.join(data_dir, "memory")
-        os.makedirs(memory_dir, exist_ok=True)
-        
-        # Ensure qdrant directory exists (same as RAGProcessor will use)
-        qdrant_path = os.path.join(data_dir, "qdrant_db")
-        os.makedirs(qdrant_path, exist_ok=True)
-        
-        # Pass the same qdrant path to KGManager to ensure consistent QdrantStore initialization
-        kg_manager = KGManager(os.path.join(memory_dir, "memory.db"), qdrant_path=qdrant_path)
-        app.state.kg_manager = kg_manager
-        
+
         # AI Models load
         app_state["status"] = InitStatus.LOADING_MODELS
         app_state["message"] = f"Loading {model_name}... (This may take a moment)"
         app_state["progress"] = 50
-        
-        from app.rag.processor import RAGProcessor
-        
-        # Ensure media directories exist
-        (MEDIA_DIR / "thumbnails").mkdir(parents=True, exist_ok=True)
-        (MEDIA_DIR / "generated/images").mkdir(parents=True, exist_ok=True)
-        (MEDIA_DIR / "generated/documents").mkdir(parents=True, exist_ok=True)
-        (MEDIA_DIR / "generated/exports").mkdir(parents=True, exist_ok=True)
-        (MEDIA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
 
-        # Pass explicit path to RAGProcessor
-        rag_processor = RAGProcessor(qdrant_path=qdrant_path) 
-        app.state.rag_processor = rag_processor
-        
+        # Ensure media directories exist and are writable
+        media_dirs = [
+            MEDIA_DIR,
+            MEDIA_DIR / "thumbnails",
+            MEDIA_DIR / "generated" / "images",
+            MEDIA_DIR / "generated" / "documents",
+            MEDIA_DIR / "generated" / "exports",
+            MEDIA_DIR / "uploads",
+        ]
+        for d in media_dirs:
+            d.mkdir(parents=True, exist_ok=True)
+            # Writable check
+            probe = d / ".write_test"
+            try:
+                probe.touch(); probe.unlink()
+            except OSError:
+                print(f"❌ Media directory not writable: {d}")
+                raise
+
+        print(f"✅ Media directory: {MEDIA_DIR.resolve()}")
+
         # Finalize
         app_state["progress"] = 100
         app_state["status"] = InitStatus.READY
         app_state["message"] = "System Online"
-        
+
     except Exception as e:
         app_state["status"] = InitStatus.ERROR
         app_state["message"] = "Startup Failed"
@@ -260,154 +336,9 @@ async def sanitize_logs_middleware(request: Request, call_next):
     sanitized_url = str(request.url)
     # Redact API keys from URL query parameters
     sanitized_url = re.sub(r'api_key=[^&\s]+', 'api_key=***REDACTED***', sanitized_url)
-    
+
     # Log sanitized request
     print(f"Request: {request.method} {sanitized_url}")
-    
+
     response = await call_next(request)
     return response
-
-# Get allowed origins from security configuration
-allowed_origins = security_config.allowed_origins
-
-# Add CORS middleware with proper configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allow_headers=[
-        "Authorization", 
-        "Content-Type", 
-        "Accept", 
-        "Origin", 
-        "X-Requested-With",
-        "Access-Control-Allow-Origin",
-        "Access-Control-Allow-Headers",
-        "Access-Control-Allow-Methods"
-    ],
-    expose_headers=["Content-Disposition", "Content-Length"],
-    max_age=3600,
-)
-
-# Initialize database (Synchronous part)
-try:
-    print(f"🔄 Initializing database at {get_database_path()}...")
-    init_db()
-    print("✅ Database initialization successful")
-except Exception as e:
-    print(f"❌ CRITICAL ERROR during database initialization: {e}")
-    if not is_development():
-        print("🚨 Production environment detected - exiting to trigger container restart")
-        sys.exit(1)
-    else:
-        print("⚠️ Development mode: continuing with degraded functionality")
-
-# Include routes
-app.include_router(auth.router)
-app.include_router(api_keys.router)
-app.include_router(chat.router)
-app.include_router(context.router)
-app.include_router(history.router)
-app.include_router(sessions.router)
-app.include_router(settings.router)
-app.include_router(system.router)
-app.include_router(download.router)
-app.include_router(hardware.router)
-app.include_router(intents.router)
-app.include_router(upload.router)
-app.include_router(models_api.router)
-app.include_router(gguf.router)
-
-app.include_router(image_generation.router)
-app.include_router(inference.router)
-app.include_router(semantic_search.router)
-app.include_router(rag.router)
-app.include_router(web_search.router)
-app.include_router(title_updates.router)
-app.include_router(websocket.router)
-
-# Media directories are created in initialize_app using MEDIA_DIR
-os.makedirs(str(BASE_DIR / "app/files"), exist_ok=True)
-os.makedirs(str(BASE_DIR / ".secrets"), exist_ok=True)
-
-# Ensure media directories exist before mounting static files
-MEDIA_DIR.mkdir(parents=True, exist_ok=True)
-(MEDIA_DIR / "thumbnails").mkdir(parents=True, exist_ok=True)
-(MEDIA_DIR / "generated").mkdir(parents=True, exist_ok=True)
-(MEDIA_DIR / "uploads").mkdir(parents=True, exist_ok=True)
-
-# Mount static files for thumbnails and generated content from MEDIA_DIR
-app.mount("/thumbnails", StaticFiles(directory=MEDIA_DIR / "thumbnails"), name="thumbnails")
-app.mount("/generated", StaticFiles(directory=MEDIA_DIR / "generated"), name="generated")
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy", "auth": "jwt", "encryption": "fernet"}
-
-@app.get("/api/health")
-async def api_health():
-    return {
-        "status": app_state["status"],
-        "message": app_state["message"],
-        "progress": app_state["progress"],
-        "ready": app_state["status"] == InitStatus.READY,
-        "error": app_state.get("error")
-    }
-
-@app.get("/debug/context")
-async def debug_context(request: Request):
-    """Debug endpoint to check middleware context"""
-    from app.middleware.context_middleware import get_request_context
-    context = get_request_context(request)
-    return {
-        "user_id": context.user_id,
-        "is_authenticated": context.is_authenticated(),
-        "conversation_id": context.conversation_id,
-        "auth_header": request.headers.get("Authorization", "None")[:20] + "..." if request.headers.get("Authorization") else "None"
-    }
-
-# --- Serve Frontend (SPA) ---
-# Resolve the frontend dist path
-# Order of preference:
-# 1. Environment variable FRONTEND_PATH
-# 2. Standard Docker path: /backend/frontend/dist
-# 3. Development path relative to this file
-env_frontend_path = os.environ.get("FRONTEND_PATH")
-docker_frontend_path = Path("/backend/frontend/dist")
-# Local check: backend is in lm-webui/backend, frontend is in lm-webui/frontend
-local_frontend_path = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
-
-frontend_dist = None
-if env_frontend_path and Path(env_frontend_path).exists():
-    frontend_dist = Path(env_frontend_path)
-elif docker_frontend_path.exists():
-    frontend_dist = docker_frontend_path
-elif local_frontend_path.exists():
-    frontend_dist = local_frontend_path
-
-if frontend_dist:
-    print(f"✅ Frontend SPA detected at: {frontend_dist}")
-    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="assets")
-    
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        # Serve static files from frontend dist if they exist
-        file_path = frontend_dist / full_path
-        if file_path.is_file():
-            return FileResponse(file_path)
-        
-        # Fallback to index.html for SPA routing
-        return FileResponse(frontend_dist / "index.html")
-else:
-    print("⚠️  WARNING: Frontend SPA distribution NOT FOUND. UI will be unavailable.")
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        app, 
-        host=server_config.host, 
-        port=server_config.port,
-        reload=server_config.reload and is_development(),
-        workers=server_config.workers
-    )

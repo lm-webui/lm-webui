@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lm-webui-host"
+version = "0.1.0"
+description = "Host runtime helper for LM-WebUI"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+lm-webui-host = "lm_webui_host.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -5,7 +5,7 @@ This module provides routes for application settings management.
 """
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from app.database import get_db
 from app.security.auth.dependencies import get_current_user
 
@@ -34,8 +34,10 @@ class SettingsUpdate(BaseModel):
     topP: float = 0.9
     systemPrompt: str = "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions."
     
-    # Search settings
+    # Defaults
     selectedSearchEngine: str = "duckduckgo"
+    defaultImageProvider: str = "openai"
+    defaultImageModel: str = "dall-e-3"
     selectedModel: str = ""
     
     # UI settings
@@ -74,7 +76,7 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
         "anthropicKey": "",
         "geminiKey": "",
         "deepSeekKey": "",
-        "selectedLLM": "openai",
+        "selectedLLM": "",
         "streamingEnabled": True,
         "temperature": 0.7,
         "topP": 0.9,
@@ -141,6 +143,8 @@ async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_
         "systemPrompt": settings.systemPrompt,
         "selectedSearchEngine": settings.selectedSearchEngine,
         "selectedModel": settings.selectedModel,
+        "defaultImageProvider": settings.defaultImageProvider,
+        "defaultImageModel": settings.defaultImageModel,
         "showRawResponse": settings.showRawResponse,
         "autoTitleGeneration": settings.autoTitleGeneration,
         "codeFormatting": settings.codeFormatting,

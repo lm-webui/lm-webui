@@ -1,3 +1,10 @@
+---
+title: Getting Started
+description: Install LM-WebUI and start your first conversation.
+section: Start here
+order: 1
+---
+
 # Getting Started
 
 Welcome to LM WebUI! This guide will help you get up and running quickly.
@@ -28,7 +35,7 @@ git clone https://github.com/lm-webui/lm-webui.git
 cd lm-webui
 
 # Start all services with Docker Compose
-docker-compose up
+docker compose up
 
 # Access the application at http://localhost:7070
 ```
