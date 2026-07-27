@@ -16,74 +16,50 @@ logger = logging.getLogger(__name__)
 class SQLiteConnectionPool:
     """Thread-safe SQLite connection pool with retry logic"""
     
-    def __init__(self, db_path: str, pool_size: int = 5, timeout: float = 30.0):
+    def __init__(self, db_path: str, pool_size: int = 50, timeout: float = 30.0):
         self.db_path = db_path
         self.max_pool_size = pool_size
         self.timeout = timeout
         self._pool = []
         self._lock = threading.Lock()
         self._active_connections = 0
-        
+
         # Ensure database directory exists
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    
+
     def _create_connection(self) -> sqlite3.Connection:
         """Create a new SQLite connection with optimized settings"""
-        conn = sqlite3.connect(self.db_path, timeout=self.timeout)
+        conn = sqlite3.connect(self.db_path, timeout=self.timeout, check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        
-        # Optimize SQLite for better concurrency
+
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
         conn.execute("PRAGMA foreign_keys=ON")
-        conn.execute("PRAGMA busy_timeout=5000")  # 5 second timeout
-        
+        conn.execute("PRAGMA busy_timeout=10000")
+
         return conn
-    
+
     @contextmanager
     def get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Get a database connection from the pool with retry logic"""
+        """Get a database connection from the pool."""
         conn = None
-        max_retries = 3
-        base_delay = 0.1
-        
-        for attempt in range(max_retries):
-            try:
-                with self._lock:
-                    if self._pool:
-                        conn = self._pool.pop()
-                    elif self._active_connections < self.max_pool_size:
-                        conn = self._create_connection()
-                        self._active_connections += 1
-                    else:
-                        # Wait for a connection to become available
-                        if attempt < max_retries - 1:
-                            time.sleep(base_delay * (2 ** attempt))
-                            continue
-                        else:
-                            raise sqlite3.OperationalError("Connection pool exhausted")
-                
-                yield conn
-                break
-                
-            except sqlite3.OperationalError as e:
-                if "locked" in str(e).lower() and attempt < max_retries - 1:
-                    logger.warning(f"Database locked, retrying in {base_delay * (2 ** attempt)}s")
-                    time.sleep(base_delay * (2 ** attempt))
-                    continue
-                elif conn:
-                    self._return_connection(conn)
-                raise
-            except Exception:
-                if conn:
-                    self._return_connection(conn)
-                raise
-        else:
-            # This should never happen due to the break in the try block
-            raise sqlite3.OperationalError("Failed to get database connection after retries")
-        
-        # Return connection to pool if no exception occurred
+        try:
+            with self._lock:
+                if self._pool:
+                    conn = self._pool.pop()
+                elif self._active_connections < self.max_pool_size:
+                    conn = self._create_connection()
+                    self._active_connections += 1
+                else:
+                    raise sqlite3.OperationalError(
+                        f"Connection pool exhausted ({self.max_pool_size} in use)"
+                    )
+            yield conn
+        except Exception:
+            if conn:
+                self._return_connection(conn)
+            raise
         if conn:
             self._return_connection(conn)
     
@@ -177,7 +153,7 @@ class DatabaseManager:
 
 # Global database manager instance
 # Use consistent path resolution from config
-from app.core.config import get_database_path
+from app.core.config_manager import get_database_path
 _db_path = get_database_path()
 database_manager = DatabaseManager(_db_path)
 
@@ -188,35 +164,11 @@ def db():
     return database_manager.connection_pool.get_connection()
 
 def get_db():
-    """Get database connection (backward compatibility)"""
-    # Return a connection object directly for backward compatibility
-    conn = None
-    try:
-        with database_manager.connection_pool.get_connection() as c:
-            # We can't return the connection from within the context manager
-            # since it will be closed when we exit. Instead, we'll create a new connection
-            # This is not ideal but maintains backward compatibility
-            pass
-    except:
-        pass
-
-    # Create a direct connection for backward compatibility
-    # This bypasses the connection pool but maintains the API
-    import sqlite3
-    import os
-    
-    # Use consistent path resolution
-    from app.core.config import get_database_path
-    db_path = get_database_path()
-    
-    os.makedirs(os.path.dirname(db_path), exist_ok=True)
-    conn = sqlite3.connect(db_path, timeout=30.0)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=-64000")
-    conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA busy_timeout=5000")
+    """Get database connection (backward compatibility).
+    Creates a properly-configured connection (bypasses pool management
+    to maintain the simple returned-connection API 71+ callers expect).
+    """
+    conn = database_manager.connection_pool._create_connection()
     return conn
 
 def init_db():

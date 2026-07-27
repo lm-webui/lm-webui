@@ -10,13 +10,8 @@ import asyncio
 from functools import partial
 from typing import List, Dict, Optional, Any
 from app.hardware.detection import get_llamacpp_settings
-from app.rag.vector_store import QdrantStore
 from app.services.model_registry import get_model_registry
-
-try:
-    from app.rag.embedder import NomicEmbedder
-except ImportError:
-    NomicEmbedder = None
+from app.services.vector_store import add_chunks, search_chunks, delete_chunk
 
 logger = logging.getLogger(__name__)
 
@@ -28,19 +23,6 @@ class KGManager:
         self.conn.row_factory = sqlite3.Row
         self._init_tables()
         self._migrate_schema()
-
-        # Initialize Semantic Memory (Qdrant)
-        try:
-            self.vector_store = QdrantStore(path=qdrant_path, collection_name="qdrant_db")
-        except Exception as e:
-            logger.error(f"Failed to init Qdrant for Memory: {e}")
-            self.vector_store = None
-            
-        try:
-            self.embedder = NomicEmbedder() if NomicEmbedder else None
-        except Exception as e:
-            logger.error(f"Failed to init Embedder for Memory: {e}")
-            self.embedder = None
     
     def _init_tables(self):
         self.conn.execute("""
@@ -98,27 +80,29 @@ class KGManager:
             )
         self.conn.commit()
 
-        # Store in Qdrant (Semantic Memory)
-        if self.vector_store and self.embedder:
-            try:
-                fact_text = f"{subject} {predicate} {obj}"
-                embedding = self.embedder.encode([fact_text])[0].tolist()
-                
-                self.vector_store.add(
-                    texts=[fact_text],
-                    embeddings=[embedding],
-                    metadatas=[{
-                        "subject": subject,
-                        "predicate": predicate,
-                        "object": obj,
-                        "conversation_id": conversation_id,
-                        "user_id": user_id,
-                        "confidence": confidence,
-                        "type": "triplet"
-                    }]
-                )
-            except Exception as e:
-                logger.error(f"Failed to store semantic triplet: {e}")
+        # Store in LanceDB (Semantic Memory)
+        try:
+            fact_text = f"{subject} {predicate} {obj}"
+            chunk_id = str(uuid.uuid4())
+            
+            metadata = {
+                "subject": subject,
+                "predicate": predicate,
+                "object": obj,
+                "conversation_id": conversation_id,
+                "user_id": user_id,
+                "confidence": confidence,
+                "type": "triplet"
+            }
+            
+            add_chunks([{
+                "id": chunk_id,
+                "document_id": conversation_id, # Use conversation_id as document_id for grouping
+                "chunk_text": fact_text,
+                "metadata": json.dumps(metadata)
+            }])
+        except Exception as e:
+            logger.error(f"Failed to store semantic triplet: {e}")
 
     def get_memories(self, conversation_id: str = None, user_id: int = None, limit: int = 10, query: str = None) -> str:
         """Retrieve relevant memories formatted as string."""
@@ -280,25 +264,33 @@ Output Format:
         results = []
         seen_content = set()
 
-        # 1. Semantic Search (Qdrant)
-        if self.vector_store and self.embedder:
-            try:
-                embedding = self.embedder.encode([query])[0].tolist()
-                semantic_results = self.vector_store.query(
-                    query_embedding=embedding,
-                    user_id=user_id, # Global search for user
-                    top_k=limit
-                )
-                for r in semantic_results:
+        # 1. Semantic Search (LanceDB)
+        try:
+            # We don't filter by user_id in search_chunks yet (it's not indexed/schema'd directly for filtering)
+            # But we can filter post-query if we extract metadata
+            semantic_results = search_chunks(query, limit=limit * 2) # Fetch more to filter
+            
+            for r in semantic_results:
+                metadata = json.loads(r.get("metadata", "{}"))
+                # Filter by user_id if provided
+                if user_id and metadata.get("user_id") != user_id:
+                    continue
+                    
+                content = r.get("chunk_text", "")
+                if content:
                     results.append({
                         "id": r["id"],
-                        "content": r["content"],
-                        "score": r["score"],
+                        "content": content,
+                        "score": r.get("score", 0.0), # LanceDB might return distance? search_chunks returns list of dicts
                         "source": "semantic"
                     })
-                    seen_content.add(r["content"])
-            except Exception as e:
-                logger.error(f"Semantic search failed: {e}")
+                    seen_content.add(content)
+                    
+            # Trim to limit after filtering
+            results = results[:limit]
+            
+        except Exception as e:
+            logger.error(f"Semantic search failed: {e}")
 
         # 2. SQL Search (Keyword/Exact)
         try:

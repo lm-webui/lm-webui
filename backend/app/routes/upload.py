@@ -117,6 +117,13 @@ async def upload_files(
     
     # Process files based on upload type
     if upload_type == "general":
+        # RBAC Check: Only admin can upload to global Knowledge Base
+        if (not conversation_id or conversation_id == "global") and user_id.get("role") != "admin":
+            raise HTTPException(
+                status_code=403,
+                detail="Admin access required for Knowledge Base upload"
+            )
+            
         return await _handle_general_upload(
             files, background_tasks, conversation_id, parsed_metadata, user_id
         )
@@ -215,7 +222,8 @@ async def _handle_general_upload(
             background_tasks.add_task(
                 rag_processor.process_file,
                 str(file_path),
-                conversation_id or "global"
+                conversation_id or "global",
+                user_id=user_id["id"]
             )
             processing_queued = True
         else:

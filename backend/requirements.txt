@@ -26,11 +26,10 @@ xai-sdk
 google-genai==1.62.0
 
 # RAG System Dependencies
-qdrant-client==1.16.2
 easyocr==1.7.2
-transformers[torch]==4.49.0
-accelerate>=0.30.0
-sentence-transformers>=5.2.2
+lancedb>=0.8.0
+fastembed>=0.3.0
+pyarrow>=15.0.0
 rank-bm25
 pdfplumber
 python-docx

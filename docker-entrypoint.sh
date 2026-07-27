@@ -87,5 +87,8 @@ echo "Current directory: $(pwd)"
 echo "Python version: $(python3 --version 2>&1 || python --version 2>&1)"
 echo "Environment: CONFIG_PATH=$CONFIG_PATH, PYTHONPATH=$PYTHONPATH"
 
+echo "🔄 Pre-warming embedding model..."
+python3 -c "from app.services.vector_store import get_embedder; get_embedder()" || echo "⚠️ Embedding pre-warm failed (non-fatal)"
+
 # Run with -u for unbuffered output to see logs immediately
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1

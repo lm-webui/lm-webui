@@ -53,6 +53,11 @@ class ModelEvent:
     def cancelled(cls) -> 'ModelEvent':
         """Create a cancellation event"""
         return cls(type="cancelled")
+    
+    @classmethod
+    def metadata(cls, data: Dict[str, Any]) -> 'ModelEvent':
+        """Create a metadata event"""
+        return cls(type="metadata", data=data)
 
 
 # Event type constants for type safety

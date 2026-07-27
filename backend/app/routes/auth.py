@@ -26,11 +26,12 @@ async def login(req: LoginRequest, response: Response):
     from app.database.sqlite.connection_pool import database_manager
     
     with database_manager.transaction() as conn:
-        user = conn.execute("SELECT id, password_hash FROM users WHERE email = ?", (req.email,)).fetchone()
+        user = conn.execute("SELECT id, password_hash, role FROM users WHERE email = ?", (req.email,)).fetchone()
         if not user or not verify_password(req.password, user[1]):
             raise HTTPException(401, "Invalid credentials")
         
         user_id = user[0]
+        role = user[2]
         
         # Generate tokens
         access = create_access_token(user_id)
@@ -57,7 +58,7 @@ async def login(req: LoginRequest, response: Response):
             max_age=7*24*60*60  # 7 days
         )
         
-        return {"user": {"id": user_id, "email": req.email}}
+        return {"user": {"id": user_id, "email": req.email, "role": role}}
 
 @router.post("/refresh")
 async def refresh(response: Response, refresh_token: str = Cookie(None)):
@@ -104,11 +105,16 @@ async def register(req: LoginRequest, response: Response):
         if existing:
             raise HTTPException(400, "User already exists")
         
+        # Determine role - first user is admin
+        cursor = conn.execute("SELECT COUNT(*) FROM users")
+        user_count = cursor.fetchone()[0]
+        role = "admin" if user_count == 0 else "user"
+        
         # Create user
         password_hash = hash_password(req.password)
         cursor = conn.execute(
-            "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-            (req.email, password_hash)
+            "INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)",
+            (req.email, password_hash, role)
         )
         user_id = cursor.lastrowid
         
@@ -137,7 +143,7 @@ async def register(req: LoginRequest, response: Response):
             max_age=7*24*60*60  # 7 days
         )
         
-        return {"user": {"id": user_id, "email": req.email}}
+        return {"user": {"id": user_id, "email": req.email, "role": role}}
 
 @router.get("/me")
 async def get_current_user_info(user_id: dict = Depends(get_current_user)):
@@ -145,11 +151,11 @@ async def get_current_user_info(user_id: dict = Depends(get_current_user)):
     from app.database.sqlite.connection_pool import database_manager
     
     with database_manager.transaction() as conn:
-        user = conn.execute("SELECT id, email FROM users WHERE id = ?", (user_id["id"],)).fetchone()
+        user = conn.execute("SELECT id, email, role FROM users WHERE id = ?", (user_id["id"],)).fetchone()
         if not user:
             raise HTTPException(404, "User not found")
 
-        return {"id": user[0], "email": user[1]}
+        return {"id": user[0], "email": user[1], "role": user[2]}
 
 @router.get("/status")
 async def get_auth_status():

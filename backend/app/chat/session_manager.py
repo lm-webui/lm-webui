@@ -71,7 +71,6 @@ class ChatSessionManager:
     
     def __init__(self):
         self.sessions: Dict[str, ChatSession] = {}
-        self._cleanup_task: Optional[asyncio.Task] = None
     
     def get_session(self, session_id: str) -> ChatSession:
         """Get or create a session"""
@@ -129,20 +128,7 @@ class ChatSessionManager:
             self.cleanup_session(session_id)
         
         return len(expired)
-    
-    async def start_background_cleanup(self, interval_seconds: int = 300):
-        """Start background task to clean up expired sessions"""
-        if self._cleanup_task is None or self._cleanup_task.done():
-            self._cleanup_task = asyncio.create_task(self._cleanup_loop(interval_seconds))
-    
-    async def _cleanup_loop(self, interval_seconds: int):
-        """Background cleanup loop"""
-        while True:
-            await asyncio.sleep(interval_seconds)
-            cleaned = self.cleanup_expired_sessions()
-            if cleaned > 0:
-                print(f"🧹 Cleaned up {cleaned} expired chat sessions")
-    
+
     def get_active_sessions(self) -> Dict[str, Dict[str, any]]:
         """Get information about active sessions"""
         result = {}

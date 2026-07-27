@@ -47,12 +47,13 @@ class SecurityConfig(BaseModel):
     """Security configuration"""
     jwt_secret_file: str = Field(default=".secrets/jwt_secret", description="Path to JWT secret file")
     fernet_secret_file: str = Field(default=".secrets/fernet_secret", description="Path to Fernet secret file")
-    access_token_expire_minutes: int = Field(default=15, description="Access token expiration in minutes")
-    refresh_token_expire_days: int = Field(default=30, description="Refresh token expiration in days")
+    access_token_expire_minutes: int = Field(default=60, description="Access token expiration in minutes")
+    refresh_token_expire_days: int = Field(default=7, description="Refresh token expiration in days")
     allowed_origins: List[str] = Field(
         default=[
             "http://localhost:5178",
             "http://localhost:5179",
+            "http://127.0.0.1:5178",
             "http://localhost:7070",
             "http://localhost:8000",
             "http://172.0.0.1:5178",

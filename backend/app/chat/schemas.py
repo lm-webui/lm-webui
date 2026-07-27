@@ -22,7 +22,7 @@ class ChatRequest:
     conversationId: Optional[str] = None
     webSearch: Optional[bool] = False
     searchProvider: Optional[str] = "duckduckgo"
-    deepThinkingMode: Optional[bool] = False
+    projectId: Optional[str] = None
     
     def __post_init__(self):
         """Generate job_id for tracking"""
@@ -36,8 +36,6 @@ class ChatRequest:
             self.metadata["webSearch"] = self.webSearch
         if "searchProvider" not in self.metadata:
             self.metadata["searchProvider"] = self.searchProvider
-        if "deepThinkingMode" not in self.metadata:
-            self.metadata["deepThinkingMode"] = self.deepThinkingMode
     
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ChatRequest':
@@ -46,7 +44,6 @@ class ChatRequest:
         conversationId = data.get("conversationId")
         webSearch = data.get("webSearch", False)
         searchProvider = data.get("searchProvider", "duckduckgo")
-        deepThinkingMode = data.get("deepThinkingMode", False)
         
         # Get metadata if provided
         metadata = data.get("metadata", {})
@@ -57,8 +54,6 @@ class ChatRequest:
             metadata["webSearch"] = webSearch
         if "searchProvider" not in metadata:
             metadata["searchProvider"] = searchProvider
-        if "deepThinkingMode" not in metadata:
-            metadata["deepThinkingMode"] = deepThinkingMode
         
         return cls(
             sessionId=data["sessionId"],
@@ -71,7 +66,6 @@ class ChatRequest:
             conversationId=conversationId,
             webSearch=webSearch,
             searchProvider=searchProvider,
-            deepThinkingMode=deepThinkingMode
         )
 
 

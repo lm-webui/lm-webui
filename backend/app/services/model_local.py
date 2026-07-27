@@ -172,8 +172,11 @@ class GGUFStrategy(BaseProviderStrategy):
                     estimated_vram = estimate_model_vram(model_path)
                     fits_vram = estimated_vram <= hw_info.get("vram_mb", 0) if hw_info.get("vram_mb", 0) > 0 else True
                     
+                    # Ensure consistent ID with gguf: prefix for ModelSelector filtering
+                    model_id = f"gguf:{model_name}" if not model_name.startswith("gguf:") else model_name
+                    
                     models.append({
-                        "id": f"gguf:{model_name}",
+                        "id": model_id,
                         "name": model_name,
                         "provider": self._backend_name,
                         "context_window": context_window,
@@ -190,8 +193,9 @@ class GGUFStrategy(BaseProviderStrategy):
                 except Exception as e:
                     logger.warning(f"Could not assess hardware compatibility for {model_name}: {e}")
                     # Fallback without hardware info
+                    model_id = f"gguf:{model_name}" if not model_name.startswith("gguf:") else model_name
                     models.append({
-                        "id": f"gguf:{model_name}",
+                        "id": model_id,
                         "name": model_name,
                         "provider": self._backend_name,
                         "context_window": context_window,

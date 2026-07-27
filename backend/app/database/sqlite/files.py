@@ -13,7 +13,7 @@ import os
 def get_db():
     """Get SQLite database connection"""
     # Use consistent path resolution from config
-    from app.core.config import get_database_path
+    from app.core.config_manager import get_database_path
     db_path = get_database_path()
     
     os.makedirs(os.path.dirname(db_path), exist_ok=True)

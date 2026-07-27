@@ -28,7 +28,8 @@ class DatabaseMigration:
         required_tables = [
             'users', 'api_keys', 'user_settings', 'model_cache',
             'conversations', 'messages', 'files', 'file_references',
-            'media_library', 'conversation_summaries', 'knowledge_graph', 'rag_chunks'
+            'media_library', 'conversation_summaries', 'knowledge_graph', 'rag_chunks',
+            'documents', 'vector_chunks'
         ]
 
         try:
@@ -91,6 +92,15 @@ class DatabaseMigration:
                 if "conversations" not in missing_columns:
                     missing_columns["conversations"] = []
                 missing_columns["conversations"].append("state")
+
+            # Check users table for role column
+            cursor.execute("PRAGMA table_info(users);")
+            user_columns = [col[1] for col in cursor.fetchall()]
+            
+            if "role" not in user_columns:
+                if "users" not in missing_columns:
+                    missing_columns["users"] = []
+                missing_columns["users"].append("role")
 
             conn.close()
             return missing_columns
@@ -162,6 +172,11 @@ class DatabaseMigration:
                 cursor.execute("ALTER TABLE conversations ADD COLUMN state TEXT DEFAULT 'active';")
                 logger.info("✅ Added state column to conversations table")
 
+            # Add role to users table
+            if "users" in missing_columns and "role" in missing_columns["users"]:
+                cursor.execute("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user';")
+                logger.info("✅ Added role column to users table")
+
             conn.commit()
             return True
 
@@ -206,22 +221,22 @@ class DatabaseMigration:
                 missing_tables = self.check_missing_tables()
                 if missing_tables:
                     logger.warning(f"⚠️ Missing tables found: {missing_tables}")
-                    logger.warning("⚠️ Full schema recreation required for missing tables")
-                    # For missing tables, we need to recreate - this is rare
+                    logger.warning("⚠️ Applying schema recreation for missing tables")
+                    # For missing tables, we attempt to apply the schema again (IF NOT EXISTS logic in SQL handles safety)
                     if not self.apply_initial_schema(conn):
                         conn.close()
                         return False
+                
+                # Check for missing columns
+                missing_columns = self.check_missing_columns()
+                if missing_columns:
+                    logger.info(f"📋 Missing columns found: {missing_columns}")
+                    if not self.add_missing_columns(conn, missing_columns):
+                        conn.close()
+                        return False
+                    logger.info("✅ Added missing columns successfully")
                 else:
-                    # Only check for missing columns
-                    missing_columns = self.check_missing_columns()
-                    if missing_columns:
-                        logger.info(f"📋 Missing columns found: {missing_columns}")
-                        if not self.add_missing_columns(conn, missing_columns):
-                            conn.close()
-                            return False
-                        logger.info("✅ Added missing columns successfully")
-                    else:
-                        logger.info("✅ Database schema is up to date")
+                    logger.info("✅ Database schema is up to date")
 
             # Verify foreign keys are enabled
             cursor.execute("PRAGMA foreign_keys;")

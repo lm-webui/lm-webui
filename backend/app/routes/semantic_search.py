@@ -190,10 +190,10 @@ async def search_status():
     return {
         "status": "ready" if rag_processor else "not_initialized",
         "search_types": ["semantic", "hybrid"],
-        "vector_database": "chromadb",
+        "vector_database": "lancedb",
         "rag_system": {
             "processor": "RAGProcessor",
-            "models": ["Moondream2", "Nomic", "BGE"]
+            "models": ["EasyOCR", "BGE-Small-FastEmbed"]
         }
     }
 

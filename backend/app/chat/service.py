@@ -7,8 +7,11 @@ import uuid
 import datetime
 import logging
 import json
+import os
+import asyncio
 from typing import Dict, List, Optional, Any
 from contextlib import contextmanager
+from functools import partial
 from app.database import get_db
 
 logger = logging.getLogger(__name__)
@@ -147,70 +150,6 @@ def save_message(
         logger.info(f"✅ Saved message to conversation {conversation_id}, role: {role}, model: {model_to_store}, provider: {provider_to_store}, tokens: {tokens}")
         return result
 
-def save_reasoning_session(session_id: str, conversation_id: str, metadata: Optional[Dict] = None) -> bool:
-    """Save a reasoning session to the database"""
-    try:
-        with get_db_context() as db:
-            metadata_json = json.dumps(metadata) if metadata else None
-            
-            db.execute(
-                "INSERT OR REPLACE INTO reasoning_sessions (id, conversation_id, metadata) VALUES (?, ?, ?)",
-                (session_id, conversation_id, metadata_json)
-            )
-            db.commit()
-            return True
-    except Exception as e:
-        logger.error(f"❌ Failed to save reasoning session {session_id}: {str(e)}")
-        return False
-
-def save_reasoning_step(session_id: str, step_data: Dict[str, Any]) -> bool:
-    """Save a reasoning step to the database"""
-    try:
-        with get_db_context() as db:
-            step_index = step_data.get("index", 0)
-            step_type = step_data.get("step_type")
-            title = step_data.get("title")
-            content = step_data.get("content", "")
-            metadata = step_data.get("metadata")
-            metadata_json = json.dumps(metadata) if metadata else None
-            
-            db.execute(
-                "INSERT INTO reasoning_steps (session_id, step_index, step_type, title, content, metadata) VALUES (?, ?, ?, ?, ?, ?)",
-                (session_id, step_index, step_type, title, content, metadata_json)
-            )
-            db.commit()
-            return True
-    except Exception as e:
-        logger.error(f"❌ Failed to save reasoning step for session {session_id}: {str(e)}")
-        return False
-
-def get_reasoning_steps(session_id: str) -> List[Dict[str, Any]]:
-    """Get reasoning steps for a session"""
-    with get_db_context() as db:
-        steps = db.execute(
-            "SELECT step_index, step_type, title, content, metadata, timestamp FROM reasoning_steps WHERE session_id = ? ORDER BY step_index ASC",
-            (session_id,)
-        ).fetchall()
-        
-        result = []
-        for s in steps:
-            step_data = {
-                "index": s[0],
-                "step_type": s[1],
-                "title": s[2],
-                "content": s[3],
-                "timestamp": s[5]
-            }
-            if s[4]:
-                try:
-                    step_data["metadata"] = json.loads(s[4])
-                except:
-                    step_data["metadata"] = {}
-            else:
-                step_data["metadata"] = {}
-            result.append(step_data)
-        
-        return result
 
 def get_conversation_messages(conversation_id: str, limit: Optional[int] = None) -> List[Dict[str, Any]]:
     """
@@ -381,12 +320,25 @@ def delete_conversation(conversation_id: str, user_id: int) -> bool:
                 logger.warning(f"⚠️ Conversation {conversation_id} not found or doesn't belong to user {user_id}")
                 return False
             
+            # Delete associated image files from disk
+            images = db.execute(
+                "SELECT file_path FROM media_library WHERE conversation_id = ? AND media_type = 'image'",
+                (conversation_id,)
+            ).fetchall()
+            for row in images:
+                fpath = row[0]
+                if fpath and os.path.exists(fpath):
+                    try:
+                        os.remove(fpath)
+                    except OSError:
+                        pass
+
             # Delete messages
             db.execute("DELETE FROM messages WHERE conversation_id = ?", (conversation_id,))
-            
+
             # Delete file references
             db.execute("DELETE FROM file_references WHERE conversation_id = ?", (conversation_id,))
-            
+
             # Delete conversation
             db.execute("DELETE FROM conversations WHERE id = ?", (conversation_id,))
             
@@ -562,3 +514,105 @@ def get_unsummarized_messages(conversation_id: str) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"❌ Failed to get unsummarized messages: {str(e)}")
         return []
+
+
+# ── Summarization via local GGUF model ──────────────────────────────
+
+# ponytail: small local model path for summarization; swap if you want a larger one
+SUMMARY_MODEL_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../models/Qwen3-0.6B-Q6_K.gguf"))
+
+
+def delete_conversation_summary(conversation_id: str) -> bool:
+    """Delete conversation summary."""
+    try:
+        db = get_db()
+        db.execute(
+            "DELETE FROM conversation_summaries WHERE conversation_id = ?",
+            (conversation_id,)
+        )
+        db.commit()
+        logger.info(f"Deleted summary for conversation {conversation_id}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to delete summary for conversation {conversation_id}: {e}")
+        return False
+
+
+async def generate_conversation_summary_llm(conversation_id: str, messages: List[Dict[str, Any]], user_id: int) -> Optional[str]:
+    """
+    Generate or update conversation summary using a local GGUF model.
+    Uses the cached SUMMARY_MODEL_PATH; falls back silently on failure.
+    """
+    if not messages:
+        return None
+
+    try:
+        old_summary = get_conversation_summary(conversation_id)
+
+        new_conversation_text = ""
+        for msg in messages:
+            speaker = "User" if msg["role"] == "user" else "Assistant"
+            new_conversation_text += f"{speaker}: {msg['content']}\n\n"
+
+        if os.path.exists(SUMMARY_MODEL_PATH):
+            try:
+                def run_gguf_summary(prompt_text, m_path):
+                    try:
+                        from llama_cpp import Llama
+                        from app.hardware.detection import get_llamacpp_settings
+
+                        settings = get_llamacpp_settings()
+                        llm = Llama(
+                            model_path=m_path,
+                            n_ctx=4096,
+                            n_threads=settings["n_threads"],
+                            n_gpu_layers=settings["n_gpu_layers"],
+                            verbose=False,
+                            use_mmap=settings.get("use_mmap", True),
+                            use_mlock=settings.get("use_mlock", False)
+                        )
+                        output = llm(
+                            prompt_text,
+                            max_tokens=300,
+                            stop=["<|im_end|>", "User:", "System:"],
+                            temperature=0.3,
+                            echo=False
+                        )
+                        return output["choices"][0]["text"].strip()
+                    except Exception as e:
+                        logger.error(f"GGUF inference internal error: {e}")
+                        return None
+
+                prompt = f"""Update the conversation summary with new events.
+
+                Current Summary:
+                {old_summary if old_summary else "No previous summary."}
+
+                New Messages:
+                {new_conversation_text}
+
+                Instructions:
+                1. Update the Current Summary to include key events from New Messages.
+                2. Maintain a coherent narrative flow.
+                3. Focus on actions, decisions, and current topic status.
+
+                Updated Summary:"""
+
+                formatted_prompt = f"<|start_header_id|>system<|end_header_id|>\n\nYou are a concise summarizer.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+
+                loop = asyncio.get_running_loop()
+                summary = await loop.run_in_executor(None, partial(run_gguf_summary, formatted_prompt, SUMMARY_MODEL_PATH))
+
+                if summary:
+                    logger.info(f"Generated Rolling Summary for {conversation_id}")
+                    return summary
+
+            except Exception as gguf_error:
+                logger.error(f"GGUF summarization failed: {gguf_error}")
+
+        logger.warning("GGUF summary failed, returning None to retry later.")
+        return None
+
+    except Exception as e:
+        logger.error(f"Failed to generate summary: {e}")
+        return None

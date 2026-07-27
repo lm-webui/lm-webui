@@ -52,6 +52,8 @@ RUN pip install llama-cpp-python==0.3.16 \
 
 # 5. Install Python dependencies
 COPY backend/requirements.txt ./requirements.txt
+# Manually install LanceDB dependencies to ensure compatibility
+RUN pip install lancedb>=0.8.0 fastembed>=0.3.0 pyarrow>=15.0.0
 RUN pip install -r requirements.txt
 
 # 6. Copy Application Code
@@ -61,7 +63,7 @@ COPY backend/ ./
 COPY --from=frontend-builder /frontend/dist ./frontend/dist
 
 # 8. Create Persistent Directories
-RUN mkdir -p /backend/data/qdrant_db \
+RUN mkdir -p /backend/data/vectors \
              /backend/media/uploads \
              /backend/data/memory \
              /backend/data/models \

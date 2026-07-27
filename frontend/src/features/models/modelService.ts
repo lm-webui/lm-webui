@@ -22,26 +22,44 @@ export class ModelService {
 
   private static readonly PROVIDERS_REQUIRING_API_KEY = PROVIDERS_REQUIRING_API_KEY as any;
 
+  /**
+   * Safe URL construction helper
+   */
+  private static getApiUrl(path: string): string {
+    const baseUrl = import.meta.env.VITE_BACKEND_URL || '';
+    // If path starts with / and baseUrl ends with /, remove one
+    const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+    const cleanPath = path.startsWith('/') ? path : `/${path}`;
+    return `${cleanBase}${cleanPath}`;
+  }
+
 // Load GGUF models from local API
   private static async loadGGUFModels(): Promise<ModelFetchResult> {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
-      const response = await authFetch(`${API_BASE_URL}/api/models/local`);
+      const response = await authFetch(this.getApiUrl('/api/models/local'));
       
       // Robust handling for both wrapped {"models": [...]} and direct [...] responses
-      const ggufModels = response?.models || (Array.isArray(response) ? response : []);
+      const ggufModels = Array.isArray(response?.models) 
+        ? response.models 
+        : (Array.isArray(response) ? response : []);
       
-      const modelNames = ggufModels.map((model: any) => model.name || model.id || 'Unknown');
+      const modelNames = ggufModels.map((model: any) => {
+        const name = model.name || model.id || 'Unknown';
+        return name.endsWith('.gguf') ? name : `${name}.gguf`;
+      });
 
-      // Transform GGUF models to ModelInfo format
-      const modelInfos: ModelInfo[] = ggufModels.map((model: any) => ({
-        id: model.name || model.id || 'unknown',
-        name: model.name || model.id || 'Unknown Model'
-      }));
+      // Transform GGUF models to ModelInfo format with consistent gguf: prefix
+      const modelInfos: ModelInfo[] = ggufModels.map((model: any) => {
+        const rawId = model.id || model.name || 'unknown';
+        // Ensure consistent ID with gguf: prefix for ModelSelector filtering
+        const id = rawId.startsWith('gguf:') ? rawId : `gguf:${rawId}`;
+        const name = model.name || model.id || 'Unknown Model';
+        return { id, name };
+      });
 
       return {
         models: modelInfos,
-        modelMapping: Object.fromEntries(modelNames.map((name: string) => [name, name])),
+        modelMapping: Object.fromEntries(modelInfos.map((m: any) => [m.name, m.id])),
         modelNames
       };
     } catch (error) {
@@ -192,9 +210,8 @@ export class ModelService {
 
   static async loadReasoningModels(): Promise<ModelCapabilities[]> {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const data = await authFetch(`${API_BASE_URL}/api/search/models/capabilities`);
-      return data.models || [];
+      const data = await authFetch(this.getApiUrl('/api/search/models/capabilities'));
+      return Array.isArray(data?.models) ? data.models : [];
     } catch (error) {
       console.error("Failed to fetch reasoning models:", error);
       return [];
@@ -203,9 +220,8 @@ export class ModelService {
 
   static async getReasoningModelNames(): Promise<string[]> {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const data = await authFetch(`${API_BASE_URL}/api/search/models/reasoning-capable`);
-      return data.models || [];
+      const data = await authFetch(this.getApiUrl('/api/search/models/reasoning-capable'));
+      return Array.isArray(data?.models) ? data.models : [];
     } catch (error) {
       console.error("Failed to fetch reasoning model names:", error);
       return [];
@@ -220,8 +236,7 @@ export class ModelService {
     complexity: string;
   } | null> {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL;
-      const data = await authFetch(`${API_BASE_URL}/api/search/models/recommend`, {
+      const data = await authFetch(this.getApiUrl('/api/search/models/recommend'), {
         method: 'POST',
         body: JSON.stringify({ query })
       });
