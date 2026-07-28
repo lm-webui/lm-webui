@@ -86,7 +86,7 @@ export function ModelsTab() {
 
           providerData[frontendProvider] = {
             models: models,
-            isConnected: connectedProviders.has(backendProvider) || ['ollama', 'gguf', 'mlx'].includes(frontendProvider),
+            isConnected: connectedProviders.has(backendProvider) || ['ollama', 'gguf'].includes(frontendProvider),
           };
 
           console.log(`Mapped ${backendProvider} -> ${frontendProvider}, models:`, models.length);

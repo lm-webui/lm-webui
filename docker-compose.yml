@@ -8,8 +8,8 @@ services:
     volumes:
       - ./.lmwebui/data:/backend/data
       - ./.lmwebui/media:/backend/media
-      - ./backend/models:/backend/models
-      - ./backend/.secrets:/backend/.secrets
+      - ./.lmwebui/models:/backend/models
+      - ./.lmwebui/secrets:/backend/.secrets
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -17,6 +17,14 @@ services:
       - APP_PATHS_DATA_DIR=/backend/data
       - APP_PATHS_MEDIA_DIR=/backend/media
       - APP_RUNTIME_DEFAULT_ENDPOINT=${APP_RUNTIME_DEFAULT_ENDPOINT:-}
+      - GGUF_N_CTX=4096
+      - GGUF_N_GPU_LAYERS=-1
+      - GGUF_FLASH_ATTN=1
+      - GGUF_CACHE_TYPE_K=q8_0
+      - GGUF_CACHE_TYPE_V=q8_0
+      - GGUF_N_THREADS=0
+      - GGUF_USE_MMAP=1
+      - GGUF_USE_MLOCK=0
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:8000/api/health')); raise SystemExit(0 if d.get('ready') else 1)"]
@@ -24,4 +32,3 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-

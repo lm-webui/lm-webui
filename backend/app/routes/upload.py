@@ -287,8 +287,9 @@ async def _handle_model_upload(
         UPLOAD_TYPES['model']['allowed_extensions']
     )
     
-    # Define upload directory
-    upload_dir = Path(__file__).parent.parent.parent / "models"
+    # Define upload directory from config
+    from app.core.config_manager import get_models_dir
+    upload_dir = get_models_dir()
     upload_dir.mkdir(exist_ok=True)
     
     file_path = upload_dir / file.filename

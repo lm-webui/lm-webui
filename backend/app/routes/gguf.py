@@ -347,3 +347,35 @@ async def list_local_gguf_models(_: dict = Depends(require_permission("models.re
 # Import logger at module level
 import logging
 logger = logging.getLogger(__name__)
+
+
+# ── GGUF Engine Config ────────────────────────────────────────────────
+from app.providers.local.gguf import get_gguf_provider
+from pydantic import BaseModel
+
+
+class GGUFConfigRequest(BaseModel):
+    n_ctx: int | None = None
+    n_gpu_layers: int | None = None
+    cache_type_k: str | None = None
+    cache_type_v: str | None = None
+
+
+@router.get("/gguf/config")
+async def get_gguf_config(_: dict = Depends(require_permission("models.view"))):
+    """Get effective GGUF engine configuration (env defaults + user overrides)."""
+    provider = get_gguf_provider()
+    return provider.get_config()
+
+
+@router.post("/gguf/config")
+async def set_gguf_config(
+    req: GGUFConfigRequest,
+    _: dict = Depends(require_permission("models.configure"))
+):
+    """Update GGUF engine configuration via UI.
+    If a model is loaded, it will be unloaded — the next load uses the new config.
+    """
+    provider = get_gguf_provider()
+    overrides = {k: v for k, v in req.model_dump().items() if v is not None}
+    return provider.update_config(overrides)

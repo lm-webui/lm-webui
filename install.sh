@@ -132,15 +132,15 @@ EOF
     fi
     
     # Create required persistent directories
-    mkdir -p ./backend/models
+    mkdir -p ./.lmwebui/models
     mkdir -p ./backend/rag/embed ./backend/rag/ocr ./backend/rag/rerank ./backend/rag/vision
     mkdir -p ./backend/data/sql_db ./backend/data/qdrant_db ./backend/data/memory
     mkdir -p ./backend/media/generated ./backend/media/uploads
-    mkdir -p ./backend/.secrets
+    mkdir -p ./.lmwebui/.secrets
     
     log_info "Created required data and model directories"
     
-    log_info "Data and media use Docker volumes; models use ./backend/models"
+    log_info "Data and media use Docker volumes; models use ./.lmwebui/models"
 }
 
 # Clone or use existing repository
@@ -207,14 +207,14 @@ show_instructions() {
     echo -e "${BLUE}Next steps:${NC}"
     echo -e "  1. Open ${YELLOW}http://localhost:7070${NC} in your browser"
     echo -e "  2. Install the optional host CLI: ${YELLOW}python -m pip install -e cli${NC}"
-    echo -e "  3. Place GGUF models in ${YELLOW}./backend/models/${NC} for local inference"
+    echo -e "  3. Place GGUF models in ${YELLOW}./.lmwebui/models/${NC} for local inference"
     echo ""
     echo -e "${BLUE}Useful directories:${NC}"
-    echo -e "  • Models: ${YELLOW}./backend/models/${NC} (mounted to container)"
+    echo -e "  • Models: ${YELLOW}./.lmwebui/models/${NC} (mounted to container)"
     echo -e "  • Data: ${YELLOW}Docker volume (lm-webui_app_data)${NC}"
     echo -e "  • Media: ${YELLOW}Docker volume (lm-webui_app_media)${NC}"
     echo -e "  • Config: ${YELLOW}./backend/config.yaml${NC}"
-    echo -e "  • Secrets: ${YELLOW}./backend/.secrets/${NC}"
+    echo -e "  • Secrets: ${YELLOW}./.lmwebui/.secrets/${NC}"
     echo ""
     echo -e "${GREEN}Enjoy your local AI assistant! 🤖${NC}"
     echo ""

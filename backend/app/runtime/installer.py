@@ -19,6 +19,9 @@ MLX_SCRIPTS: Dict[str, str] = {
     "server_status": "lsof -ti:8090 2>/dev/null && echo 'MLX server running on :8090' || echo 'MLX server not running'",
     "detect_hardware": "python3 -c 'import platform; print(platform.machine())'",
     "list_models": "python3 -c \"import os; models=os.listdir(os.path.expanduser('~/.mlx/models')) if os.path.exists(os.path.expanduser('~/.mlx/models')) else []; print('\\n'.join(models) if models else 'No models found')\"",
+    "model_pull": "mlx_lm.fetch --hf-path <model-repo-id>",
+    "model_list_local": "ls ~/.mlx/models/ 2>/dev/null || echo 'No models in ~/.mlx/models/'",
+    "model_run": "mlx_lm.server --port 8090 --model ~/.mlx/models/<model-name>",
 }
 
 
@@ -53,7 +56,7 @@ class MLXManager:
             "steps": [
                 {"order": 1, "action": "install", "command": MLX_SCRIPTS["install"], "description": "Install MLX packages"},
                 {"order": 2, "action": "verify", "command": MLX_SCRIPTS["version"], "description": "Verify MLX installation"},
-                {"order": 3, "action": "download_model", "command": "mlx_lm.fetch --hf-path <model-name>", "description": "Download a model (e.g., mlx-community/Llama-3.2-3B-Instruct-4bit)"},
+                {"order": 3, "action": "download_model", "command": MLX_SCRIPTS["model_pull"], "description": "Download a model (e.g., mlx-community/Llama-3.2-3B-Instruct-4bit)"},
                 {"order": 4, "action": "start_server", "command": MLX_SCRIPTS["server_start"], "description": "Start MLX inference server"},
                 {"order": 5, "action": "test", "command": "curl http://localhost:8090/v1/models", "description": "Test server is responding"},
             ],

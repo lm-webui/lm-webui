@@ -33,7 +33,7 @@ Or run manually:
 ```bash
 git clone https://github.com/lm-webui/lm-webui.git
 cd lm-webui
-mkdir -p backend/models backend/.secrets
+mkdir -p .lmwebui/models .lmwebui/secrets
 docker compose up -d --build
 ```
 
@@ -54,10 +54,10 @@ The default Compose deployment persists:
 | --- | --- |
 | SQLite/application data | Docker volume `app_data` → `/backend/data` |
 | Generated media/uploads | Docker volume `app_media` → `/backend/media` |
-| Local models | `./backend/models` → `/backend/models` |
-| Secrets | `./backend/.secrets` → `/backend/.secrets` |
+| Local models | `./.lmwebui/models` → `/backend/models` |
+| Secrets | `./.lmwebui/secrets` → `/backend/.secrets` |
 
-Back up the Docker volumes and `backend/models` before upgrades. Never commit `.env`, `.secrets`, API keys, databases, or model files.
+Back up the Docker volumes and `./.lmwebui/models` before upgrades. Never commit `.env`, `.secrets`, API keys, databases, or model files.
 
 ## External runtimes
 

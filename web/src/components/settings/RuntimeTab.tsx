@@ -5,16 +5,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { 
-  Monitor, 
-  Database, 
-  HardDrive, 
-  Cpu, 
-  Download, 
-  Trash2, 
-  RefreshCw, 
-  CheckCircle, 
-  XCircle, 
+import {
+  Monitor,
+  HardDrive,
+  Cpu,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
   Loader2,
   ChevronRight,
   Server
@@ -44,14 +41,13 @@ interface HardwareInfo {
 }
 
 interface RuntimeTabProps {
-  onOpenRuntimeManager?: (tab?: string) => void;
+  onOpenRuntimeManager?: () => void;
 }
 
 export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [hardware, setHardware] = useState<HardwareInfo | null>(null);
   const [loading, setLoading] = useState(true);
-  const [installing, setInstalling] = useState<string | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -74,28 +70,6 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
     }
   };
 
-  const handleInstall = async (runtimeType: string) => {
-    const BASE = import.meta.env.VITE_BACKEND_URL || "";
-    setInstalling(runtimeType);
-    try {
-      const data = await authFetch(`${BASE}/api/runtimes/install`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ runtime_type: runtimeType, options: {} })
-      });
-      if (data.requires_host_cli) {
-        toast.info(`${data.message} Command: ${data.command}`);
-      } else {
-        toast.success(`${runtimeType} installed successfully`);
-      }
-      await fetchData();
-    } catch (error) {
-      toast.error(`Failed to install ${runtimeType}`);
-    } finally {
-      setInstalling(null);
-    }
-  };
-
   const handleRefresh = () => {
     fetchData();
     toast.info("Refreshing runtime status...");
@@ -103,16 +77,12 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
 
   const getRuntimeIcon = (type: string) => {
     switch (type) {
-      case "ollama":
-        return <Database className="h-5 w-5 text-cyan-500" />;
-      case "vllm":
-        return <Monitor className="h-5 w-5 text-emerald-500" />;
       case "gguf":
         return <HardDrive className="h-5 w-5 text-gray-500" />;
       case "mlx":
         return <Cpu className="h-5 w-5 text-purple-500" />;
-      case "qdrant":
-        return <Server className="h-5 w-5 text-blue-500" />;
+      case "comfyui":
+        return <Monitor className="h-5 w-5 text-pink-500" />;
       default:
         return <Cpu className="h-5 w-5" />;
     }
@@ -124,9 +94,6 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
     }
     if (runtime.installed) {
       return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"><RefreshCw className="h-3 w-3 mr-1" />Installed</Badge>;
-    }
-    if (runtime.manual_install) {
-      return <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Manual</Badge>;
     }
     return <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"><XCircle className="h-3 w-3 mr-1" />Not Installed</Badge>;
   };
@@ -199,27 +166,9 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
                   </div>
                   <div className="flex items-center gap-2">
                     {getStatusBadge(runtime)}
-                    {!runtime.installed && !runtime.manual_install && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleInstall(runtime.type)}
-                        disabled={installing === runtime.type}
-                        className="h-7 gap-1"
-                      >
-                        {installing === runtime.type ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <Download className="h-3 w-3" />
-                        )}
-                        Install
-                      </Button>
-                    )}
-                    {runtime.installed && (
-                      <Button size="sm" variant="ghost" className="h-7" onClick={() => onOpenRuntimeManager?.(runtime.type)}>
-                        <ChevronRight className="h-3 w-3" />
-                      </Button>
-                    )}
+                    <Button size="sm" variant="ghost" className="h-7" onClick={() => onOpenRuntimeManager?.()}>
+                      <ChevronRight className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
                 {runtime.install_hint && !runtime.installed && (

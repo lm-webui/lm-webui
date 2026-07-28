@@ -56,7 +56,6 @@ export function Settings({
   const [streamingEnabled, setStreamingEnabled] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [runtimeManagerOpen, setRuntimeManagerOpen] = useState(false);
-  const [runtimeManagerTab, setRuntimeManagerTab] = useState("ollama");
   const { user } = useAuth();
 
   // Local state for search engine to ensure persistence works correctly
@@ -314,7 +313,7 @@ export function Settings({
               </TabsContent>
 
               {user?.role === "admin" && <TabsContent value="runtime" className="space-y-4 h-full">
-                <RuntimeTab onOpenRuntimeManager={(tab) => { setRuntimeManagerTab(tab || "ollama"); setRuntimeManagerOpen(true); }} />
+                <RuntimeTab onOpenRuntimeManager={() => setRuntimeManagerOpen(true)} />
               </TabsContent>}
             </div>
           </Tabs>
@@ -337,7 +336,6 @@ export function Settings({
       {user?.role === "admin" && <RuntimeManager
         open={runtimeManagerOpen}
         onOpenChange={setRuntimeManagerOpen}
-        initialTab={runtimeManagerTab}
       />}
     </>
   );

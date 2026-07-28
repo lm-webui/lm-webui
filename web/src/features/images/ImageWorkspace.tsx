@@ -80,7 +80,7 @@ export default function ImageWorkspace() {
           },
           local: {
             label: "Local", icon: "server",
-            connected: runtimes.ollama?.installed || runtimes.gguf?.installed || runtimes.mlx?.installed,
+            connected: runtimes.ollama?.installed || runtimes.gguf?.installed,
             models: apiModels.local || ["sdxl", "flux-dev", "flux-schnell", "ltx"],
           },
         });

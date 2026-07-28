@@ -181,8 +181,8 @@ Use the Runtime Manager as an administrator to register and test Ollama or anoth
 |---|---|
 | SQLite / application data | Docker volume → `/backend/data` |
 | Generated media / uploads | Docker volume → `/backend/media` |
-| Local models | `./backend/models` → `/backend/models` |
-| Secrets | `./backend/.secrets` → `/backend/.secrets` |
+| Local models | `./.lmwebui/models` → `/backend/models` |
+| Secrets | `./.lmwebui/secrets` → `/backend/.secrets` |
 
 See [Host CLI](./docs/cli.md) and [Deployment](./docs/DEPLOYMENT.md) for setup, runtime endpoints, and troubleshooting.
 

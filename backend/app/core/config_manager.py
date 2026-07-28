@@ -75,9 +75,10 @@ class PathsConfig(BaseModel):
     base_dir: str = Field(default=".", description="Base directory for relative paths")
     media_dir: str = Field(default="media", description="Media directory for uploads and generated files")
     data_dir: str = Field(default="data", description="Data directory for databases and storage")
+    models_dir: str = Field(default="models", description="Directory for model files (GGUF, MLX)")
     config_path: str = Field(default="config.yaml", description="Path to YAML configuration file")
-    
-    @validator('media_dir', 'data_dir')
+
+    @validator('media_dir', 'data_dir', 'models_dir')
     def resolve_paths(cls, v, values):
         """Resolve relative paths to absolute paths"""
         if os.path.isabs(v):
@@ -359,6 +360,15 @@ def get_media_dir() -> Path:
         base_dir = Path(paths_config.base_dir)
         media_path = base_dir / media_path
     return media_path.resolve()
+
+def get_models_dir() -> Path:
+    """Get absolute path to models directory"""
+    paths_config = get_paths_config()
+    models_path = Path(paths_config.models_dir)
+    if not models_path.is_absolute():
+        base_dir = Path(paths_config.base_dir)
+        models_path = base_dir / models_path
+    return models_path.resolve()
 
 def get_data_dir() -> Path:
     """Get absolute path to data directory"""
