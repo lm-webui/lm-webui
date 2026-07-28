@@ -16,7 +16,6 @@ services:
       - APP_ENVIRONMENT=production
       - APP_PATHS_DATA_DIR=/backend/data
       - APP_PATHS_MEDIA_DIR=/backend/media
-      - APP_RUNTIME_DEFAULT_ENDPOINT=${APP_RUNTIME_DEFAULT_ENDPOINT:-}
       - GGUF_N_CTX=4096
       - GGUF_N_GPU_LAYERS=-1
       - GGUF_FLASH_ATTN=1

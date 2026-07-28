@@ -19,28 +19,23 @@ lm-webui-host status
 lm-webui-host doctor
 ```
 
-## Runtime commands
+## Runtime commands (MLX only)
+
+MLX runs as an external server on macOS hosts. The CLI can install and manage it:
 
 ```bash
-lm-webui-host runtime list
-lm-webui-host runtime detect
-lm-webui-host runtime test http://127.0.0.1:11434
-```
-
-Install supported host runtimes with confirmation:
-
-```bash
-lm-webui-host runtime install ollama
 lm-webui-host runtime install mlx
-lm-webui-host runtime install gguf
-lm-webui-host runtime install vllm
+lm-webui-host runtime list
+lm-webui-host runtime test http://127.0.0.1:8090
 ```
 
-Preview an installation without changing the host:
+Preview without changing the host:
 
 ```bash
-lm-webui-host runtime install ollama --dry-run
+lm-webui-host runtime install mlx --dry-run
 ```
+
+**Other runtimes**: ComfyUI is installed by cloning its repository. Ollama and vLLM are configured as API providers in Settings → API Providers (no CLI needed). GGUF (llama.cpp) is bundled in-container — no host installation required.
 
 The CLI does not install NVIDIA, AMD, Intel, or operating-system kernel drivers. Install those through the host operating system's supported vendor process.
 
@@ -61,7 +56,7 @@ The application is available at `http://localhost:7070`. Readiness is reported b
 curl http://localhost:7070/api/health
 ```
 
-The default Compose setup persists data, media, models, and secrets separately. Runtime endpoints are configured in the admin Runtime Manager. For a host Ollama service, use `http://host.docker.internal:11434`; Linux deployments should use the host gateway configuration supplied by Compose.
+The default Compose setup persists data, media, models, and secrets separately. External runtime endpoints are detected automatically via HTTP probes on `host.docker.internal`. For API providers (Ollama, vLLM), configure the endpoint URL in Settings → API Providers.
 
 ## Repository development commands
 
