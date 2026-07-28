@@ -107,7 +107,7 @@ If you want to use cloud-based AI models:
 
 ### Environment Variables
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root or set these on the `lm-webui` service in `docker-compose.yml`:
 
 ```bash
 # Frontend (.env in project root)
@@ -119,6 +119,20 @@ BACKEND_PORT=8000
 DATABASE_URL=sqlite:///./data/app.db
 SECRET_KEY=your-secret-key-here
 ```
+
+**GGUF engine tuning** — set these on the `lm-webui` service in `docker-compose.yml` to override hardware-auto-detected defaults:
+
+```yaml
+environment:
+  - GGUF_N_CTX=4096          # Context window: 1024–32768
+  - GGUF_N_GPU_LAYERS=-1     # GPU layers: -1=all, 0=CPU, N=first N layers
+  - GGUF_FLASH_ATTN=1        # Flash attention: 1=on (faster), 0=off
+  - GGUF_CACHE_TYPE_K=q8_0   # Key cache: f16, q8_0, q4_0
+  - GGUF_CACHE_TYPE_V=q8_0   # Value cache: f16, q8_0, q4_0
+  - GGUF_N_THREADS=0         # CPU threads: 0=auto
+```
+
+> A subset of these (context window, GPU toggle, KV cache quality) are also adjustable from the Runtime Manager UI. Env vars serve as system defaults; UI changes apply per-session.
 
 ### Configuration File
 

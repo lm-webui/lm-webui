@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-07-28
+
+### Changed
+- Runtime Manager refocused to 3 managed runtimes: GGUF (in-container), MLX (external on macOS host), ComfyUI (external)
+- Ollama and vLLM moved to Settings → API Providers (standard provider pattern, not managed runtimes)
+- MLX now detected and connected as external server — install `mlx_lm.server` on macOS host, WebUI connects via HTTP API
+- GGUF engine config adjustable from Runtime Manager UI (context window slider, GPU toggle, KV cache quality)
+- Hardware-aware GGUF defaults — flash_attn, n_gpu_layers, cache_type auto-configured from host hardware
+- Model storage moved from `./backend/models` to `./.lmwebui/models` (outside repo checkout — survives `rm -rf`)
+- Secrets moved from `./backend/.secrets` to `./.lmwebui/secrets`
+- Runtime detection uses HTTP probing on `host.docker.internal` — no host agent, no Docker socket needed
+- MLX provider rewritten as HTTP client — connects to `mlx_lm.server` instead of in-process `mlx_lm.load()`
+
+### Removed
+- Ollama and vLLM from Runtime Manager UI (configured via Settings → API Providers)
+- `/api/runtimes/install` endpoint (runtime installation delegated to host CLI)
+- `RuntimeInstaller` module — replaced with `MLXManager` (setup scripts for host-side install)
+
 ## [0.5.0] — 2026-07-27
 
 A fresh foundation. Stripped unused systems, hardened core auth, cleaned the entire repo, and prepared for the next generation.

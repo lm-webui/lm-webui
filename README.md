@@ -74,10 +74,10 @@ The web client runs on the configured Vite port and proxies API requests to the 
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
 | **File Context** | Upload files for conversation context. Image and document processing, upload status, file references with conversations, and citation display in chat. |
-| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Hardware-compatibility checking and local model registry. |
-| **MLX Runtime** | Model discovery, download, and management for Apple Silicon. Seamless integration with the chat interface. |
+| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and run models locally. Configurable context window, GPU offload, and KV cache from Runtime Manager UI. Hardware-compatibility checking. |
+| **MLX Runtime** | Apple Silicon acceleration via external `mlx_lm.server`. Detected and connected through Runtime Manager — install scripts provided. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
-| **Runtime Manager** | Detect, register, and test local runtimes including Ollama, GGUF (llama.cpp), MLX, vLLM, and ComfyUI through the admin interface. |
+| **Runtime Manager** | Manage GGUF (in-container), MLX (external), and ComfyUI (external). Engine config controls for GGUF. Ollama and vLLM configured in Settings → API Providers. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
 | **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
 | **Self-Hosted Ready** | Single Docker container, zero external telemetry, offline-capable. Mount your models, data, and media as volumes. |

@@ -135,15 +135,18 @@ Gallery stores generated images for the authenticated user. It supports browsing
 
 ## Runtime and hardware management
 
-The Runtime Manager detects and reports local runtime availability and provides installation or refresh actions where supported.
+The Runtime Manager detects and reports local runtime availability with a clean 3-section UI.
 
-Recognized runtimes include:
+**GGUF (llama.cpp)** — bundled in-container. Universal local inference engine with hardware-accelerated defaults. Configurable from the Runtime Manager UI:
+- Context window slider (1K–32K)
+- GPU acceleration toggle
+- KV cache quality (balanced q8_0 / full f16)
 
-- Ollama
-- GGUF through llama.cpp
-- MLX
-- vLLM
-- ComfyUI
+**MLX** — external server on Apple Silicon macOS hosts. Install `mlx_lm.server` on the host, the Runtime Manager detects it and connects via HTTP API. Setup scripts (install/uninstall/start/stop) available directly in the UI.
+
+**ComfyUI** — external server for image generation. Detected on `host.docker.internal:8188`, one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
+
+Ollama and vLLM are configured as standard API providers in Settings → API Providers, not managed runtimes.
 
 The application also reports local hardware information for CPU, CUDA, ROCm, and Apple Metal environments. Hardware acceleration affects local execution only; cloud providers use their own infrastructure.
 

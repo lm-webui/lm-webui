@@ -76,9 +76,9 @@ Model Selector → GET /api/models/* → Model Registry → Provider.list_models
 | OpenAI | Cloud | ✅ | ✅ |
 | Google Gemini | Cloud | ✅ | ✅ |
 | Ollama | Local | ✅ | ❌ |
-| GGUF (llama.cpp) | Local | ✅ | ❌ |
-| MLX | Local | ✅ | ❌ |
-| ComfyUI | Local | ❌ | ✅ |
+| GGUF (llama.cpp) | In-container | ✅ | ❌ |
+| MLX | External (host server) | ✅ | ❌ |
+| ComfyUI | External (host server) | ❌ | ✅ |
 
 ## Key Design Decisions
 
@@ -87,3 +87,4 @@ Model Selector → GET /api/models/* → Model Registry → Provider.list_models
 - **SQLite with WAL mode** for zero-config persistence
 - **Connection pool** with 50 connections for concurrent access
 - **Cookie-based auth** with JWT + refresh tokens
+- **Runtime architecture** — runtimes split into two tiers: (1) **managed** — GGUF bundled in-container with hardware-aware defaults and UI-configurable engine params; (2) **detected** — MLX and ComfyUI run as external servers on the host, discovered via HTTP probes on `host.docker.internal`. Ollama and vLLM are standard API providers (Settings → API Keys), not runtimes.
