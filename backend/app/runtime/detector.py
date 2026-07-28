@@ -1,13 +1,16 @@
 """
 Runtime Detector
-Detects installed runtimes on the system.
+Detects managed runtimes: GGUF (in-container), MLX (external on Apple Silicon), ComfyUI (external).
 """
 import os
-import shutil
 import logging
-import subprocess
 from typing import Dict, List, Optional
 from enum import Enum
+
+try:
+    import httpx
+except ImportError:
+    httpx = None
 
 logger = logging.getLogger(__name__)
 
@@ -19,75 +22,84 @@ class RuntimeType(str, Enum):
     COMFYUI = "comfyui"  # Image generation (external server on host)
 
 
+# Host detection constants
+HOST_INTERNAL = "host.docker.internal"
+MLX_SERVER_PORT = 8090
+COMFYUI_PORT = 8188
+
+
 class RuntimeDetector:
     """
-    Detects installed runtimes on the system.
-    
+    Detects managed runtimes.
+
     Detection methods:
-    - CLI commands (ollama, docker)
-    - Python packages (mlx, llama-cpp)
-    - Running services (localhost ports)
+    - Python packages (llama-cpp-python in-container)
+    - External server probing (MLX, ComfyUI on host.docker.internal)
     """
-    
-    # Runtime detection configurations
+
+    # Runtime detection configurations — only managed runtimes
     RUNTIME_CONFIGS = {
-        RuntimeType.OLLAMA: {
-            "type": "local_binary",
-            "commands": ["ollama"],
-            "ports": [11434],
-            "install_hint": "Run: curl -fsSL https://ollama.ai/install.sh | sh"
-        },
         RuntimeType.GGUF: {
             "type": "python_package",
             "packages": ["llama_cpp"],
             "models_dir": "models",
-            "install_hint": "pip install llama-cpp-python"
+            "managed": True,
         },
         RuntimeType.MLX: {
-            "type": "python_package",
-            "packages": ["mlx"],
-            "install_hint": "pip install mlx mlx-lm && pip install mlx-optiq"
-        },
-        
-        
-        RuntimeType.VLLM: {
-            "type": "python_package",
-            "packages": ["vllm"],
-            "install_hint": "pip install vllm"
+            "type": "external_server",
+            "host_port": MLX_SERVER_PORT,
+            "probe_path": "/v1/models",
+            "managed": False,
         },
         RuntimeType.COMFYUI: {
-            "type": "local_binary",
-            "commands": [],
-            "ports": [8188],
-            "install_hint": "git clone https://github.com/comfyanonymous/ComfyUI && cd ComfyUI && pip install -r requirements.txt"
-        }
+            "type": "external_server",
+            "host_port": COMFYUI_PORT,
+            "probe_path": "/",
+            "managed": False,
+        },
     }
-    
-    def detect_all(self) -> Dict[str, Dict]:
+
+    def detect_all(self, include_external: bool = True) -> Dict[str, Dict]:
         """
-        Detect all runtimes.
-        
+        Detect all managed runtimes.
+
+        Args:
+            include_external: Whether to probe host.docker.internal for external runtimes
+
         Returns:
             Dict mapping runtime type -> detection info
         """
         results = {}
-        
+
+        # In-container detection (GGUF)
         for runtime_type in RuntimeType:
-            info = self.detect(runtime_type)
-            if info["installed"]:
+            config = self.RUNTIME_CONFIGS.get(runtime_type)
+            if config and config.get("type") == "python_package":
+                info = self.detect(runtime_type)
                 results[runtime_type.value] = info
-        
+
+        # External server detection (MLX, ComfyUI)
+        if include_external:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                ext_results = loop.run_until_complete(self.detect_external_all())
+            except RuntimeError:
+                # No running loop — create one
+                ext_results = asyncio.run(self.detect_external_all())
+            results.update(ext_results)
+
         return results
-    
+
     def detect(self, runtime_type: RuntimeType) -> Dict:
         """
         Detect a specific runtime.
-        
+
         Args:
             runtime_type: The runtime to detect
-            
+
         Returns:
-            status and details Dict with installation
+            status and details Dict with detection info
         """
         config = self.RUNTIME_CONFIGS.get(runtime_type)
         if not config:
@@ -96,90 +108,44 @@ class RuntimeDetector:
                 "type": runtime_type.value,
                 "error": "Unknown runtime type"
             }
-        
+
         result = {
             "type": runtime_type.value,
             "installed": False,
             "version": None,
-            "path": None,
-            "port": None,
             "status": "not_installed"
         }
-        
-        # Try different detection methods based on runtime type
-        detection_method = config.get("type", "local_binary")
-        
-        if detection_method == "local_binary":
-            self._detect_binary(config, result)
-        elif detection_method == "python_package":
+
+        detection_method = config.get("type", "")
+
+        if detection_method == "python_package":
             self._detect_package(config, result)
-        elif detection_method == "docker":
-            self._detect_docker(config, result)
-        
+
         return result
-    
-    def _detect_binary(self, config: Dict, result: Dict) -> None:
-        """Detect local binary runtime."""
-        commands = config.get("commands", [])
-        
-        for cmd in commands:
-            # Check if command exists
-            path = shutil.which(cmd)
-            if path:
-                result["installed"] = True
-                result["path"] = path
-                result["status"] = "available"
-                
-                # Try to get version
-                try:
-                    version = subprocess.run(
-                        [cmd, "--version"],
-                        capture_output=True,
-                        text=True,
-                        timeout=5
-                    )
-                    if version.returncode == 0:
-                        result["version"] = version.stdout.strip()
-                except Exception:
-                    pass
-                
-                break
-        
-        # Check ports if still not found
-        if not result["installed"]:
-            ports = config.get("ports", [])
-            for port in ports:
-                if self._is_port_open(port):
-                    result["installed"] = True
-                    result["port"] = port
-                    result["status"] = "running"
-                    break
-    
+
     def _detect_package(self, config: Dict, result: Dict) -> None:
-        """Detect Python package runtime."""
+        """Detect Python package runtime (GGUF in-container)."""
         packages = config.get("packages", [])
-        
+
         for pkg in packages:
             try:
-                # Try to import the package
                 __import__(pkg.replace("-", "_"))
                 result["installed"] = True
                 result["status"] = "available"
-                
-                # Try to get version
+
                 try:
                     import importlib.metadata
                     version = importlib.metadata.version(pkg)
                     result["version"] = version
                 except Exception:
                     pass
-                
+
                 break
             except ImportError:
                 continue
-        
-        # Check models directory for GGUF
-        if not result["installed"] and config.get("models_dir"):
+
+        # Count GGUF models in models directory
+        if result["installed"] and config.get("models_dir"):
             models_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)),
                 "..",
@@ -188,68 +154,97 @@ class RuntimeDetector:
             if os.path.exists(models_dir):
                 gguf_files = [
                     f for f in os.listdir(models_dir)
-                    if f.endswith(".gguf")
+                    if f.endswith(".gguf") and os.path.isfile(os.path.join(models_dir, f))
                 ]
-                if gguf_files:
-                    result["installed"] = True
-                    result["status"] = "available"
-                    result["models_count"] = len(gguf_files)
-    
-    def _detect_docker(self, config: Dict, result: Dict) -> None:
-        """Detect Docker container runtime."""
-        containers = config.get("containers", [])
-        
-        # Check if docker is available
-        if not shutil.which("docker"):
-            result["status"] = "docker_not_available"
-            return
-        
-        for container in containers:
-            try:
-                result_check = subprocess.run(
-                    ["docker", "ps", "--filter", f"name={container}", "--format", "{{.Names}}"],
-                    capture_output=True,
-                    text=True,
-                    timeout=10
-                )
-                if container in result_check.stdout:
-                    result["installed"] = True
-                    result["status"] = "running"
-                    break
-            except Exception:
-                continue
-        
-        # Check ports
-        if not result["installed"]:
-            ports = config.get("ports", [])
-            for port in ports:
-                if self._is_port_open(port):
-                    result["installed"] = True
-                    result["port"] = port
-                    result["status"] = "running"
-                    break
-    
-    def _is_port_open(self, port: int) -> bool:
-        """Check if a port is open."""
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(1)
+                result["models_count"] = len(gguf_files)
+
+    async def detect_external_all(self) -> Dict[str, Dict]:
+        """
+        Probe host.docker.internal for running external runtimes (MLX, ComfyUI).
+
+        Returns:
+            Dict of detected runtime type -> status info
+        """
+        results = {}
+
+        mlx = await self._probe_external("mlx")
+        if mlx:
+            results["mlx"] = mlx
+
+        comfy = await self._probe_external("comfyui")
+        if comfy:
+            results["comfyui"] = comfy
+
+        return results
+
+    async def _probe_external(self, runtime_type: str) -> Optional[Dict]:
+        """
+        Probe a single external runtime on host.docker.internal.
+
+        Args:
+            runtime_type: The runtime type key
+
+        Returns:
+            Detection dict or None if not found
+        """
+        for rt in RuntimeType:
+            if rt.value == runtime_type:
+                config = self.RUNTIME_CONFIGS.get(rt)
+                break
+        else:
+            return None
+
+        if not config or config.get("type") != "external_server":
+            return None
+
+        port = config["host_port"]
+        path = config["probe_path"]
+        url = f"http://{HOST_INTERNAL}:{port}{path}"
+
+        if httpx is None:
+            logger.warning("httpx not available, skipping external runtime detection")
+            return None
+
         try:
-            result = sock.connect_ex(("localhost", port))
-            sock.close()
-            return result == 0
-        except Exception:
-            return False
-    
+            async with httpx.AsyncClient(timeout=2) as client:
+                resp = await client.get(url)
+                if resp.status_code < 500:
+                    return {
+                        "type": runtime_type,
+                        "installed": True,
+                        "status": "running",
+                        "port": port,
+                        "endpoint": f"http://{HOST_INTERNAL}:{port}",
+                    }
+        except (httpx.ConnectError, httpx.TimeoutException, httpx.ReadError):
+            pass
+        except Exception as e:
+            logger.debug(f"Error probing {runtime_type} at {url}: {e}")
+
+        return None
+
     def get_detection_info(self, runtime_type: RuntimeType) -> Dict:
         """Get detection info including install hints."""
         config = self.RUNTIME_CONFIGS.get(runtime_type, {})
+        hints = {
+            RuntimeType.GGUF: "Bundled in-container — always available",
+            RuntimeType.MLX: (
+                "Install on macOS host:\n"
+                "  pip install mlx mlx-lm mlx-optiq\n"
+                "  mlx_lm.server --port 8090 --model <model>"
+            ),
+            RuntimeType.COMFYUI: (
+                "Install on host:\n"
+                "  git clone https://github.com/comfyanonymous/ComfyUI\n"
+                "  cd ComfyUI && pip install -r requirements.txt\n"
+                "  python main.py --port 8188"
+            ),
+        }
         return {
             "type": runtime_type.value,
             "detection_method": config.get("type", "unknown"),
-            "install_hint": config.get("install_hint", "Please install this runtime"),
-            "commands": config.get("commands", []),
-            "ports": config.get("ports", [])
+            "install_hint": hints.get(runtime_type, config.get("install_hint", "")),
+            "managed": config.get("managed", False),
         }
 
 

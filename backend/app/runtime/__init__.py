@@ -1,17 +1,17 @@
 """
 Runtime Manager
-Manages local runtime installation and detection.
+Manages local inference (GGUF) and detected external runtimes (MLX, ComfyUI).
 """
 from .registry import RuntimeRegistry, get_runtime_registry
 from .detector import RuntimeDetector, RuntimeType, get_runtime_detector
-from .installer import RuntimeInstaller, get_runtime_installer
+from .installer import MLXManager, get_mlx_manager
 
 __all__ = [
     "RuntimeRegistry",
-    "RuntimeDetector", 
-    "RuntimeInstaller",
+    "RuntimeDetector",
+    "MLXManager",
     "RuntimeType",
     "get_runtime_registry",
-    "get_runtime_detector", 
-    "get_runtime_installer",
+    "get_runtime_detector",
+    "get_mlx_manager",
 ]
