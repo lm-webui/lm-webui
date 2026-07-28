@@ -216,7 +216,7 @@ async def _handle_general_upload(
 
         media_id = cursor.lastrowid
 
-        # Trigger Background Processing
+        # Trigger Background Processing (text extraction + RAG indexing)
         if file_processor:
             logger.info(f"Queueing text extraction for {final_filename}")
             background_tasks.add_task(
@@ -226,6 +226,22 @@ async def _handle_general_upload(
                 user_id["id"]
             )
             processing_queued = True
+
+            # Also queue RAG indexing if enabled
+            try:
+                from app.core.config_manager import get_config
+                if get_config().rag.enabled:
+                    from app.rag.processor import RAGProcessor
+                    processor = RAGProcessor()
+                    background_tasks.add_task(
+                        processor.process_file,
+                        str(file_path),
+                        final_filename,
+                        conversation_id,
+                        user_id["id"],
+                    )
+            except Exception:
+                pass  # RAG not configured — silently skip
         else:
             logger.warning(f"FileProcessor not initialized, skipping processing for {final_filename}")
             processing_queued = False

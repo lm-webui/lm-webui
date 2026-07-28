@@ -13,12 +13,10 @@ logger = logging.getLogger(__name__)
 
 
 class RuntimeType(str, Enum):
-    """Runtime types supported by LM-WebUI."""
-    OLLAMA = "ollama"
-    GGUF = "gguf"  # llama-cpp-python
-    MLX = "mlx"
-    VLLM = "vllm"
-    COMFYUI = "comfyui"
+    """Runtime types managed by LM-WebUI Runtime Manager."""
+    GGUF = "gguf"  # llama-cpp-python (in-container)
+    MLX = "mlx"    # Apple Silicon only (external server on host)
+    COMFYUI = "comfyui"  # Image generation (external server on host)
 
 
 class RuntimeDetector:

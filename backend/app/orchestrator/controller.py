@@ -99,10 +99,12 @@ class OrchestratorController:
             api_base = getattr(provider, '_api_base', 'unknown')
             logger.info(f"Provider {provider_id} api_base: {api_base[:80] if api_base else 'None'}")
 
-            # 3. Context (file references + web search)
+            # 3. Context (RAG retrieval + web search)
             context = ""
             if chat_request.file_references:
                 context = self._get_file_context(chat_request.file_references)
+            elif chat_request.requires_rag:
+                context = self._retrieve_context(chat_request.message, user_id)
 
             # 3b. Web search — inject results as context when search mode is enabled
             if chat_request.webSearch and chat_request.message.strip():
@@ -277,6 +279,57 @@ class OrchestratorController:
                 if row and row[2]:  # extracted_text exists
                     context_parts.append(f"--- {row[0]} ---\n{row[2]}")
         return "\n\n".join(context_parts)
+
+    def _retrieve_context(self, user_message: str, user_id: int) -> str:
+        """Retrieve relevant context using RAG pipeline (LanceDB + FlashRank).
+
+        Falls back to empty string if RAG is not configured.
+        """
+        try:
+            from app.core.config_manager import get_config
+            cfg = get_config()
+            if not cfg.rag.enabled:
+                return ""
+        except Exception:
+            return ""
+
+        try:
+            from app.rag.query_parser import extract_filters
+            from app.rag.embedder import embed_query
+            from app.rag.vector_store import hybrid_search
+            from app.rag.reranker import rerank
+
+            # Step 1: Extract time/document filters from query
+            filters = extract_filters(user_message)
+
+            # Step 2: Embed query
+            query_vec = embed_query(user_message)
+
+            # Step 3: Hybrid search with filters
+            candidates = hybrid_search(
+                query_vec, user_message,
+                filters=filters or None,
+                user_id=user_id,
+                top_k=20,
+            )
+            if not candidates:
+                return ""
+
+            # Step 4: Rerank → Top 5
+            top_chunks = rerank(user_message, candidates, top_k=5)
+            if not top_chunks:
+                top_chunks = candidates[:5]
+
+            # Step 5: Format for LLM
+            parts = []
+            for c in top_chunks:
+                source = c.get("file_name", "source")
+                parts.append(f"--- {source} ---\n{c['text']}")
+            return "\n\n".join(parts)
+
+        except Exception as exc:
+            logger.warning("RAG retrieval failed: %s", exc)
+            return ""
 
     def _construct_messages(self, user_message: str, context: str, conversation_id: str, system_prompt: str = "") -> list:
         """Construct messages with history, summary, and context."""

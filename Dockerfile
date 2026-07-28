@@ -31,9 +31,14 @@ RUN pip install -r requirements.txt
 COPY backend/ ./
 COPY --from=frontend-builder /frontend/dist ./web/dist
 
-RUN mkdir -p /backend/data /backend/media/generated/images /backend/media/generated/documents /backend/media/uploads /backend/models /backend/.secrets
+RUN mkdir -p /backend/data/cache/fastembed /backend/data/cache/flashrank /backend/data/vectors \
+    /backend/media/generated/images /backend/media/generated/documents /backend/media/uploads \
+    /backend/models /backend/.secrets
 
 ENV PYTHONPATH=/backend
+ENV FASTEMBED_CACHE_PATH=/backend/data/cache/fastembed
+ENV FLASHRANK_CACHE_PATH=/backend/data/cache/flashrank
+ENV LANCE_DB_PATH=/backend/data/vectors
 
 EXPOSE 8000
 

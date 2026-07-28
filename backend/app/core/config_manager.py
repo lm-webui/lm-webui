@@ -85,6 +85,16 @@ class PathsConfig(BaseModel):
         base_dir = values.get('base_dir', '.')
         return str(Path(base_dir) / v)
 
+class RAGConfig(BaseModel):
+    """RAG / vector search configuration"""
+    enabled: bool = Field(default=False, description="Enable RAG pipeline (LanceDB + reranker)")
+    embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", description="Embedding model for vector search")
+    reranker_model: str = Field(default="ms-marco-MultiBERT-L-12", description="Reranker model (or 'none' to skip)")
+    chunk_size: int = Field(default=512, ge=128, le=4096, description="Target characters per chunk")
+    chunk_overlap: int = Field(default=64, ge=0, le=256, description="Overlap between adjacent chunks")
+    top_k_retrieval: int = Field(default=20, ge=1, le=100, description="Pool size before reranking")
+    top_k_rerank: int = Field(default=5, ge=1, le=20, description="Final items after reranking")
+
 class LLMConfig(BaseModel):
     """LLM configuration"""
     model_name: str = Field(default="Default Model", description="Default model name")
@@ -128,6 +138,7 @@ class AppConfig(BaseModel):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
+    rag: RAGConfig = Field(default_factory=RAGConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     
     class Config:

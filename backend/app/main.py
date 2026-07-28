@@ -291,6 +291,17 @@ async def initialize_app():
         app_state["message"] = f"Loading {model_name}... (This may take a moment)"
         app_state["progress"] = 50
 
+        # Pre-warm RAG module if enabled (downloads embedding model in background)
+        try:
+            if config_manager.get_config().rag.enabled:
+                from app.rag.processor import RAGProcessor
+                rag_p = RAGProcessor()
+                rag_p.ensure_ready()
+                app_state.setdefault("rag_ready", True)
+                logger.info("RAG processor initialized")
+        except Exception:
+            logger.info("RAG not configured — skipping")
+
         # Ensure media directories exist and are writable
         media_dirs = [
             MEDIA_DIR,
