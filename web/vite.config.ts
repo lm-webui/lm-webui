@@ -3,10 +3,16 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import fs from "fs";
 
-// Read version from repo root package.json (works in both dev and Docker)
-const appVersion = JSON.parse(
-  fs.readFileSync(path.resolve(__dirname, "../../package.json"), "utf-8")
-).version;
+// Read version from repo root package.json (graceful fallback if not found)
+let appVersion = "0.0.0";
+try {
+  const pkgPath = path.resolve(__dirname, "../package.json");
+  if (fs.existsSync(pkgPath)) {
+    appVersion = JSON.parse(fs.readFileSync(pkgPath, "utf-8")).version;
+  }
+} catch {
+  // package.json not available (e.g. installed via install.sh without root pkg)
+}
 
 /// <reference types="vitest" />
 
