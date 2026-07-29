@@ -35,33 +35,36 @@ Run fully offline, integrate with cloud APIs when needed, and deploy across envi
 
 ## 🚀 Quick Start
 
-### Docker (Recommended)
+### One-Line Install (Recommended)
 
 ```bash
-git clone https://github.com/lm-webui/lm-webui.git
-cd lm-webui
-docker compose up --build
+curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
 ```
+
+This will install Python dependencies, create `~/.lmwebui/` for data and models, build the frontend, and start the service.
 
 Open `http://localhost:7070`.
 
-### Development
+### Manual / Development
 
 ```bash
-# 1. Install root dependencies
-npm install
-
-# 2. Backend setup
+# 1. Clone and set up backend
+git clone https://github.com/lm-webui/lm-webui.git
+cd lm-webui
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. Start both backend and frontend
-cd ..
+# 2. Start backend
+uvicorn app.main:app --host 0.0.0.0 --port 7070
+
+# 3. In another terminal, start frontend dev server
+cd web
+npm install
 npm run dev
 ```
 
-The web client runs on the configured Vite port and proxies API requests to the FastAPI backend on port `8000`.
+The web client runs on the configured Vite port and proxies API requests to the FastAPI backend on port `7070`.
 
 ---
 
@@ -74,13 +77,13 @@ The web client runs on the configured Vite port and proxies API requests to the 
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
 | **File Context** | Upload files for conversation context. Image and document processing, upload status, file references with conversations, and citation display in chat. |
-| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and run models locally. Configurable context window, GPU offload, and KV cache from Runtime Manager UI. Hardware-compatibility checking. |
-| **MLX Runtime** | Apple Silicon acceleration via external `mlx_lm.server`. Detected and connected through Runtime Manager — install scripts provided. |
+| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Hardware-compatibility checking and local model registry. |
+| **MLX Runtime** | Model discovery, download, and management for Apple Silicon. Seamless integration with the chat interface. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
-| **Runtime Manager** | Manage GGUF (in-container), MLX (external), and ComfyUI (external). Engine config controls for GGUF. Ollama and vLLM configured in Settings → API Providers. |
+| **Runtime Manager** | Detect, register, and test local runtimes including Ollama, GGUF (llama.cpp), MLX, vLLM, and ComfyUI through the admin interface. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
 | **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
-| **Self-Hosted Ready** | Single Docker container, zero external telemetry, offline-capable. Mount your models, data, and media as volumes. |
+| **Self-Hosted Ready** | Native Python service, zero external telemetry, offline-capable. Data in `~/.lmwebui/`. Docker deployment also available. |
 
 ---
 
@@ -165,15 +168,27 @@ npm run format       # Format frontend code
 
 ## 🚢 Deployment
 
-The recommended deployment is one LM-WebUI Docker container with runtimes installed outside the application container.
+### Native service (recommended)
+
+The `install.sh` script sets up a systemd (Linux) or launchd (macOS) service running on port 7070.
 
 ```bash
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
 ```
 
-Docker packages the web application, authentication, RBAC, projects, artifacts, and usage analytics. Host runtimes provide hardware-specific inference.
+Data, models, and config live in `~/.lmwebui/` (override with `LMWEBUI_HOME` environment variable).
 
-Use the Runtime Manager as an administrator to register and test Ollama or another OpenAI-compatible local endpoint. Install host runtimes with the separate `lm-webui-host` CLI — the application container does not install drivers or modify the host operating system.
+### Docker (alternative)
+
+For containerized server deployments, Docker Compose is available in the repository:
+
+```bash
+git clone https://github.com/lm-webui/lm-webui.git
+cd lm-webui
+docker compose up --build
+```
+
+Open `http://localhost:7070`.
 
 ### Persistence
 
