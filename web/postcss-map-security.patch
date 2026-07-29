@@ -1,0 +1,20 @@
+--- a/node_modules/postcss/lib/previous-map.js
++++ b/node_modules/postcss/lib/previous-map.js
+@@ -87,9 +87,17 @@ class PreviousMap {
+   loadFile(path, cssFile, trusted) {
+     /* c8 ignore next 5 */
+     if (!trusted && !this.unsafeMap) {
+       if (!/\.map$/i.test(path)) {
+         return undefined
+       }
++      // Path traversal guard: resolved path must stay inside CSS file's directory
++      if (cssFile) {
++        let root = resolve(dirname(cssFile))
++        let resolvedPath = resolve(root, path)
++        if (resolvedPath !== root && !resolvedPath.startsWith(root + sep)) {
++          return undefined
++        }
++      }
+     }
+     this.root = dirname(path)
+     if (existsSync(path)) {
