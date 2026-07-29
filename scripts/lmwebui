@@ -1,0 +1,136 @@
+#!/bin/bash
+# lm-webui — CLI for managing LM-WebUI service
+# Installed at ~/.lmwebui/lmwebui, symlinked to /usr/local/bin/lm-webui
+
+set -e
+
+LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
+
+case "${1:-status}" in
+  start)
+    case "$(uname)" in
+      Linux)
+        sudo systemctl start lmwebui 2>/dev/null || systemctl --user start lmwebui 2>/dev/null || echo "Could not start service"
+        ;;
+      Darwin)
+        launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Service already running"
+        ;;
+    esac
+    ;;
+
+  stop)
+    case "$(uname)" in
+      Linux)
+        sudo systemctl stop lmwebui 2>/dev/null || systemctl --user stop lmwebui 2>/dev/null || echo "Could not stop service"
+        ;;
+      Darwin)
+        launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Service not running"
+        ;;
+    esac
+    ;;
+
+  restart)
+    "$0" stop || true
+    sleep 2
+    "$0" start || true
+    ;;
+
+  status)
+    echo "Checking LM-WebUI at http://localhost:7070 ..."
+    curl -sf http://localhost:7070/api/health 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    s = d.get('status', 'unknown')
+    print(f'Status: {s}')
+    if d.get('ready'):
+        print('✅ Service is healthy')
+    elif s == 'error':
+        print('❌ Service error:', d.get('message', ''))
+    else:
+        print('⏳ Starting up...')
+except Exception:
+    print('❌ Not reachable')
+" 2>/dev/null || echo "❌ Not reachable"
+    echo "Data directory: $LMWEBUI_HOME/data/"
+    ;;
+
+  logs)
+    case "$(uname)" in
+      Linux)
+        journalctl -u lmwebui -f 2>/dev/null || echo "Try: sudo journalctl -u lmwebui -f"
+        ;;
+      Darwin)
+        tail -f "$LMWEBUI_HOME/logs/stdout.log" 2>/dev/null || echo "No logs yet"
+        ;;
+    esac
+    ;;
+
+  update)
+    echo "🔄 Updating LM-WebUI..."
+    echo "   Data at $LMWEBUI_HOME/data/ will be preserved."
+    echo ""
+
+    # Fix ownership first so cp/rm can write
+    OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
+    if [ "$OWNER" = "root" ]; then
+      echo "   Fixing root ownership..."
+      chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || \
+      sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
+        echo "❌ Could not fix ownership. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"
+        exit 1
+      }
+    fi
+
+    TMP="/tmp/lmwebui-update-$$"
+    git clone --depth 1 https://github.com/lm-webui/lm-webui.git "$TMP" 2>&1 || { echo "❌ Update failed — git clone error"; exit 1; }
+
+    # Replace code, preserve everything else
+    rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
+    cp -r "$TMP/backend/"* "$LMWEBUI_HOME/"
+    cp -r "$TMP/web" "$LMWEBUI_HOME/web"
+    cp "$TMP/package.json" "$LMWEBUI_HOME/package.json"
+    cp "$TMP/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui"
+    rm -rf "$TMP"
+
+    # Update Python deps (including new ones added in update)
+    if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then
+      source "$LMWEBUI_HOME/.venv/bin/activate"
+      pip install --upgrade pip --quiet 2>/dev/null
+      pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
+    fi
+
+    # Rebuild frontend (clean install + build to pick up new deps)
+    if command -v npm &>/dev/null && [ -f "$LMWEBUI_HOME/web/package.json" ]; then
+      cd "$LMWEBUI_HOME/web" && rm -rf node_modules && npm install --quiet && npm run build
+      echo "   Frontend rebuilt."
+    fi
+
+    "$0" restart || true
+    echo ""
+    echo "✅ LM-WebUI updated successfully."
+    echo "   Data preserved at $LMWEBUI_HOME/data/"
+    echo "   Models at $LMWEBUI_HOME/models/"
+    ;;
+
+  help|--help|-h)
+    echo "Usage: lm-webui <command>"
+    echo ""
+    echo "Commands:"
+    echo "  start     Start the LM-WebUI service"
+    echo "  stop      Stop the LM-WebUI service"
+    echo "  restart   Restart the LM-WebUI service"
+    echo "  status    Show service health and status"
+    echo "  logs      Follow service logs"
+    echo "  update    Update code from GitHub, preserve data"
+    echo ""
+    echo "Environment:"
+    echo "  LMWEBUI_HOME  Data directory (default: ~/.lmwebui)"
+    ;;
+
+  *)
+    echo "Unknown command: $1"
+    echo "Usage: lm-webui <start|stop|restart|status|logs|update>"
+    exit 1
+    ;;
+esac
