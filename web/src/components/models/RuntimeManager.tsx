@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import ModelDownloadModal from "@/components/models/ModelDownloadModal";
 import {
@@ -275,8 +276,15 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
           </Button>
         </div>
 
-        {/* ---------- GGUF SECTION ---------- */}
-        <Card className="border-green-200 dark:border-green-800">
+        <Tabs defaultValue="gguf" className="flex-1 flex flex-col overflow-hidden">
+          <TabsList className="grid w-full grid-cols-3 mb-4">
+            <TabsTrigger value="gguf" className="gap-2"><HardDrive className="h-4 w-4" /> GGUF</TabsTrigger>
+            <TabsTrigger value="mlx" className="gap-2"><Cpu className="h-4 w-4" /> MLX</TabsTrigger>
+            <TabsTrigger value="comfyui" className="gap-2"><Image className="h-4 w-4" /> ComfyUI</TabsTrigger>
+          </TabsList>
+
+        <TabsContent value="gguf" className="m-0 overflow-y-auto scrollbar-hide flex-1">
+        <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -415,7 +423,9 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
             </Collapsible>
           </CardContent>
         </Card>
+        </TabsContent>
 
+          <TabsContent value="mlx" className="m-0 overflow-y-auto scrollbar-hide flex-1">
         {/* ---------- MLX SECTION ---------- */}
         {mlxStatus?.available === false ? (
           /* MLX unsupported — hidden on non-Apple */
@@ -496,7 +506,9 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
             </CardContent>
           </Card>
         )}
+          </TabsContent>
 
+          <TabsContent value="comfyui" className="m-0 overflow-y-auto scrollbar-hide flex-1">
         {/* ---------- COMFYUI SECTION ---------- */}
         <Card className={comfyuiConnected ? "border-green-200 dark:border-green-800" : ""}>
           <CardHeader className="pb-3">
@@ -580,7 +592,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
             )}
           </CardContent>
         </Card>
-
+          </TabsContent>
+        </Tabs>
       </DialogContent>
 
       <ModelDownloadModal
