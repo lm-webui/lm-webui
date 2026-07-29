@@ -144,7 +144,7 @@ The Runtime Manager detects and reports local runtime availability with a clean 
 
 **MLX** — external server on Apple Silicon macOS hosts. Install `mlx_lm.server` on the host, the Runtime Manager detects it and connects via HTTP API. Setup scripts (install/uninstall/start/stop) available directly in the UI.
 
-**ComfyUI** — external server for image generation. Detected on `host.docker.internal:8188`, one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
+**ComfyUI** — external server for image generation. Detected on `localhost:8188` (native) or `host.docker.internal:8188` (Docker), one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
 
 Ollama and vLLM are configured as standard API providers in Settings → API Providers, not managed runtimes.
 

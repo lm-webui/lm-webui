@@ -56,7 +56,7 @@ The application is available at `http://localhost:7070`. Readiness is reported b
 curl http://localhost:7070/api/health
 ```
 
-The default Compose setup persists data, media, models, and secrets separately. External runtime endpoints are detected automatically via HTTP probes on `host.docker.internal`. For API providers (Ollama, vLLM), configure the endpoint URL in Settings → API Providers.
+External runtime endpoints are detected automatically via HTTP probes on `localhost` (native) or `host.docker.internal` (Docker). For API providers (Ollama, vLLM), configure the endpoint URL in Settings → API Providers.
 
 ## Repository development commands
 
@@ -110,4 +110,4 @@ docker compose logs --tail=200 lm-webui
 curl http://localhost:7070/api/health
 ```
 
-If a runtime is reachable from the host but not from Docker, verify the endpoint uses `host.docker.internal`, the host firewall permits the connection, and the runtime is listening beyond an inaccessible loopback address where required. Do not expose runtime endpoints publicly unless the office network and runtime authentication are configured appropriately.
+If a runtime is reachable from the host but not from the app, verify the firewall permits the connection and the runtime is listening on `0.0.0.0` (not `127.0.0.1`). For Docker deployments, use `host.docker.internal` instead of `localhost`. Do not expose runtime endpoints publicly.

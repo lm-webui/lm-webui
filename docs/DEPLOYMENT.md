@@ -76,7 +76,7 @@ Context window, GPU toggle, and KV cache quality are also adjustable from the Ru
 
 ## External runtimes
 
-Install host runtimes for hardware-accelerated local inference. The Docker container connects to them via `host.docker.internal`:
+Install host runtimes for hardware-accelerated local inference. The app connects to them via `localhost` (native) or `host.docker.internal` (Docker):
 
 **MLX** (Apple Silicon macOS only):
 ```bash
@@ -93,9 +93,7 @@ python main.py --port 8188 --listen 0.0.0.0
 
 **Ollama / vLLM** — configured as API providers in Settings → API Providers. No Runtime Manager integration needed. Enter the endpoint URL, test, and save.
 
-The Runtime Manager auto-detects running external services via HTTP probes on `host.docker.internal` (no host agent, no Docker socket). Detected services can be connected with one click.
-
-The Runtime Manager auto-detects running external services via HTTP probes on `host.docker.internal` (no host agent, no Docker socket). Detected services can be connected with one click.
+The Runtime Manager auto-detects running external services via HTTP probes on `localhost` (native install) or `host.docker.internal` (Docker). No host agent, no Docker socket needed.
 
 ## Office deployment
 
@@ -105,7 +103,7 @@ For a small office or SMB deployment:
 2. GGUF (llama.cpp) inference is available immediately — bundled in-container with hardware-accelerated defaults.
 3. For additional runtimes:
    - Install MLX on a macOS workstation, or Ollama/vLLM/ComfyUI on any host machine.
-   - The Runtime Manager auto-detects running services via `host.docker.internal` probes.
+   - The Runtime Manager auto-detects running services via `localhost` (native) or `host.docker.internal` (Docker) probes.
    - Connect with one click from the admin Runtime Manager UI.
 4. Configure API providers (OpenAI, Anthropic, Google, Ollama, vLLM) in Settings → API Providers.
 5. Create users through the admin user-management menu.
