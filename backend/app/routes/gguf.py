@@ -141,7 +141,7 @@ async def download_progress_websocket(websocket: WebSocket, task_id: str, _: dic
     """
     WebSocket endpoint for real-time download progress
     
-    Connects to: ws://localhost:8000/api/models/download-ws/{task_id}
+    Connects to: ws://localhost:7070/api/models/download-ws/{task_id}
     
     Messages received:
     {

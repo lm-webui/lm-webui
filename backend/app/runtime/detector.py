@@ -22,8 +22,9 @@ class RuntimeType(str, Enum):
     COMFYUI = "comfyui"  # Image generation (external server on host)
 
 
-# Host detection constants
-HOST_INTERNAL = "host.docker.internal"
+# Host detection — use host.docker.internal in Docker, localhost otherwise
+import os as _os
+HOST_INTERNAL = "host.docker.internal" if _os.path.exists("/.dockerenv") else "localhost"
 MLX_SERVER_PORT = 8090
 COMFYUI_PORT = 8188
 

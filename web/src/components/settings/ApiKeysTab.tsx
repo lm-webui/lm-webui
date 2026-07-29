@@ -24,7 +24,7 @@ export function ApiKeysTab() {
     { id: "anthropic", name: "Anthropic (Claude)", icon: Bot, type: "cloud", placeholder: "sk-ant-..." },
     { id: "xai", name: "Grok (xAI)", icon: Bot, type: "cloud", placeholder: "xai-..." },
     { id: "deepseek", name: "DeepSeek", icon: Bot, type: "cloud", placeholder: "sk-..." },
-    { id: "vllm", name: "vLLM", icon: Zap, type: "local", placeholder: "http://localhost:8000" },
+    { id: "vllm", name: "vLLM", icon: Zap, type: "local", placeholder: "http://localhost:7070" },
     { id: "lmstudio", name: "LM Studio", icon: Monitor, type: "local", placeholder: "http://localhost:1234" },
     { id: "ollama", name: "Ollama", icon: Database, type: "local", placeholder: "http://localhost:11434" },
   ];

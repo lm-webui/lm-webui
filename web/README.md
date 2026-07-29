@@ -19,7 +19,7 @@ npm install
 ### Development
 
 ```bash
-npm run dev          # Start dev server (http://localhost:5178)
+npm run dev          # Start dev server (http://localhost:5177)
 npm run build        # Build for production
 npm run preview      # Preview production build
 npm run lint         # Run ESLint
@@ -31,7 +31,7 @@ npm run type-check   # TypeScript type checking
 Create `.env` file:
 
 ```env
-VITE_BACKEND_URL=http://localhost:8000
+VITE_BACKEND_URL=http://localhost:7070
 VITE_API_TIMEOUT=30000
 VITE_WEBSOCKET_RECONNECT_ATTEMPTS=3
 ```

@@ -30,10 +30,9 @@ def _get_ranker():
 
     from flashrank import Ranker, RerankRequest
 
-    cache_dir = os.environ.get(
-        "FLASHRANK_CACHE_PATH",
-        "/backend/data/cache/flashrank",
-    )
+    from app.core.config_manager import get_data_dir
+    default_cache = os.path.join(str(get_data_dir()), "cache", "flashrank")
+    cache_dir = os.environ.get("FLASHRANK_CACHE_PATH", default_cache)
     os.makedirs(cache_dir, exist_ok=True)
 
     logger.info("Loading reranker %s (%.0f MB) ...", _model_name, 150)

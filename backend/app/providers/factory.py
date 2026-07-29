@@ -22,7 +22,7 @@ class ProviderFactory:
     _openai_compat: Dict[str, tuple] = {
         "xai": (OpenAIProvider, "https://api.x.ai/v1"),
         "deepseek": (OpenAIProvider, "https://api.deepseek.com/v1"),
-        "vllm": (OpenAIProvider, "http://localhost:8000/v1"),
+        "vllm": (OpenAIProvider, "http://localhost:7070/v1"),
     }
     _registry: Dict[str, Type[Provider]] = {
         "openai": OpenAIProvider,  # covers any OpenAI-compatible endpoint

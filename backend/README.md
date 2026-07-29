@@ -42,7 +42,7 @@ Create `.env` file:
 
 ```bash
 BACKEND_HOST=0.0.0.0
-BACKEND_PORT=8000
+BACKEND_PORT=7070
 DATABASE_URL=sqlite:///./data/app.db
 ```
 
@@ -71,18 +71,18 @@ docker-compose up
 
 # Or build individually
 docker build -t lm-webui-backend .
-docker run -p 8000:8000 lm-webui-backend
+docker run -p 7070:7070 lm-webui-backend
 ```
 
 ### Verify Installation
 
 ```bash
 # Check health endpoint
-curl http://localhost:8000/health
+curl http://localhost:7070/api/health
 # Should return: {"status": "healthy", "auth": "jwt", "encryption": "fernet"}
 
 # Check detailed health
-curl http://localhost:8000/api/health
+curl http://localhost:7070/api/health
 ```
 
 ## 📖 Documentation

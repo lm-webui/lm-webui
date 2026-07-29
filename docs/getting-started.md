@@ -14,33 +14,21 @@ Welcome to LM WebUI! This guide will help you get up and running quickly.
 ### Option 1: One-Line Installation (Recommended)
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
+curl -fsSL https://lmwebui.com/install.sh | bash
 ```
 
 This will:
 
-- Check for Docker and Docker Compose
-- Clone the repository (if needed)
-- Set up environment configuration
-- Build and start the Docker containers
-- Provide access instructions
+- Check for Python 3.10+ and git
+- Clone the repository to `~/.lmwebui/`
+- Create Python virtual environment and install dependencies
+- Build the frontend (requires Node.js, skips if not found)
+- Install systemd (Linux) or launchd (macOS) service
+- Start the service on port 7070
 
 Access the application at `http://localhost:7070`
 
-### Option 2: Docker (Manual)
-
-```bash
-# Clone the repository
-git clone https://github.com/lm-webui/lm-webui.git
-cd lm-webui
-
-# Start all services with Docker Compose
-docker compose up
-
-# Access the application at http://localhost:7070
-```
-
-### Option 3: Manual Installation (For Developers)
+### Option 2: Manual Installation (For Developers)
 
 ```bash
 # 1. Clone the repository
@@ -59,21 +47,29 @@ npm install
 
 # 4. Start services
 # Terminal 1: Backend
-cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 7070 --reload
 
 # Terminal 2: Frontend
 cd frontend && npm run dev
 
-# Access at http://localhost:5178
+# Access at http://localhost:5177
 ```
 
-**Note**: Docker installation uses port 7070, manual installation uses port 5178.
+### Option 3: Docker (For Server Deployment)
+
+```bash
+git clone https://github.com/lm-webui/lm-webui.git
+cd lm-webui
+docker compose up --build
+```
+
+Access the application at `http://localhost:7070`. Docker is an alternative for containerized server environments.
 
 ## First Steps
 
 ### 1. Create an Account
 
-1. Open `http://localhost:7070` (Docker) or `http://localhost:5178` (manual) in your browser
+1. Open `http://localhost:7070` (Docker) or `http://localhost:5177` (manual) in your browser
 2. Click "Register" to create a new account
 3. Enter your email and password
 4. You'll be automatically logged in after registration
@@ -111,11 +107,11 @@ Create a `.env` file in the project root or set these on the `lm-webui` service 
 
 ```bash
 # Frontend (.env in project root)
-VITE_BACKEND_URL=http://localhost:8000
+VITE_BACKEND_URL=http://localhost:7070
 
 # Backend (backend/.env)
 BACKEND_HOST=0.0.0.0
-BACKEND_PORT=8000
+BACKEND_PORT=7070
 DATABASE_URL=sqlite:///./data/app.db
 SECRET_KEY=your-secret-key-here
 ```
@@ -141,7 +137,7 @@ Create `backend/config.yaml` for advanced configuration:
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 8000
+  port: 7070
   reload: true
 
 database:
@@ -151,8 +147,8 @@ database:
 security:
   jwt_secret_path: ".secrets/jwt_secret"
   allowed_origins:
-    - "http://localhost:5178"
-    - "http://localhost:8000"
+    - "http://localhost:5177"
+    - "http://localhost:7070"
 
 llm:
   default_model: "gpt-4o-mini"
@@ -190,17 +186,17 @@ llm:
 
 ```bash
 # Check if backend is running
-curl http://localhost:8000/health
+curl http://localhost:7070/health
 
 # If not, start it:
-cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+cd backend && uvicorn app.main:app --host 0.0.0.0 --port 7070 --reload
 ```
 
 ### "Frontend not loading"
 
 ```bash
 # Check if frontend dev server is running
-curl http://localhost:5178
+curl http://localhost:5177
 
 # If not, start it:
 cd frontend && npm run dev
@@ -217,9 +213,9 @@ cd backend && python -c "from app.database import init_db; init_db()"
 ### "Port already in use"
 
 ```bash
-# Find and kill process using port 8000 or 5178
-lsof -ti:8000 | xargs kill -9
-lsof -ti:5178 | xargs kill -9
+# Find and kill process using port 7070 or 5177
+lsof -ti:7070 | xargs kill -9
+lsof -ti:5177 | xargs kill -9
 ```
 
 ## Next Steps

@@ -51,14 +51,13 @@ class SecurityConfig(BaseModel):
     refresh_token_expire_days: int = Field(default=7, description="Refresh token expiration in days")
     allowed_origins: List[str] = Field(
         default=[
-            "http://localhost:5178",
+            "http://localhost:5177",
             "http://localhost:5179",
-            "http://127.0.0.1:5178",
+            "http://127.0.0.1:5177",
             "http://localhost:7070",
-            "http://localhost:8000",
-            "http://172.0.0.1:5178",
+            "http://127.0.0.1:7070",
+            "http://172.0.0.1:5177",
             "http://172.0.0.1:7070",
-            "http://170.0.0.1:8000",
         ],
         description="Allowed CORS origins"
     )
@@ -115,7 +114,7 @@ class LLMConfig(BaseModel):
 class ServerConfig(BaseModel):
     """Server configuration"""
     host: str = Field(default="0.0.0.0", description="Server host address")
-    port: int = Field(default=8000, ge=1, le=65535, description="Server port")
+    port: int = Field(default=7070, ge=1, le=65535, description="Server port")
     workers: int = Field(default=1, ge=1, description="Number of worker processes")
     reload: bool = Field(default=False, description="Enable auto-reload in development")
     log_level: str = Field(default="INFO", description="Logging level")

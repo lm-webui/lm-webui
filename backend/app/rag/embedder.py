@@ -20,10 +20,9 @@ def _get_model():
 
     from fastembed import TextEmbedding
 
-    cache_dir = os.environ.get(
-        "FASTEMBED_CACHE_PATH",
-        "/backend/data/cache/fastembed",
-    )
+    from app.core.config_manager import get_data_dir
+    default_cache = os.path.join(str(get_data_dir()), "cache", "fastembed")
+    cache_dir = os.environ.get("FASTEMBED_CACHE_PATH", default_cache)
     os.makedirs(cache_dir, exist_ok=True)
     logger.info("Loading embedding model BAAI/bge-small-en-v1.5 ...")
     _model = TextEmbedding(

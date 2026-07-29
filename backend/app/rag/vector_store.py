@@ -41,7 +41,9 @@ def _get_db() -> lancedb.DBConnection:
     global _db
     if _db is not None:
         return _db
-    path = os.environ.get("LANCE_DB_PATH", "/backend/data/vectors")
+    from app.core.config_manager import get_data_dir
+    default_path = os.path.join(str(get_data_dir()), "vectors")
+    path = os.environ.get("LANCE_DB_PATH", default_path)
     os.makedirs(path, exist_ok=True)
     _db = lancedb.connect(path)
     logger.info("LanceDB connected at %s", path)

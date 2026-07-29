@@ -40,7 +40,7 @@ ENV FASTEMBED_CACHE_PATH=/backend/data/cache/fastembed
 ENV FLASHRANK_CACHE_PATH=/backend/data/cache/flashrank
 ENV LANCE_DB_PATH=/backend/data/vectors
 
-EXPOSE 8000
+EXPOSE 7070
 
 COPY docker-entrypoint.sh /
 RUN chmod +x /docker-entrypoint.sh

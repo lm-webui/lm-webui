@@ -78,9 +78,9 @@ The web client runs on the configured Vite port and proxies API requests to the 
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
 | **File Context** | Upload files for conversation context. Image and document processing, upload status, file references with conversations, and citation display in chat. |
 | **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Hardware-compatibility checking and local model registry. |
-| **MLX Runtime** | Model discovery, download, and management for Apple Silicon. Seamless integration with the chat interface. |
+| **MLX Runtime** | In-process inference on Apple Silicon via mlx-lm. Model download from HuggingFace with one click. Seamless chat integration. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
-| **Runtime Manager** | Detect, register, and test local runtimes including Ollama, GGUF (llama.cpp), MLX, vLLM, and ComfyUI through the admin interface. |
+| **Runtime Manager** | Manage GGUF (in-container with hardware-accelerated defaults), MLX (Apple Silicon in-process), and ComfyUI (image generation). Ollama and vLLM are configured as API providers in Settings. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
 | **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
 | **Self-Hosted Ready** | Native Python service, zero external telemetry, offline-capable. Data in `~/.lmwebui/`. Docker deployment also available. |
