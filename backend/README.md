@@ -60,7 +60,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
 
 ```bash
 source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn app.main:app --host 0.0.0.0 --port 7070
 ```
 
 #### With Docker

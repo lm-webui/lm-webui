@@ -1,14 +1,12 @@
 """
-MLX Model Routes — list and delete MLX models.
-MLX runs as mlx_lm.server on the macOS host (not in Docker).
-Model download is a host-side operation — WebUI shows CLI commands.
+MLX Model Routes — list, download, delete MLX models (native host).
+MLX runs in-process via mlx_lm — no external server needed on macOS.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 import logging
 
 from app.security.auth.dependencies import get_current_user, require_permission
-from app.providers.local.mlx import MLXProvider, MLX_DEFAULT_ENDPOINT
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/mlx", tags=["mlx"])
@@ -20,45 +18,35 @@ class DownloadRequest(BaseModel):
 
 @router.get("/models")
 async def list_mlx_models(user_id: dict = Depends(require_permission("models.install"))):
-    """List models loaded in the MLX server via its OpenAI-compatible API."""
-    provider = MLXProvider()
-    models = await provider.list_models()
-    return {
-        "models": [
-            {"name": m.id, "provider": "mlx"}
-            for m in models
-        ]
-    }
+    """List downloaded MLX models in ~/.lmwebui/models/mlx/."""
+    from app.services.mlx_downloader import list_local_mlx_models
+    return {"models": list_local_mlx_models()}
 
 
 @router.post("/resolve")
 async def resolve_mlx_repo(req: DownloadRequest, _: dict = Depends(require_permission("models.install"))):
-    """Return CLI command for downloading an MLX model on the host."""
-    return {
-        "status": "host_command",
-        "repo_id": req.repo_id,
-        "command": f"mlx_lm.fetch --hf-path {req.repo_id}",
-        "alternative": f"mlx_lm.server --port 8090 --model {req.repo_id}",
-        "message": "MLX models must be on the macOS host filesystem. Run the command above on your host.",
-    }
+    """Check if a HuggingFace repo exists and return metadata."""
+    from app.services.mlx_downloader import resolve_hf_repo
+    result = resolve_hf_repo(req.repo_id)
+    if not result:
+        raise HTTPException(404, f"Repo {req.repo_id} not found")
+    return result
 
 
 @router.post("/download")
 async def download_mlx_model(req: DownloadRequest, _: dict = Depends(require_permission("models.install"))):
-    """Return CLI command for downloading MLX model on host (download happens on host, not in container)."""
-    return {
-        "status": "host_command",
-        "repo_id": req.repo_id,
-        "command": f"mlx_lm.fetch --hf-path {req.repo_id}",
-        "message": "Run this command on your macOS host. MLX models must be on the host filesystem for mlx_lm.server to access them.",
-    }
+    """Download MLX model from HuggingFace to ~/.lmwebui/models/mlx/<name>/."""
+    from app.services.mlx_downloader import download_mlx_model
+    result = await download_mlx_model(req.repo_id)
+    if result["status"] == "error":
+        raise HTTPException(500, result.get("error", "Download failed"))
+    return result
 
 
 @router.delete("/models/{model_name}")
 async def delete_mlx_model(model_name: str, _: dict = Depends(require_permission("models.install"))):
-    """Delete an MLX model from the host (returns CLI command)."""
-    return {
-        "status": "host_command",
-        "command": f"rm -rf ~/.mlx/models/{model_name}",
-        "message": "Run this command on your macOS host to delete the model.",
-    }
+    """Delete a local MLX model."""
+    from app.services.mlx_downloader import delete_local_mlx_model
+    if delete_local_mlx_model(model_name):
+        return {"success": True}
+    raise HTTPException(404, f"Model {model_name} not found")

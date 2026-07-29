@@ -1,20 +1,19 @@
 """
 Runtime Routes
-API endpoints for runtime management (GGUF, MLX, ComfyUI only).
+API endpoints for runtime management (GGUF, MLX, ComfyUI).
+On native host — install/uninstall/start/stop use real subprocess.
 """
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, field_validator
-from typing import List, Optional
+from typing import Optional
 from app.runtime import (
     RuntimeRegistry,
     RuntimeDetector,
     RuntimeType,
-    MLXManager,
     get_runtime_registry,
     get_runtime_detector,
-    get_mlx_manager,
+    get_runtime_installer,
 )
-from app.runtime.detector import HOST_INTERNAL
 from app.security.auth.dependencies import require_permission
 from app.runtime.connectors import connector_for
 
@@ -39,22 +38,14 @@ class RuntimeConfigRequest(BaseModel):
 
 @router.get("")
 async def get_runtimes(_: dict = Depends(require_permission("runtime.view"))):
-    """
-    Get all managed runtimes and their status.
-    Returns: GGUF (in-container), MLX (external), ComfyUI (external).
-    """
+    """Get all managed runtimes and their status."""
     registry = get_runtime_registry()
-    return {
-        "runtimes": registry.get_runtime_info_for_ui()
-    }
+    return {"runtimes": registry.get_runtime_info_for_ui()}
 
 
 @router.post("/scan")
 async def scan_runtimes(_: dict = Depends(require_permission("runtime.view"))):
-    """
-    Scan host.docker.internal for running external runtimes (MLX, ComfyUI).
-    Returns detected runtimes. They are not auto-registered — user confirms.
-    """
+    """Scan localhost for running external runtimes."""
     detector = get_runtime_detector()
     import asyncio
     detected = await detector.detect_external_all()
@@ -66,7 +57,7 @@ async def register_external_runtime(
     request: RuntimeConfigRequest,
     _: dict = Depends(require_permission("runtime.configure"))
 ):
-    """Register an external runtime endpoint (MLX, ComfyUI, or API provider)."""
+    """Register an external runtime endpoint."""
     if request.runtime_type not in {"mlx", "comfyui", "ollama", "openai_compatible", "vllm", "llamacpp"}:
         raise HTTPException(400, f"Unsupported runtime type: {request.runtime_type}")
     registry = get_runtime_registry()
@@ -88,7 +79,7 @@ async def test_runtime_connection(
     registry = get_runtime_registry()
     runtime = registry.get_runtime(runtime_type)
     if not runtime or not runtime.get("endpoint"):
-        raise HTTPException(404, f"Runtime '{runtime_type}' is not registered or has no endpoint")
+        raise HTTPException(404, f"Runtime '{runtime_type}' is not registered")
     try:
         result = connector_for(runtime_type, runtime["endpoint"]).health()
     except ValueError as exc:
@@ -105,36 +96,46 @@ async def runtime_models(
     registry = get_runtime_registry()
     runtime = registry.get_runtime(runtime_type)
     if not runtime or not runtime.get("endpoint"):
-        raise HTTPException(404, f"Runtime '{runtime_type}' is not registered or has no endpoint")
+        raise HTTPException(404, f"Runtime '{runtime_type}' is not registered")
     try:
         return connector_for(runtime_type, runtime["endpoint"]).models()
     except Exception as exc:
         raise HTTPException(502, f"Runtime unavailable: {exc}")
 
 
-@router.get("/mlx/scripts")
-async def get_mlx_scripts(_: dict = Depends(require_permission("runtime.view"))):
-    """
-    Get MLX management shell commands.
-    MLX runs on macOS host — these scripts help install, manage, and clean up.
-    """
-    manager = get_mlx_manager()
-    return {
-        "runtime": "mlx",
-        "platform": "macOS (Apple Silicon)" if manager.is_apple_silicon() else "macOS",
-        "scripts": manager.get_scripts(),
-        "setup_guide": manager.get_setup_guide(),
-    }
+@router.post("/{runtime_type}/install")
+async def install_runtime(
+    runtime_type: str,
+    _: dict = Depends(require_permission("runtime.install"))
+):
+    """Install a runtime on the host via subprocess."""
+    if runtime_type not in {"mlx", "comfyui"}:
+        raise HTTPException(400, f"Runtime '{runtime_type}' does not support auto-install")
+    installer = get_runtime_installer()
+    result = installer.install(runtime_type)
+    if not result["success"]:
+        raise HTTPException(500, result.get("error", "Install failed"))
+    return result
+
+
+@router.post("/{runtime_type}/uninstall")
+async def uninstall_runtime(
+    runtime_type: str,
+    _: dict = Depends(require_permission("runtime.install"))
+):
+    """Uninstall a runtime from the host."""
+    if runtime_type not in {"mlx", "comfyui"}:
+        raise HTTPException(400, f"Runtime '{runtime_type}' does not support auto-uninstall")
+    installer = get_runtime_installer()
+    return installer.uninstall(runtime_type)
 
 
 @router.get("/mlx/status")
 async def get_mlx_status(_: dict = Depends(require_permission("runtime.view"))):
-    """
-    Get MLX compatibility and status.
-    Returns whether the host is Apple Silicon and whether MLX server is detected.
-    """
-    manager = get_mlx_manager()
-    is_apple = manager.is_apple_silicon()
+    """Get MLX compatibility — checks if mlx is importable and models exist."""
+    from app.providers.local.mlx import HAS_MLX, MLX_DIR
+    import platform as _platform
+    is_apple = _platform.system() == "Darwin" and _platform.machine() == "arm64"
 
     if not is_apple:
         return {
@@ -144,17 +145,15 @@ async def get_mlx_status(_: dict = Depends(require_permission("runtime.view"))):
             "hardware_detected": False,
         }
 
-    # Probe for MLX server on host
-    detector = get_runtime_detector()
-    import asyncio
-    detected = await detector.detect_external_all()
-    mlx_info = detected.get("mlx", {})
+    mlx_importable = HAS_MLX
+    models = [d.name for d in sorted(MLX_DIR.iterdir()) if d.is_dir() and (d / "config.json").exists()] if MLX_DIR.exists() else []
 
     return {
         "runtime": "mlx",
         "available": True,
         "hardware_detected": True,
-        "server_running": mlx_info.get("installed", False),
-        "endpoint": mlx_info.get("endpoint"),
-        "port": mlx_info.get("port"),
+        "mlx_installed": mlx_importable,
+        "models_available": len(models),
+        "models": models,
+        "models_dir": str(MLX_DIR),
     }

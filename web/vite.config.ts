@@ -20,26 +20,26 @@ try {
 export default defineConfig(() => ({
   server: {
     host: "::",
-    port: 5178,
+    port: 5177,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:7070',
         changeOrigin: true,
         secure: false,
         credentials: true
       },
       '/auth': {
-        target: 'http://localhost:8000',
+        target: 'http://localhost:7070',
         changeOrigin: true,
         secure: false,
         credentials: true
       },
       '/ws': {
-        target: 'ws://localhost:8000',
+        target: 'ws://localhost:7070',
         ws: true
       },
       '/generated': {
-        target: 'http://localhost:8000'
+        target: 'http://localhost:7070'
       }
     }
   },

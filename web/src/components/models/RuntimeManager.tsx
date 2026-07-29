@@ -16,7 +16,7 @@ import ModelDownloadModal from "@/components/models/ModelDownloadModal";
 import {
   HardDrive, Trash2, Cpu, CloudDownload, RefreshCw,
   Loader2, CheckCircle, XCircle, Server, Search, FolderOpen,
-  ChevronDown, Image, Copy, ScanLine, ExternalLink, Terminal,
+  ChevronDown, Image, Copy, ScanLine, ExternalLink, Download,
   Cpu as ChipIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -42,30 +42,15 @@ interface GGUFModel {
   quantization?: string;
 }
 
-interface MLXScripts {
-  install: string;
-  uninstall: string;
-  server_start: string;
-  server_stop: string;
-  server_status: string;
-  version: string;
-  detect_hardware: string;
-  list_models: string;
-}
-
 interface MLXStatus {
   runtime: string;
   available: boolean;
   hardware_detected: boolean;
-  server_running: boolean;
-  endpoint?: string;
-  port?: number;
+  mlx_installed: boolean;
+  models_available: number;
+  models?: string[];
+  models_dir?: string;
   reason?: string;
-}
-
-interface MLXSetupGuide {
-  steps: { order: number; action: string; command: string; description: string }[];
-  cleanup: { description: string; commands: string[] };
 }
 
 interface DetectedExternal {
@@ -90,9 +75,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
   const [ggufQuery, setGgufQuery] = useState("");
   const [downloadModal, setDownloadModal] = useState<"gguf" | null>(null);
   const [mlxStatus, setMlxStatus] = useState<MLXStatus | null>(null);
-  const [mlxScripts, setMlxScripts] = useState<MLXScripts | null>(null);
-  const [mlxSetupGuide, setMlxSetupGuide] = useState<MLXSetupGuide | null>(null);
   const [loadingMlx, setLoadingMlx] = useState(false);
+  const [installingMlx, setInstallingMlx] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [detectedExternals, setDetectedExternals] = useState<DetectedExternal[]>([]);
   const [comfyuiConnected, setComfyuiConnected] = useState(false);
@@ -139,17 +123,25 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
   const fetchMlxInfo = async () => {
     setLoadingMlx(true);
     try {
-      const [statusRes, scriptsRes] = await Promise.all([
-        authFetch("/api/runtimes/mlx/status"),
-        authFetch("/api/runtimes/mlx/scripts"),
-      ]);
-      setMlxStatus(statusRes);
-      setMlxScripts(scriptsRes.scripts);
-      setMlxSetupGuide(scriptsRes.setup_guide);
+      const data = await authFetch("/api/runtimes/mlx/status");
+      setMlxStatus(data);
     } catch (error) {
       console.error("Failed to fetch MLX info:", error);
     } finally {
       setLoadingMlx(false);
+    }
+  };
+
+  const installMlx = async () => {
+    setInstallingMlx(true);
+    try {
+      await authFetch("/api/runtimes/mlx/install", { method: "POST" });
+      toast.success("MLX installed. Refresh to verify.");
+      await fetchMlxInfo();
+    } catch (error: any) {
+      toast.error(error.message || "MLX install failed");
+    } finally {
+      setInstallingMlx(false);
     }
   };
 
@@ -426,26 +418,22 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
 
         {/* ---------- MLX SECTION ---------- */}
         {mlxStatus?.available === false ? (
-          /* MLX unsupported on this hardware — hidden */
+          /* MLX unsupported — hidden on non-Apple */
           null
         ) : (
-          <Card className={mlxStatus?.server_running ? "border-green-200 dark:border-green-800" : ""}>
+          <Card className={mlxStatus?.mlx_installed ? "border-green-200 dark:border-green-800" : ""}>
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Cpu className="h-5 w-5 text-purple-500" />
                   <CardTitle className="text-base">MLX (Apple Silicon)</CardTitle>
-                  {mlxStatus?.server_running ? (
+                  {mlxStatus?.mlx_installed ? (
                     <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      <CheckCircle className="h-3 w-3 mr-1" /> Running
-                    </Badge>
-                  ) : mlxStatus?.hardware_detected ? (
-                    <Badge variant="outline" className="border-amber-300 text-amber-600">
-                      <ChipIcon className="h-3 w-3 mr-1" /> Not Running
+                      <CheckCircle className="h-3 w-3 mr-1" /> Ready
                     </Badge>
                   ) : (
-                    <Badge variant="secondary">
-                      <XCircle className="h-3 w-3 mr-1" /> Unavailable
+                    <Badge variant="outline" className="border-amber-300 text-amber-600">
+                      <ChipIcon className="h-3 w-3 mr-1" /> Not Installed
                     </Badge>
                   )}
                 </div>
@@ -454,112 +442,57 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
                 </Button>
               </div>
               <CardDescription>
-                {mlxStatus?.hardware_detected
-                  ? "Apple Silicon detected — MLX is the recommended runtime for best performance."
-                  : "MLX requires Apple Silicon (M-series) hardware."}
+                In-process inference on Apple Silicon. Models in ~/.lmwebui/models/mlx/.
+                {mlxStatus?.models_available ? ` ${mlxStatus.models_available} model(s) available.` : ""}
               </CardDescription>
             </CardHeader>
             <CardContent>
               {loadingMlx ? (
                 <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-              ) : mlxStatus?.server_running ? (
+              ) : mlxStatus?.mlx_installed ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm text-green-600">
                     <CheckCircle className="h-4 w-4" />
-                    MLX server running at {mlxStatus.endpoint || `host.docker.internal:${mlxStatus.port}`}
+                    MLX ready — {mlxStatus.models_available} model(s) available
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="h-7 gap-1"
-                      onClick={() => copyToClipboard(mlxScripts?.server_stop || "")}>
-                      <Terminal className="h-3 w-3" /> Stop Server
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 gap-1"
-                      onClick={() => copyToClipboard(mlxScripts?.server_status || "")}>
-                      <ExternalLink className="h-3 w-3" /> Check Status
-                    </Button>
-                  </div>
-                </div>
-              ) : mlxStatus?.hardware_detected ? (
-                <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Install MLX on your macOS host, then start the inference server.
-                    lm-webui will auto-detect it.
-                  </p>
-
-                  {/* Install Guide */}
-                  {mlxSetupGuide && (
-                    <Collapsible>
-                      <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium hover:text-accent-foreground transition-colors mb-2">
-                        <ChevronDown className="h-4 w-4" />
-                        Setup Guide
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="space-y-2">
-                          {mlxSetupGuide.steps.map((step) => (
-                            <div key={step.order} className="flex items-start gap-3 p-2 rounded-lg bg-neutral-50 dark:bg-neutral-900">
-                              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 text-xs flex items-center justify-center font-medium">
-                                {step.order}
-                              </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-medium">{step.description}</p>
-                                <div className="flex items-center gap-2 mt-1">
-                                  <code className="text-xs font-mono bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded flex-1 truncate">
-                                    {step.command}
-                                  </code>
-                                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 flex-shrink-0"
-                                    onClick={() => copyToClipboard(step.command)}>
-                                    <Copy className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-
-                          {/* Cleanup section */}
-                          <Collapsible>
-                            <CollapsibleTrigger className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mt-4">
-                              <ChevronDown className="h-3 w-3" />
-                              Cleanup / Uninstall
-                            </CollapsibleTrigger>
-                            <CollapsibleContent>
-                              <div className="space-y-1 mt-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800">
-                                <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-2">{mlxSetupGuide.cleanup.description}</p>
-                                {mlxSetupGuide.cleanup.commands.map((cmd, i) => (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <code className="text-xs font-mono bg-red-100 dark:bg-red-900/30 px-2 py-1 rounded flex-1">{cmd}</code>
-                                    <Button size="sm" variant="ghost" className="h-6 w-6 p-0 flex-shrink-0"
-                                      onClick={() => copyToClipboard(cmd)}>
-                                      <Copy className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ))}
-                              </div>
-                            </CollapsibleContent>
-                          </Collapsible>
+                  {mlxStatus.models && mlxStatus.models.length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {mlxStatus.models.map((m: string) => (
+                        <div key={m} className="flex items-center gap-2 py-1">
+                          <Cpu className="h-3 w-3 text-purple-500" />
+                          {m}
                         </div>
-                      </CollapsibleContent>
-                    </Collapsible>
+                      ))}
+                    </div>
                   )}
-
-                  {/* Quick commands */}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    MLX needs to be installed via pip, then download a model from HuggingFace.
+                  </p>
                   <div className="text-xs font-mono bg-neutral-100 dark:bg-neutral-800 p-3 rounded-lg space-y-1">
                     <div className="flex items-center justify-between">
-                      <span><span className="text-muted-foreground">$</span> {mlxScripts?.install || "pip install mlx mlx-lm mlx-optiq"}</span>
+                      <span><span className="text-muted-foreground">$</span> pip install mlx mlx-lm mlx-optiq</span>
                       <Button size="sm" variant="ghost" className="h-5 w-5 p-0"
-                        onClick={() => copyToClipboard(mlxScripts?.install || "")}>
+                        onClick={() => copyToClipboard("pip install mlx mlx-lm mlx-optiq")}>
                         <Copy className="h-3 w-3" />
                       </Button>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span><span className="text-muted-foreground">$</span> {mlxScripts?.server_start || "mlx_lm.server --port 8090 --model <name>"}</span>
+                      <span><span className="text-muted-foreground">$</span> mlx_lm.fetch --hf-path mlx-community/Llama-3.2-3B-Instruct-4bit</span>
                       <Button size="sm" variant="ghost" className="h-5 w-5 p-0"
-                        onClick={() => copyToClipboard(mlxScripts?.server_start || "")}>
+                        onClick={() => copyToClipboard("mlx_lm.fetch --hf-path mlx-community/Llama-3.2-3B-Instruct-4bit")}>
                         <Copy className="h-3 w-3" />
                       </Button>
                     </div>
                   </div>
+                  <Button size="sm" onClick={installMlx} disabled={installingMlx} className="w-full gap-1">
+                    {installingMlx ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                    {installingMlx ? "Installing..." : "Install MLX"}
+                  </Button>
                 </div>
-              ) : null}
+              )}
             </CardContent>
           </Card>
         )}
