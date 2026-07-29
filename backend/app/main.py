@@ -13,11 +13,14 @@ from contextlib import asynccontextmanager
 
 # ── App version from single source (repo root package.json) ──
 _APP_VERSION = "0.0.0"
-_v_path = os.path.join(os.path.dirname(__file__), "..", "..", "package.json")
-try:
-    _APP_VERSION = json.load(open(_v_path))["version"]
-except Exception:
-    pass
+_base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+for _rel in ["package.json", "../package.json"]:
+    _v_path = os.path.join(_base_dir, _rel)
+    try:
+        _APP_VERSION = json.load(open(_v_path))["version"]
+        break
+    except Exception:
+        continue
 import sys
 import json
 import yaml
