@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-07-29
+
+Native host migration. Runtime Manager refocused, CLI wrapper, LAN access, portable install.
+
+### Added
+- **Native host install** — `curl -fsSL https://lmwebui.com/install.sh | sh` replaces Docker as primary distribution. Python venv + systemd/launchd service, no Docker required.
+- **`lm-webui` CLI** — `start|stop|restart|status|logs|update` commands. `lm-webui update` pulls latest code from GitHub, preserves `~/.lmwebui/data/`, `models/`, `media/`, `secrets/`, `config.yaml`.
+- **GGUF engine config in UI** — context window slider (1K–32K), GPU acceleration toggle, KV cache quality dropdown in Runtime Manager. Settings persist per-session, overridable via `GGUF_*` env vars.
+- **LAN access panel** — QR code + LAN IP in Profile → Access. Mobile users scan to open on the same network.
+- **Hardware-aware GGUF defaults** — flash_attn, n_gpu_layers, cache_type auto-configured from host hardware detection.
+
+### Changed
+- **Runtime Manager refocused** — now manages 3 runtimes: GGUF (in-container), MLX (in-process on Apple Silicon), ComfyUI (external). Ollama and vLLM moved to Settings → API Providers.
+- **MLX inference** — reverted from external server to in-process `mlx_lm.load()`. Now works directly on macOS with full Metal acceleration.
+- **Default port 8000 → 7070** — avoids conflicts with common dev servers. All configs, proxies, docs updated.
+- **Directory structure** — data, models, config live in `~/.lmwebui/` (overridable via `LMWEBUI_HOME`). No Docker volume layer.
+- **Detection uses localhost** — runtime probes use `localhost` instead of `host.docker.internal`.
+- **Model paths moved** — from `./backend/models` to `./.lmwebui/models` (outside repo checkout, survives `rm -rf`).
+- **Secrets moved** — from `./backend/.secrets` to `./.lmwebui/secrets`.
+
+### Removed
+- **Docker as primary distribution** — Docker Compose kept as alternative for server deployments, but `install.sh` no longer depends on Docker.
+- **Ollama/vLLM from Runtime Manager** — configured via Settings → API Providers (standard provider pattern).
+- **In-container MLX server** — MLX now runs in-process natively.
+- **`RuntimeInstaller` module** — replaced with `RuntimeInstaller` using real `subprocess.run()` on host.
+- **`APP_RUNTIME_DEFAULT_ENDPOINT`** — no longer needed.
+
 ## [0.5.0] — 2026-07-27
 
 A fresh foundation. Stripped unused systems, hardened core auth, cleaned the entire repo, and prepared for the next generation.
