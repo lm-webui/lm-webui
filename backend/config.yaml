@@ -1,9 +1,16 @@
-app_config:
-  data_dir: data
-  host: 0.0.0.0
-  port: 8000
+# LM-WebUI Configuration
+# Environment variables override these values (APP_ prefix).
+# Config is generated at ~/.lmwebui/config.yaml on install.
 
-llm_config:
-  model_name: "Default Model"
-  provider: "openai"
-  model: "gpt-4.1-mini"
+server:
+  host: "0.0.0.0"
+  port: 7070
+
+database:
+  url: "sqlite:///~/.lmwebui/data/sql_db/app.db"
+
+paths:
+  base_dir: "~/.lmwebui"
+  data_dir: "~/.lmwebui/data"
+  media_dir: "~/.lmwebui/media"
+  models_dir: "~/.lmwebui/models"

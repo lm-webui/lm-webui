@@ -1,3 +1,9 @@
+try:
+    import setproctitle
+    setproctitle.setproctitle("lm-webui")
+except ImportError:
+    pass
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
