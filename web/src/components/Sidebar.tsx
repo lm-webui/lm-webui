@@ -110,7 +110,7 @@ function ConversationItem({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => onSelect(conversation.id)}
+        onClick={() => { if (window.innerWidth < 768) onClose?.(); onSelect(conversation.id); }}
         onKeyDown={(e) => {
           if (e.key === "Enter") onSelect(conversation.id);
         }}
@@ -328,7 +328,7 @@ export default function Sidebar({
           <Button
             variant="ghost"
             size="icon"
-            onClick={createNewChat}
+            onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             title="New chat"
           >
             <Plus className="h-5 w-5" />
@@ -425,7 +425,7 @@ export default function Sidebar({
 
         <div className="px-4 mb-2">
           <Button
-            onClick={createNewChat}
+            onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             variant="ghost"
             className="w-full flex items-center justify-start gap-3 rounded-full h-12 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >

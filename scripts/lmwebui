@@ -13,7 +13,9 @@ case "${1:-status}" in
         sudo systemctl start lmwebui 2>/dev/null || systemctl --user start lmwebui 2>/dev/null || echo "Could not start service"
         ;;
       Darwin)
-        launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Service already running"
+        launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || true
+        sleep 1
+        launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Failed to start"
         ;;
     esac
     ;;

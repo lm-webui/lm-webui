@@ -136,7 +136,9 @@ WantedBy=multi-user.target
 SERVICEEOF
       if command -v systemctl &>/dev/null; then
         sudo mv /tmp/lmwebui.service /etc/systemd/system/lmwebui.service
-        sudo systemctl daemon-reload && sudo systemctl enable lmwebui && sudo systemctl start lmwebui
+        sudo systemctl daemon-reload && sudo systemctl enable lmwebui
+        sudo systemctl stop lmwebui 2>/dev/null || true
+        sudo systemctl start lmwebui
         log_success "systemd service installed"
       fi ;;
     Darwin)
@@ -155,6 +157,8 @@ SERVICEEOF
 </dict></plist>
 PLISTEOF
       mkdir -p "$HOME/Library/LaunchAgents" && mv /tmp/com.lmwebui.server.plist "$PLIST_PATH"
+      launchctl unload "$PLIST_PATH" 2>/dev/null || true
+      sleep 1
       launchctl load "$PLIST_PATH" && log_success "launchd service installed" ;;
   esac
 }

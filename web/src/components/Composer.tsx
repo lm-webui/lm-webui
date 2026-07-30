@@ -270,7 +270,7 @@ export default function Composer({
             <ModelSelector
               selectedLLM={selectedLLM || "openai"}
               onLLMChange={onLLMChange || (() => {})}
-              selectedModel={selectedModel || "gpt-image-1-mini"}
+              selectedModel={selectedModel || ""}
               onModelChange={onModelChange || (() => {})}
               availableModels={
                 isImageMode

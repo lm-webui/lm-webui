@@ -114,7 +114,7 @@ export default function ChatPane({
       setIsImageMode={setIsImageMode}
       isCodingMode={isCodingMode}
       setIsCodingMode={setIsCodingMode}
-      selectedModel={selectedModel || "gpt-4o-mini"}
+      selectedModel={selectedModel || ""}
       selectedLLM={selectedLLM}
       onLLMChange={onLLMChange}
       onModelChange={onModelChange}
