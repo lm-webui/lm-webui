@@ -81,9 +81,9 @@ class PathsConfig(BaseModel):
     def resolve_paths(cls, v, values):
         """Resolve relative paths to absolute paths"""
         if os.path.isabs(v):
-            return v
+            return str(Path(v).expanduser())
         base_dir = values.get('base_dir', '.')
-        return str(Path(base_dir) / v)
+        return str(Path(base_dir).expanduser() / v)
 
 class RAGConfig(BaseModel):
     """RAG / vector search configuration"""
