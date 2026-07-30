@@ -98,7 +98,7 @@ except Exception:
     # Update Python deps (including new ones added in update)
     if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then
       source "$LMWEBUI_HOME/.venv/bin/activate"
-      pip install --upgrade pip --quiet 2>/dev/null
+      pip install --upgrade pip --quiet 2>&1 || true
       pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
     fi
 

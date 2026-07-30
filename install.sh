@@ -204,7 +204,7 @@ case "${1:-status}" in
     cp "$TMP/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui"
     rm -rf "$TMP"
     source "$LMWEBUI_HOME/.venv/bin/activate" 2>/dev/null
-    pip install --upgrade pip --quiet 2>/dev/null
+    pip install --upgrade pip --quiet 2>&1 || log_info "pip upgrade skipped (non-critical)"
     pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet 2>/dev/null
     command -v npm &>/dev/null && cd "$LMWEBUI_HOME/web" && rm -rf node_modules && npm install --quiet && npm run build
     "$0" restart 2>/dev/null; echo "✅ Updated" ;;
