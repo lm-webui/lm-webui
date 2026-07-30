@@ -148,6 +148,13 @@ SERVICEEOF
       fi ;;
     Darwin)
       PLIST_PATH="$HOME/Library/LaunchAgents/com.lmwebui.server.plist"
+      # Kill any root-owned uvicorn processes holding port 7070
+      ROOT_PID=$(ps aux | grep "uvicorn.*7070" | grep "^root" | awk '{print $2}' 2>/dev/null)
+      if [ -n "$ROOT_PID" ]; then
+        log_warning "Killing stale root process PID $ROOT_PID on port 7070..."
+        sudo kill -9 "$ROOT_PID" 2>/dev/null || true
+        sleep 1
+      fi
       cat > /tmp/com.lmwebui.server.plist << PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
