@@ -48,6 +48,11 @@ check_prerequisites() {
 
 setup_environment() {
   log_info "Setting up environment at $LMWEBUI_HOME..."
+  if [ ! -w "$LMWEBUI_HOME" ]; then
+    log_warning "Fixing ownership of $LMWEBUI_HOME..."
+    sudo mkdir -p "$LMWEBUI_HOME" && sudo chown -R "$(whoami)" "$LMWEBUI_HOME" || {
+      log_error "Cannot write to $LMWEBUI_HOME. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
+  fi
   mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,cache/fastembed,cache/flashrank,secrets,logs}
   if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
     cat > "$LMWEBUI_HOME/config.yaml" << CONFIGEOF
