@@ -25,10 +25,14 @@ class LoginRequest(BaseModel):
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):
     """Login user and set JWT tokens as httpOnly cookies"""
+    import time as _time
+    _t0 = _time.time()
     from app.database.sqlite.connection_pool import database_manager
 
     with database_manager.transaction() as conn:
+        _t1 = _time.time()
         user = conn.execute("SELECT id, password_hash, role, COALESCE(status, 'active') FROM users WHERE email = ?", (req.email,)).fetchone()
+        _t2 = _time.time()
         if not user or not verify_password(req.password, user[1]):
             raise HTTPException(401, "Invalid credentials")
 
@@ -37,6 +41,8 @@ async def login(req: LoginRequest, response: Response):
         if user[3] == "disabled":
             raise HTTPException(403, "Account disabled")
         conn.execute("UPDATE users SET last_login_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?", (user_id,))
+        _t3 = _time.time()
+        print(f"DEBUG LOGIN: transaction={_t3-_t1:.3f}s query={_t2-_t1:.3f}s update={_t3-_t2:.3f}s")
 
         # Generate tokens with role and permissions
         permissions = get_permissions_for_role(role)

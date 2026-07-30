@@ -54,7 +54,17 @@ setup_environment() {
       log_error "Cannot write to $LMWEBUI_HOME. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
   fi
   mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,cache/fastembed,cache/flashrank,secrets,logs}
+  # Check if config.yaml needs creation or upgrade from old format
+  _NEEDS_CONFIG=false
   if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
+    _NEEDS_CONFIG=true
+  elif grep -q "app_config\|port: 8000\|llm_config" "$LMWEBUI_HOME/config.yaml" 2>/dev/null; then
+    log_warning "Detected old config format (port 8000). Backing up to config.yaml.bak..."
+    cp "$LMWEBUI_HOME/config.yaml" "$LMWEBUI_HOME/config.yaml.bak"
+    _NEEDS_CONFIG=true
+  fi
+
+  if [ "$_NEEDS_CONFIG" = true ]; then
     cat > "$LMWEBUI_HOME/config.yaml" << CONFIGEOF
 server:
   host: "0.0.0.0"
