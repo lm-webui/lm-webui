@@ -303,32 +303,50 @@ def detect_gpu_cli() -> Optional[Dict]:
     # NVIDIA
     try:
         out = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            ["nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader"],
             capture_output=True, text=True, timeout=5
         ).stdout.strip()
         if out:
-            return {"backend": "cuda", "device": out, "vendor": "nvidia", "flags": "-DGGML_CUDA=on"}
+            parts = out.split(",")
+            name = parts[0].strip()
+            vram_gb = 0
+            if len(parts) > 1:
+                try:
+                    vram_gb = int(parts[1].strip().split()[0]) / 1024  # MiB → GB
+                except Exception:
+                    vram_gb = 0
+            return {"backend": "cuda", "device": name, "vendor": "nvidia",
+                    "flags": "-DGGML_CUDA=on", "vram_gb": vram_gb}
     except Exception:
         pass
     # AMD ROCm
     try:
         out = subprocess.run(["rocminfo"], capture_output=True, text=True, timeout=5).stdout
         if "Agent" in out:
-            return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd", "flags": "-DGGML_HIPBLAS=on"}
+            return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd",
+                    "flags": "-DGGML_HIPBLAS=on", "vram_gb": 0}
     except Exception:
         pass
-    # Apple Silicon Metal
+    # Apple Silicon Metal — estimate from system RAM
     if platform.system() == "Darwin" and platform.machine() == "arm64":
-        return {"backend": "metal", "device": "Apple Silicon", "vendor": "apple", "flags": "-DGGML_METAL=on"}
+        try:
+            import psutil
+            vram_gb = int(psutil.virtual_memory().total / (1024**3) * 0.75)
+        except Exception:
+            vram_gb = 0
+        return {"backend": "metal", "device": "Apple Silicon", "vendor": "apple",
+                "flags": "-DGGML_METAL=on", "vram_gb": vram_gb}
     # Intel / AMD via lspci (Linux)
     try:
         out = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5).stdout
         for line in out.splitlines():
             if "VGA" in line or "3D" in line:
                 if "Intel" in line:
-                    return {"backend": "sycl", "device": "Intel GPU", "vendor": "intel", "flags": "-DGGML_SYCL=on"}
+                    return {"backend": "sycl", "device": "Intel GPU", "vendor": "intel",
+                            "flags": "-DGGML_SYCL=on", "vram_gb": 0}
                 if "AMD/ATI" in line or "AMD" in line:
-                    return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd", "flags": "-DGGML_HIPBLAS=on"}
+                    return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd",
+                            "flags": "-DGGML_HIPBLAS=on", "vram_gb": 0}
     except Exception:
         pass
     return None

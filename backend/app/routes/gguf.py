@@ -393,6 +393,7 @@ async def get_gguf_gpu(_: dict = Depends(require_permission("models.read"))):
     return {
         "gpu": gpu,
         "has_gpu": gpu is not None,
+        "vram_gb": (gpu or {}).get("vram_gb", 0),
         "gpu_accelerated": gpu is not None and gpu_layers < 0,
     }
 

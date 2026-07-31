@@ -262,6 +262,15 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
     toast.success("Copied to clipboard");
   };
 
+  // Estimate max model size (billions of params) that fits GPU VRAM at a given context.
+  const estimateMaxModel = (qBits: number) => {
+    const vram = (gpuInfo?.vram_gb || 0) - 1.5;  // subtract system overhead
+    const kvBits = ggufConfig.cache_type_k === "f16" ? 16 : 8;
+    const modelFactor = (qBits / 8) * 1.15;
+    const kvFactor = ggufConfig.n_ctx * (kvBits / 16) * 0.000012;
+    return vram > 0 ? Math.max(0, vram / (modelFactor + kvFactor)) : 0;
+  };
+
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + " B";
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
@@ -379,12 +388,12 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <Label className="text-xs">Context window</Label>
-                    <span className="text-xs font-mono text-muted-foreground">{ggufConfig.n_ctx}</span>
+                    <span className="text-xs font-mono text-muted-foreground">{(ggufConfig.n_ctx / 1024).toFixed(0)}K</span>
                   </div>
                   <input
                     type="range"
                     min="1024"
-                    max="32768"
+                    max="131072"
                     step="1024"
                     value={ggufConfig.n_ctx}
                     onChange={(e) => setGgufConfig(prev => ({ ...prev, n_ctx: parseInt(e.target.value) }))}
@@ -392,8 +401,18 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
                   />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-0.5">
                     <span>1K</span>
-                    <span>32K</span>
+                    <span>128K</span>
                   </div>
+                  {gpuInfo?.vram_gb > 0 && (
+                    <div className="mt-2 text-[10px] leading-tight rounded-md px-2 py-1.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
+                      <span className="font-medium">⚠️ {gpuInfo.gpu?.device}</span>
+                      <span className="text-muted-foreground">
+                        {" "}at {(ggufConfig.n_ctx / 1024).toFixed(0)}K context ({ggufConfig.cache_type_k} KV): max model ≈{" "}
+                        <span className="font-mono">{estimateMaxModel(8).toFixed(1)}B (Q8)</span>,{" "}
+                        <span className="font-mono">{estimateMaxModel(4).toFixed(1)}B (Q4)</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* GPU Acceleration */}
