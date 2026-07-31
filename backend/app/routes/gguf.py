@@ -371,7 +371,7 @@ async def get_gguf_config(_: dict = Depends(require_permission("models.read"))):
 @router.post("/gguf/config")
 async def set_gguf_config(
     req: GGUFConfigRequest,
-    _: dict = Depends(require_permission("models.configure"))
+    _: dict = Depends(require_permission("settings.write"))
 ):
     """Update GGUF engine configuration via UI.
     If a model is loaded, it will be unloaded — the next load uses the new config.
