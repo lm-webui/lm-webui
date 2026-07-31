@@ -52,8 +52,9 @@ Open `http://localhost:7070`.
 git clone https://github.com/lm-webui/lm-webui.git
 cd lm-webui
 cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+# Using uv (recommended, fast): uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
+# Or using pip: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
+uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
 
 # 2. Start backend
 uvicorn app.main:app --host 0.0.0.0 --port 7070

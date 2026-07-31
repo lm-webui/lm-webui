@@ -27,11 +27,15 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # Install uv
+      - name: Setup uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       # Install Python tools
       - name: Install Python dependencies
         run: |
-          pip install ruff mypy pip-audit pytest pytest-cov
-          cd backend && pip install -r requirements-test.txt
+          uv pip install --system ruff mypy pip-audit pytest pytest-cov
+          cd backend && uv pip install --system -r requirements-test.txt
       # Code quality checks (non-blocking for now)
       - name: Run Ruff linting
         run: ruff check backend || echo "Ruff found issues that need addressing"
@@ -69,11 +73,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Setup uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Install backend dependencies
         run: |
           cd backend
-          pip install -r requirements.txt
-          pip install pytest pytest-cov
+          uv pip install --system -r requirements.txt
+          uv pip install --system pytest pytest-cov
       # Run backend tests (non-blocking due to current issues)
       - name: Run backend tests
         run: |
@@ -134,8 +141,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Setup uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh && echo "$HOME/.local/bin" >> $GITHUB_PATH
+
       - name: Install backend dependencies
-        run: cd backend && pip install -r requirements.txt
+        run: cd backend && uv pip install --system -r requirements.txt
 
       - name: Validate OpenAPI schema
         run: |

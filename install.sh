@@ -32,16 +32,30 @@ EOF
 
 check_prerequisites() {
   log_info "Checking prerequisites..."
-  if command -v python3 &>/dev/null; then PYTHON=$(command -v python3)
-  elif command -v python &>/dev/null; then PYTHON=$(command -v python)
-  else log_error "Python 3.10+ required. Install: https://www.python.org/downloads/"; exit 1; fi
-  PY_VER=$($PYTHON --version 2>&1 | grep -Eo '[0-9]+\.[0-9]+' | head -1)
-  PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1); PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-  if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-    log_error "Python 3.10+ required (found $PY_VER)."; exit 1
+
+  # Install uv (fast, self-contained Python manager) if missing
+  if ! command -v uv &>/dev/null; then
+    log_info "Installing uv (Python package manager)..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh 2>/dev/null || log_warning "uv install failed — will use system Python"
+    export PATH="$HOME/.local/bin:$PATH"
   fi
-  log_success "Python $PY_VER found at $PYTHON"
-  if ! $PYTHON -m pip --version &>/dev/null; then log_error "pip not installed"; exit 1; fi
+  if command -v uv &>/dev/null; then
+    log_success "Using uv $(uv --version 2>/dev/null | awk '{print $2}')"
+  else
+    # Fallback: system Python 3.10+ (for systems where uv install is blocked)
+    if command -v python3 &>/dev/null; then PYTHON=$(command -v python3)
+    elif command -v python &>/dev/null; then PYTHON=$(command -v python)
+    else log_error "Python 3.10+ required. Install: https://www.python.org/downloads/"; exit 1; fi
+    PY_VER=$($PYTHON --version 2>&1 | grep -Eo '[0-9]+\.[0-9]+' | head -1)
+    PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1); PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
+    if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
+      log_error "Python 3.10+ required (found $PY_VER)."; exit 1
+    fi
+    log_success "Using Python $PY_VER at $PYTHON"
+    # Bootstrap pip if missing (fixes VPS without python3-pip)
+    $PYTHON -m ensurepip --upgrade 2>/dev/null || true
+    if ! $PYTHON -m pip --version &>/dev/null; then log_error "pip not available"; exit 1; fi
+  fi
   if ! command -v git &>/dev/null; then log_error "git required"; exit 1; fi
   log_success "All prerequisites satisfied"
 }
@@ -124,10 +138,16 @@ build_frontend() {
 
 install_dependencies() {
   log_info "Installing Python dependencies..."
-  $PYTHON -m venv "$LMWEBUI_HOME/.venv"
-  source "$LMWEBUI_HOME/.venv/bin/activate"
-  pip install --upgrade pip --quiet
-  pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
+  if command -v uv &>/dev/null; then
+    uv venv "$LMWEBUI_HOME/.venv" --python 3.12 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv"
+    uv pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
+  else
+    $PYTHON -m venv "$LMWEBUI_HOME/.venv"
+    source "$LMWEBUI_HOME/.venv/bin/activate"
+    $PYTHON -m ensurepip --upgrade 2>/dev/null || true
+    pip install --upgrade pip --quiet 2>&1 || true
+    pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
+  fi
   log_success "Dependencies installed"
 }
 
