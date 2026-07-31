@@ -72,6 +72,7 @@ function ConversationItem({
   onAssignProject?: (conversationId: string, projectId: string) => void;
   onCreateProject?: (conversationId: string, name: string) => void;
   projectName?: string;
+  onClose?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(conversation.title);
@@ -490,6 +491,7 @@ export default function Sidebar({
                     onAssignProject={handleAssignProject}
                     onCreateProject={handleCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
+                    onClose={onClose}
                   />
                 ))}
               </div>
@@ -518,6 +520,7 @@ export default function Sidebar({
                     onAssignProject={handleAssignProject}
                     onCreateProject={handleCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
+                    onClose={onClose}
                 />
               ))
             )}
