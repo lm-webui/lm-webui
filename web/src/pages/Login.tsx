@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,15 +99,6 @@ export default function Login() {
             >
               {isLoading ? 'Logging in...' : 'Login'}
             </Button>
-            
-            <div className="text-center pt-4 border-t border-white/10">
-              <Link
-                to="/register"
-                className="text-blue-400/50 hover:text-blue-300 text-sm transition-colors"
-              >
-                Don't have an account? Register
-              </Link>
-            </div>
           </form>
         </CardContent>
       </Card>

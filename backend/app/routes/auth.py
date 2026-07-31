@@ -70,7 +70,6 @@ async def login(req: LoginRequest, response: Response):
         )
 
         log_action(user_id=user_id, action="user.login")
-        log_action(user_id=user_id, action="user.register")
         return {"user": {"id": user_id, "email": req.email, "role": role}, "access_token": access}
 
 @router.post("/refresh")
@@ -112,7 +111,7 @@ async def register(req: LoginRequest, response: Response):
     from app.database.sqlite.connection_pool import database_manager
     
     with database_manager.transaction() as conn:
-        if os.getenv("APP_AUTH_ALLOW_REGISTRATION", "true").lower() == "false":
+        if os.getenv("APP_AUTH_ALLOW_REGISTRATION", "false").lower() == "false":
             existing_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
             if existing_count > 0:
                 raise HTTPException(403, "Public registration is disabled")
