@@ -243,10 +243,12 @@ esac
 CLIEOF
   fi
   chmod +x "$LMWEBUI_HOME/lmwebui"
-  if [ -d "/usr/local/bin" ] && [ -w "/usr/local/bin" ]; then
-    ln -sf "$LMWEBUI_HOME/lmwebui" /usr/local/bin/lm-webui && log_success "CLI: lm-webui"
-  elif [ -d "/usr/local/bin" ]; then
-    log_info "Install CLI: sudo ln -sf $LMWEBUI_HOME/lmwebui /usr/local/bin/lm-webui"
+  if [ -d "/usr/local/bin" ]; then
+    ln -sf "$LMWEBUI_HOME/lmwebui" /usr/local/bin/lm-webui 2>/dev/null && log_success "CLI: lm-webui" || {
+      sudo ln -sf "$LMWEBUI_HOME/lmwebui" /usr/local/bin/lm-webui 2>/dev/null && log_success "CLI: lm-webui" || {
+        log_info "Install CLI: sudo ln -sf $LMWEBUI_HOME/lmwebui /usr/local/bin/lm-webui"
+      }
+    }
   fi
 }
 
