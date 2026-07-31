@@ -2,6 +2,8 @@ import { PROVIDER_MAPPING } from './modelProviders';
 import { useAuth } from '../hooks/useAuth';
 
 const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+// new URL() requires an absolute base — use origin when API_BASE_URL is empty (native install)
+const URL_BASE = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 // Helper function to handle token refresh
 async function handleTokenRefresh(): Promise<void> {
@@ -173,7 +175,7 @@ async function _chatWithModel(
 }
 
 export async function searchQuery(query: string): Promise<Array<{title: string, link: string, snippet: string}>> {
-  const url = new URL(`${API_BASE_URL}/api/search`);
+  const url = new URL(`${URL_BASE}/api/search`);
   url.searchParams.set('q', query);
   const response = await authFetch(url.toString());
   return response;
@@ -426,7 +428,7 @@ export async function fetchModels(
       // Try dynamic endpoint first if enabled
       if (dynamic) {
         try {
-          const dynamicUrl = new URL(`${API_BASE_URL}/api/models/api/dynamic`);
+          const dynamicUrl = new URL(`${URL_BASE}/api/models/api/dynamic`);
           dynamicUrl.searchParams.set('provider', provider);
           
           console.log(`🔄 Fetching dynamic models for ${provider} (backend: ${backendProvider})`);
@@ -494,7 +496,7 @@ export async function refreshModelsCache(provider?: string): Promise<void> {
   }
   
   // For API providers, use the refresh endpoint
-  const url = new URL(`${API_BASE_URL}/api/models/api/refresh`);
+  const url = new URL(`${URL_BASE}/api/models/api/refresh`);
   if (provider) {
     url.searchParams.set('provider', provider);
   }
