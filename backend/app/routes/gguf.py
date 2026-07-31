@@ -362,7 +362,7 @@ class GGUFConfigRequest(BaseModel):
 
 
 @router.get("/gguf/config")
-async def get_gguf_config(_: dict = Depends(require_permission("models.view"))):
+async def get_gguf_config(_: dict = Depends(require_permission("models.read"))):
     """Get effective GGUF engine configuration (env defaults + user overrides)."""
     provider = get_gguf_provider()
     return provider.get_config()

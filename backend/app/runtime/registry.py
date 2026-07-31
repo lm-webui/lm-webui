@@ -58,17 +58,9 @@ class RuntimeRegistry:
         except Exception as e:
             logger.error(f"Failed to save registry: {e}")
 
-    def refresh(self) -> Dict[str, Dict]:
-        """
-        Refresh registry by detecting all managed runtimes.
-
-        Returns:
-            Updated runtime information
-        """
-        detected = self._detector.detect_all(include_external=True)
+    def _update_from_detection(self, detected: Dict[str, Dict]) -> None:
+        """Store detected runtimes into the registry."""
         from datetime import datetime
-
-        # Update registry with detected runtimes
         for runtime_type, info in detected.items():
             self._runtimes[runtime_type] = {
                 "installed": info.get("installed", False),
@@ -78,6 +70,16 @@ class RuntimeRegistry:
                 "endpoint": info.get("endpoint"),
                 "last_checked": datetime.now().isoformat()
             }
+
+    def refresh(self) -> Dict[str, Dict]:
+        """
+        Refresh registry by detecting all managed runtimes (synchronous).
+
+        Returns:
+            Updated runtime information
+        """
+        detected = self._detector.detect_all(include_external=True)
+        self._update_from_detection(detected)
 
         return self._runtimes
 
@@ -106,11 +108,8 @@ class RuntimeRegistry:
             del self._runtimes[runtime_type]
             self._save()
 
-    def get_runtime_info_for_ui(self) -> List[Dict]:
-        """Get runtime info formatted for UI display."""
-        # Refresh first to get latest status
-        self.refresh()
-
+    def _build_ui_entries(self) -> List[Dict]:
+        """Build the UI-formatted runtime list from current registry state."""
         result = []
         for rt in RuntimeType:
             info = self._runtimes.get(rt.value, {})
@@ -136,6 +135,18 @@ class RuntimeRegistry:
             result.append(entry)
 
         return result
+
+    def get_runtime_info_for_ui(self) -> List[Dict]:
+        """Get runtime info formatted for UI display (synchronous)."""
+        self.refresh()
+        return self._build_ui_entries()
+
+    async def get_runtime_info_for_ui_async(self) -> List[Dict]:
+        """Get runtime info formatted for UI display (async — safe in FastAPI endpoints)."""
+        detected = await self._detector.detect_all_async(include_external=True)
+        self._update_from_detection(detected)
+        self._save()
+        return self._build_ui_entries()
 
 
 # Singleton instance

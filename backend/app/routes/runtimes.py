@@ -40,7 +40,7 @@ class RuntimeConfigRequest(BaseModel):
 async def get_runtimes(_: dict = Depends(require_permission("runtime.view"))):
     """Get all managed runtimes and their status."""
     registry = get_runtime_registry()
-    return {"runtimes": registry.get_runtime_info_for_ui()}
+    return {"runtimes": await registry.get_runtime_info_for_ui_async()}
 
 
 @router.post("/scan")

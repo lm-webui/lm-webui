@@ -92,6 +92,26 @@ class RuntimeDetector:
 
         return results
 
+    async def detect_all_async(self, include_external: bool = True) -> Dict[str, Dict]:
+        """
+        Detect all managed runtimes asynchronously.
+        Safe to call from within an async FastAPI endpoint (awaits external detection).
+        """
+        results = {}
+
+        # In-container detection (GGUF) — synchronous
+        for runtime_type in RuntimeType:
+            config = self.RUNTIME_CONFIGS.get(runtime_type)
+            if config and config.get("type") == "python_package":
+                results[runtime_type.value] = self.detect(runtime_type)
+
+        # External server detection (MLX, ComfyUI) — awaited, not run_until_complete
+        if include_external:
+            ext = await self.detect_external_all()
+            results.update(ext)
+
+        return results
+
     def detect(self, runtime_type: RuntimeType) -> Dict:
         """
         Detect a specific runtime.
