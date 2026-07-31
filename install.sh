@@ -139,7 +139,8 @@ build_frontend() {
 install_dependencies() {
   log_info "Installing Python dependencies..."
   if command -v uv &>/dev/null; then
-    uv venv "$LMWEBUI_HOME/.venv" --python 3.12 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv"
+    uv venv "$LMWEBUI_HOME/.venv" --python 3.12 --clear 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv" --clear
+    export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
     uv pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
   else
     $PYTHON -m venv "$LMWEBUI_HOME/.venv"

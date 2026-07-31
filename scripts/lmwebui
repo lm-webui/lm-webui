@@ -99,6 +99,7 @@ except Exception:
     if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then
       source "$LMWEBUI_HOME/.venv/bin/activate"
       if command -v uv &>/dev/null; then
+        export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
         uv pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
       else
         pip install --upgrade pip --quiet 2>&1 || true
