@@ -79,11 +79,13 @@ class PathsConfig(BaseModel):
 
     @validator('media_dir', 'data_dir', 'models_dir')
     def resolve_paths(cls, v, values):
-        """Resolve relative paths to absolute paths"""
-        if os.path.isabs(v):
-            return str(Path(v).expanduser())
-        base_dir = values.get('base_dir', '.')
-        return str(Path(base_dir).expanduser() / v)
+        """Resolve paths to absolute. Expands ~ first so tilde paths
+        (e.g. ~/.lmwebui/data) aren't joined onto base_dir."""
+        p = Path(v).expanduser()
+        if p.is_absolute():
+            return str(p)
+        base_dir = Path(values.get('base_dir', '.')).expanduser()
+        return str(base_dir / p)
 
 class RAGConfig(BaseModel):
     """RAG / vector search configuration"""
