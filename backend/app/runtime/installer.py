@@ -32,6 +32,37 @@ class RuntimeInstaller:
         "comfyui": ("kill $(lsof -ti:8188) 2>/dev/null || true",),
     }
 
+    def _run(self, cmd: str, timeout: int = 600) -> Dict:
+        """Run a shell command and return structured result."""
+        logger.info(f"Running: {cmd}")
+        try:
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout)
+            if result.returncode != 0:
+                return {"success": False, "error": f"Command failed: {cmd}\n{result.stderr[:500]}", "command": cmd}
+            return {"success": True, "command": cmd}
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": f"Command timed out: {cmd}", "command": cmd}
+        except Exception as e:
+            return {"success": False, "error": str(e), "command": cmd}
+
+    def install_gguf_gpu(self) -> Dict:
+        """Rebuild llama-cpp-python with GPU flags based on detected hardware."""
+        from app.hardware.detection import detect_gpu_cli
+        gpu = detect_gpu_cli()
+        if not gpu:
+            return {"success": False, "error": "No GPU detected on this system"}
+        # Find the venv python
+        import os
+        venv_python = os.path.expanduser("~/.lmwebui/.venv/bin/python")
+        if os.path.exists(venv_python):
+            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 {venv_python} -m pip install llama-cpp-python --upgrade --force-reinstall"
+        else:
+            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 pip install llama-cpp-python --upgrade --force-reinstall"
+        result = self._run(cmd, timeout=900)
+        if result["success"]:
+            result["message"] = f"llama-cpp-python rebuilt with {gpu['backend']} ({gpu['device']})"
+        return result
+
     def install(self, runtime_type: str) -> Dict:
         """Install a runtime on the host. Returns success/error."""
         cmds = self.INSTALL_COMMANDS.get(runtime_type)

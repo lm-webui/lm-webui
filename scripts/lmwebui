@@ -101,9 +101,11 @@ except Exception:
       if command -v uv &>/dev/null; then
         export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
         uv pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
+        uv pip install llama-cpp-python --quiet 2>/dev/null || true
       else
         pip install --upgrade pip --quiet 2>&1 || true
         pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
+        pip install llama-cpp-python --quiet 2>&1 || true
       fi
     fi
 

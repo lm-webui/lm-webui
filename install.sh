@@ -152,6 +152,19 @@ install_dependencies() {
   log_success "Dependencies installed"
 }
 
+install_llamacpp() {
+  log_info "Installing llama-cpp-python (CPU)..."
+  # CPU build — fast, works everywhere
+  if command -v uv &>/dev/null; then
+    uv pip install --python "$LMWEBUI_HOME/.venv/bin/python" llama-cpp-python --quiet 2>/dev/null || \
+    uv pip install llama-cpp-python --quiet 2>/dev/null || \
+    log_warning "llama-cpp-python install failed — GGUF inference unavailable"
+  else
+    source "$LMWEBUI_HOME/.venv/bin/activate"
+    pip install llama-cpp-python --quiet 2>&1 || log_warning "llama-cpp-python install failed — GGUF inference unavailable"
+  fi
+}
+
 install_service() {
   log_info "Installing service..."
   case "$(uname)" in
@@ -288,6 +301,7 @@ main() {
   setup_repository
   build_frontend
   install_dependencies
+  install_llamacpp
   install_service
   install_cli
   wait_for_ready

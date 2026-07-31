@@ -18,7 +18,7 @@ import {
   HardDrive, Trash2, Cpu, CloudDownload, RefreshCw,
   Loader2, CheckCircle, XCircle, Server, Search, FolderOpen,
   ChevronDown, Image, Copy, ScanLine, ExternalLink, Download,
-  Cpu as ChipIcon,
+  Cpu as ChipIcon, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authFetch } from "@/utils/api";
@@ -89,6 +89,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
     cache_type_v: "q8_0",
   });
   const [applyingConfig, setApplyingConfig] = useState(false);
+  const [gpuInfo, setGpuInfo] = useState<any>(null);
+  const [installingGpu, setInstallingGpu] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -97,6 +99,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
       fetchMlxInfo();
       fetchGgufConfig();
       scanExternals();
+      fetchGpuInfo();
     }
   }, [open]);
 
@@ -208,9 +211,31 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
 
   const handleRefresh = async () => {
     setLoading(true);
-    await Promise.all([fetchRuntimes(), fetchModels(), fetchMlxInfo()]);
+    await Promise.all([fetchRuntimes(), fetchModels(), fetchMlxInfo(), fetchGpuInfo()]);
     setLoading(false);
     toast.success("Refreshed");
+  };
+
+  const fetchGpuInfo = async () => {
+    try {
+      const data = await authFetch("/api/models/gguf/gpu");
+      setGpuInfo(data);
+    } catch (error) {
+      console.error("Failed to fetch GPU info:", error);
+    }
+  };
+
+  const installGpuAcceleration = async () => {
+    setInstallingGpu(true);
+    try {
+      await authFetch("/api/models/gguf/gpu-install", { method: "POST" });
+      toast.success("GPU acceleration installed. Restart to take effect.");
+      await fetchGpuInfo();
+    } catch (error: any) {
+      toast.error(error.message || "GPU acceleration install failed");
+    } finally {
+      setInstallingGpu(false);
+    }
   };
 
   const connectComfyui = async () => {
@@ -390,6 +415,35 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
                       ggufConfig.n_gpu_layers < 0 ? "translate-x-[18px]" : "translate-x-[3px]"
                     }`} />
                   </button>
+                </div>
+
+                {/* GPU Acceleration Install */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs">Detected GPU</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {gpuInfo?.has_gpu
+                        ? `🎮 ${gpuInfo.gpu?.device || "GPU"} (${gpuInfo.gpu?.backend?.toUpperCase()})`
+                        : "🖥️ No discrete GPU detected — using CPU"}
+                    </p>
+                  </div>
+                  {gpuInfo?.has_gpu && !gpuInfo?.gpu_accelerated && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1"
+                      onClick={installGpuAcceleration}
+                      disabled={installingGpu}
+                    >
+                      {installingGpu ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                      {installingGpu ? "Installing..." : "Install GPU Acceleration"}
+                    </Button>
+                  )}
+                  {gpuInfo?.gpu_accelerated && (
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle className="h-3 w-3 mr-1" /> GPU Accelerated
+                    </Badge>
+                  )}
                 </div>
 
                 {/* KV Cache Quality */}

@@ -379,3 +379,26 @@ async def set_gguf_config(
     provider = get_gguf_provider()
     overrides = {k: v for k, v in req.model_dump().items() if v is not None}
     return provider.update_config(overrides)
+
+
+@router.get("/gguf/gpu")
+async def get_gguf_gpu(_: dict = Depends(require_permission("models.read"))):
+    """Return detected GPU + whether llama-cpp is already GPU-accelerated."""
+    from app.hardware.detection import detect_gpu_cli
+    from app.providers.local.gguf import get_gguf_provider
+
+    gpu = detect_gpu_cli()
+    cfg = get_gguf_provider().get_config()
+    gpu_layers = cfg.get("n_gpu_layers", 0)
+    return {
+        "gpu": gpu,
+        "has_gpu": gpu is not None,
+        "gpu_accelerated": gpu is not None and gpu_layers < 0,
+    }
+
+
+@router.post("/gguf/gpu-install")
+async def install_gguf_gpu(_: dict = Depends(require_permission("models.install"))):
+    """Rebuild llama-cpp-python with detected GPU flags."""
+    from app.runtime.installer import get_runtime_installer
+    return get_runtime_installer().install_gguf_gpu()

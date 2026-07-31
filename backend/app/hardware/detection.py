@@ -295,6 +295,45 @@ def get_hardware_status() -> Dict:
     return status
 
 
+def detect_gpu_cli() -> Optional[Dict]:
+    """Lightweight GPU detection without torch (CLI-based).
+    Returns None if no discrete GPU found. Used by GGUF GPU acceleration install."""
+    import subprocess
+    import platform
+    # NVIDIA
+    try:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True, text=True, timeout=5
+        ).stdout.strip()
+        if out:
+            return {"backend": "cuda", "device": out, "vendor": "nvidia", "flags": "-DGGML_CUDA=on"}
+    except Exception:
+        pass
+    # AMD ROCm
+    try:
+        out = subprocess.run(["rocminfo"], capture_output=True, text=True, timeout=5).stdout
+        if "Agent" in out:
+            return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd", "flags": "-DGGML_HIPBLAS=on"}
+    except Exception:
+        pass
+    # Apple Silicon Metal
+    if platform.system() == "Darwin" and platform.machine() == "arm64":
+        return {"backend": "metal", "device": "Apple Silicon", "vendor": "apple", "flags": "-DGGML_METAL=on"}
+    # Intel / AMD via lspci (Linux)
+    try:
+        out = subprocess.run(["lspci"], capture_output=True, text=True, timeout=5).stdout
+        for line in out.splitlines():
+            if "VGA" in line or "3D" in line:
+                if "Intel" in line:
+                    return {"backend": "sycl", "device": "Intel GPU", "vendor": "intel", "flags": "-DGGML_SYCL=on"}
+                if "AMD/ATI" in line or "AMD" in line:
+                    return {"backend": "rocm", "device": "AMD GPU", "vendor": "amd", "flags": "-DGGML_HIPBLAS=on"}
+    except Exception:
+        pass
+    return None
+
+
 def check_gguf_compatibility(model_path: str) -> Dict:
     """
     Check hardware compatibility for GGUF model
