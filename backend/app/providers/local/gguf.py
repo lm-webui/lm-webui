@@ -175,19 +175,35 @@ class GGUFProvider(BaseProvider):
 
         logger.info(f"Loading GGUF model: {model_path} with config: {config}")
 
+        # Pre-validate the GGUF file before attempting load — catches corrupt/incomplete downloads
         try:
-            self._active_model = Llama(
-                model_path=model_path,
-                n_ctx=n_ctx,
-                flash_attn=flash_attn,
-                n_gpu_layers=n_gpu_layers,
-                n_threads=n_threads,
-                cache_type_k=cache_type_k,
-                cache_type_v=cache_type_v,
-                use_mmap=use_mmap,
-                use_mlock=use_mlock,
-                verbose=False,
-            )
+            from app.services.gguf_manager import validate_gguf_file
+            vresult = validate_gguf_file(model_path)
+            if not vresult.get("valid"):
+                raise ProviderError("gguf", f"Invalid GGUF file: {vresult.get('error', 'unknown')}")
+        except ProviderError:
+            raise
+        except Exception:
+            pass  # validation itself failed — let the load attempt surface the real error
+
+        # Capture llama.cpp's stderr so the real failure reason surfaces to the user
+        import io
+        import contextlib
+        stderr_buf = io.StringIO()
+        try:
+            with contextlib.redirect_stderr(stderr_buf):
+                self._active_model = Llama(
+                    model_path=model_path,
+                    n_ctx=n_ctx,
+                    flash_attn=flash_attn,
+                    n_gpu_layers=n_gpu_layers,
+                    n_threads=n_threads,
+                    cache_type_k=cache_type_k,
+                    cache_type_v=cache_type_v,
+                    use_mmap=use_mmap,
+                    use_mlock=use_mlock,
+                    verbose=True,
+                )
             self._active_model_path = model_path
             self._active_config = config
             logger.info(f"Model loaded successfully. Active config: {config}")
@@ -196,8 +212,19 @@ class GGUFProvider(BaseProvider):
             self._active_model = None
             self._active_model_path = None
             self._active_config = {}
-            logger.error(f"Failed to load model {model_path}: {e}")
-            raise ProviderError("gguf", f"Failed to load model: {e}")
+            stderr_detail = stderr_buf.getvalue().strip() or str(e)
+            logger.error(f"Failed to load model {model_path}: {stderr_detail}")
+
+            # Vision/multimodal model detection for actionable guidance
+            VISION_HINTS = ["-v-", "vision", "-vl", "multimodal", "glm-4.6v"]
+            model_lower = model_path.lower()
+            if any(h in model_lower for h in VISION_HINTS):
+                hint = ("This looks like a vision/multimodal model — it may require a separate "
+                        "mmproj GGUF file, or a llama-cpp build with vision support.")
+            else:
+                hint = "The model file may be corrupt or incomplete — try re-downloading it."
+
+            raise ProviderError("gguf", f"Failed to load model: {stderr_detail}\n{hint}")
 
     # ── generate, stream, _generate_blocking follow ──
     # (unchanged from original — uses self._load_model above)
