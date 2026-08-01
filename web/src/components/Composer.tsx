@@ -162,7 +162,7 @@ export default function Composer({
           </div>
         )}
 
-        <div className="flex-1 px-4 pt-4">
+        <div className="flex-1 px-3 pt-2 md:px-4 md:pt-4">
           <textarea
             ref={inputRef}
             value={value}
@@ -179,7 +179,7 @@ export default function Composer({
           />
         </div>
 
-        <div className="flex items-center justify-between px-3 pb-3 pl-4">
+        <div className="flex items-center justify-between px-2 pb-2 pl-3 md:px-3 md:pb-3 md:pl-4">
           <div className="flex items-center gap-1">
             <input
               type="file"

@@ -151,9 +151,9 @@ export default function ChatPane({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col relative bg-neutral-200/70 dark:bg-neutral-900/50">
       {artifact && <ArtifactDrawer artifact={artifact} onClose={() => setArtifact(null)} />}
-      <div className="flex-1 space-y-6 overflow-y-auto px-4 py-6 sm:px-8 scrollbar-hide">
+      <div className="flex-1 space-y-6 overflow-y-auto px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
-          <div className="mb-8">
+          <div className="mb-8 hidden md:block">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-dark">
               {conversation.title}
             </h1>

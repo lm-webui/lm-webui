@@ -392,28 +392,28 @@ export default function Sidebar({
 
       <aside
         className={cn(
-          "z-50 flex h-full w-80 shrink-0 flex-col border-r border-stone-400/50 bg-neutral-300 transition-transform duration-200 dark:border-zinc-800 dark:bg-neutral-900",
+          "z-50 flex h-full w-64 md:w-80 shrink-0 flex-col border-r border-stone-400/50 bg-neutral-300 transition-transform duration-200 dark:border-zinc-800 dark:bg-neutral-900",
           open ? "translate-x-0" : "-translate-x-full",
           "fixed inset-y-0 left-0 md:static md:translate-x-0",
         )}
       >
-        <div className="flex items-center justify-between px-3 py-5 ml-2 pb-6">
-          <div className="flex items-center gap-28">
-            <div className="flex items-center gap-3 ml-1">
+        <div className="flex items-center justify-between px-2 py-4 md:px-3 md:py-5 ml-2 pb-4 md:pb-6">
+          <div className="flex items-center gap-8 md:gap-28">
+            <div className="flex items-center gap-2 md:gap-3 ml-1">
               <img
                 src="/logo1.png"
                 alt="Logo"
-                className="h-7 w-7 object-contain"
+                className="h-5 w-5 md:h-7 md:w-7 object-contain"
               />
               <img
                 src="/text41.png"
                 alt="AI Assistant"
-                className="h-4 object-contain hidden dark:block"
+                className="h-3 md:h-4 object-contain hidden dark:block"
               />
               <img
                 src="/text49.png"
                 alt="AI Assistant"
-                className="h-4 object-contain block dark:hidden"
+                className="h-3 md:h-4 object-contain block dark:hidden"
               />
             </div>
             <Button
@@ -442,7 +442,7 @@ export default function Sidebar({
           </div>
         </div>
 
-        <div className="px-4 mb-2">
+        <div className="px-4 mb-2 hidden md:block">
           <Button
             onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             variant="ghost"

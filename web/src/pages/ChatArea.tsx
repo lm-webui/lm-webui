@@ -17,7 +17,7 @@ import ImageWorkspace from "@/features/images/ImageWorkspace";
 import ImageGallery from "@/features/images/ImageGallery";
 import ProjectsWorkspace from "@/features/projects/ProjectsWorkspace";
 import RuntimeManager from "../components/models/RuntimeManager";
-import Settings from "../components/settings/Settings";
+import { Settings } from "../components/settings/Settings";
 
 export default function ChatArea({
   isAuthenticated,

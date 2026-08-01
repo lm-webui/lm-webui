@@ -1,4 +1,4 @@
-import { PanelLeftOpen, Settings as SettingsIcon, Server } from "lucide-react";
+import { PanelLeftOpen, Settings as SettingsIcon, Server, MessageSquarePlus, MoreVertical } from "lucide-react";
 import { Button } from "./ui/button";
 import { HardwareStatus } from "./orchestrator/HardwareStatus";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,9 +43,32 @@ export default function Header({
         >
           <PanelLeftOpen className="h-5 w-5" />
         </Button>
+        <img
+          src="/text41.png"
+          alt="LM-WebUI"
+          className="h-5 w-auto object-contain md:hidden"
+        />
       </div>
 
       <div className="flex items-center gap-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={createNewChat}
+          className="md:hidden"
+          title="New chat"
+        >
+          <MessageSquarePlus className="h-5 w-5" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onViewChange?.("settings")}
+          className="md:hidden"
+          title="Settings"
+        >
+          <MoreVertical className="h-5 w-5" />
+        </Button>
         <div className="hidden sm:block">
           <HardwareStatus />
         </div>
