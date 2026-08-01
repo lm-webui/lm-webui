@@ -1,8 +1,5 @@
-import { useState } from "react";
 import { PanelLeftOpen, Settings as SettingsIcon, Server } from "lucide-react";
 import { Button } from "./ui/button";
-import { Settings } from "./settings/Settings";
-import RuntimeManager from "./models/RuntimeManager";
 import { HardwareStatus } from "./orchestrator/HardwareStatus";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -17,6 +14,7 @@ interface HeaderProps {
   availableModels: string[];
   selectedSearchEngine?: string;
   onSearchEngineChange?: (value: string) => void;
+  onViewChange?: (view: string) => void;
 }
 
 export default function Header({
@@ -30,8 +28,8 @@ export default function Header({
   availableModels,
   selectedSearchEngine,
   onSearchEngineChange,
+  onViewChange,
 }: HeaderProps) {
-  const [isRuntimeManagerOpen, setIsRuntimeManagerOpen] = useState(false);
   const { user } = useAuth();
 
   return (
@@ -55,35 +53,21 @@ export default function Header({
         {user?.role === "admin" && <Button
           variant="link"
           size="sm"
-          onClick={() => setIsRuntimeManagerOpen(true)}
+          onClick={() => onViewChange?.("runtime")}
           className="hidden sm:flex gap-2 py-5 px-3 rounded-full border-zinc-200 dark:border-zinc-800"
           title="Runtime Manager"
         >
           <Server className="h-5 w-5" />
         </Button>}
-        {user?.role === "admin" && <RuntimeManager
-          open={isRuntimeManagerOpen}
-          onOpenChange={setIsRuntimeManagerOpen}
-          onModelLoad={onModelChange}
-        />}
-        <Settings
-          selectedLLM={selectedLLM}
-          onLLMChange={onLLMChange}
-          availableModels={availableModels}
-          selectedModel={selectedModel}
-          onModelChange={onModelChange}
-          selectedSearchEngine={selectedSearchEngine ?? "duckduckgo"}
-          onSearchEngineChange={onSearchEngineChange ?? (() => {})}
-          trigger={
-            <Button
-              variant="link"
-              size="sm"
-              className="flex gap-2 py-5 px-3 rounded-full border-zinc-200 dark:border-zinc-800"
-            >
-              <SettingsIcon className="h-5 w-5" />
-            </Button>
-          }
-        />
+        <Button
+          variant="link"
+          size="sm"
+          onClick={() => onViewChange?.("settings")}
+          className="hidden sm:flex gap-2 py-5 px-3 rounded-full border-zinc-200 dark:border-zinc-800"
+          title="Settings"
+        >
+          <SettingsIcon className="h-5 w-5" />
+        </Button>
       </div>
     </header>
   );

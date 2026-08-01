@@ -13,6 +13,8 @@ import {
   FolderKanban,
   Loader2,
   MoreHorizontal,
+  Server,
+  Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/utils/api";
@@ -357,6 +359,22 @@ export default function Sidebar({
             onClick={() => onViewChange?.("projects")}
           >
             <FolderKanban className="h-5 w-5 text-zinc-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Runtime"
+            onClick={() => onViewChange?.("runtime")}
+          >
+            <Server className="h-5 w-5 text-zinc-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Settings"
+            onClick={() => onViewChange?.("settings")}
+          >
+            <SettingsIcon className="h-5 w-5 text-zinc-500" />
           </Button>
         </div>
       </aside>

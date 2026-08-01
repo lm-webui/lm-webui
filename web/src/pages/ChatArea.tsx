@@ -16,6 +16,8 @@ import ChatPane from "../components/chat/ChatPane";
 import ImageWorkspace from "@/features/images/ImageWorkspace";
 import ImageGallery from "@/features/images/ImageGallery";
 import ProjectsWorkspace from "@/features/projects/ProjectsWorkspace";
+import RuntimeManager from "../components/models/RuntimeManager";
+import Settings from "../components/settings/Settings";
 
 export default function ChatArea({
   isAuthenticated,
@@ -72,7 +74,7 @@ export default function ChatArea({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"chat" | "gallery" | "workspace" | "projects">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
   const {
     messages: chatMessages, // unused but returned
     conversations: chatConversations, // unused but returned
@@ -201,7 +203,7 @@ export default function ChatArea({
         createNewChat={() => { handleNewChat(); setActiveView("chat"); }}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
-        onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects")}
+        onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100/50 dark:bg-zinc-950">
@@ -216,6 +218,7 @@ export default function ChatArea({
           availableModels={allModels}
           selectedSearchEngine={selectedSearchEngine}
           onSearchEngineChange={onSearchEngineChange}
+          onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
         />
         {activeView === "chat" && (
           <ChatPane
@@ -242,6 +245,15 @@ export default function ChatArea({
         {activeView === "workspace" && <ImageWorkspace />}
         {activeView === "gallery" && <ImageGallery />}
         {activeView === "projects" && <ProjectsWorkspace />}
+        {activeView === "runtime" && (
+          <RuntimeManager
+            open={true}
+            onOpenChange={() => {}}
+            onModelLoad={setSelectedModel}
+            inline
+          />
+        )}
+        {activeView === "settings" && <Settings inline />}
       </main>
     </div>
   );

@@ -66,9 +66,11 @@ interface RuntimeManagerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onModelLoad?: (modelName: string) => void;
+  /** When true, renders the tabs inline as a page instead of in a Dialog modal. */
+  inline?: boolean;
 }
 
-export default function RuntimeManager({ open, onOpenChange, onModelLoad }: RuntimeManagerProps) {
+export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline = false }: RuntimeManagerProps) {
   const [runtimes, setRuntimes] = useState<Runtime[]>([]);
   const [models, setModels] = useState<GGUFModel[]>([]);
   const [loading, setLoading] = useState(false);
@@ -93,7 +95,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
   const [installingGpu, setInstallingGpu] = useState(false);
 
   useEffect(() => {
-    if (open) {
+    if (inline || open) {
       fetchRuntimes();
       fetchModels();
       fetchMlxInfo();
@@ -101,7 +103,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
       scanExternals();
       fetchGpuInfo();
     }
-  }, [open]);
+  }, [inline, open]);
 
   const fetchRuntimes = async () => {
     try {
@@ -285,9 +287,14 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
   const ggufRuntime = runtimes.find(r => r.type === "gguf");
   const ggufReady = ggufRuntime?.installed;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl min-h-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
+  const body = (
+    <>
+      {inline ? (
+        <div className="flex items-center gap-2">
+          <Server className="h-5 w-5" />
+          <h2 className="text-lg font-semibold">Runtime Manager</h2>
+        </div>
+      ) : (
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Server className="h-5 w-5" />
@@ -298,8 +305,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
             Ollama and vLLM are configured in Settings → API Providers.
           </DialogDescription>
         </DialogHeader>
-
-        <div className="flex items-center gap-2 mb-4">
+      )}
+      <div className="flex items-center gap-2 mb-4">
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
@@ -667,8 +674,28 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad }: Runt
         </Card>
           </TabsContent>
         </Tabs>
-      </DialogContent>
+    </>
+  );
 
+  if (inline) {
+    return (
+      <div className="h-full overflow-y-auto p-6 space-y-4">
+        {body}
+        <ModelDownloadModal
+          open={downloadModal !== null}
+          onOpenChange={(o) => !o && setDownloadModal(null)}
+          modelType={downloadModal || "gguf"}
+          onComplete={() => { fetchModels(); fetchRuntimes(); }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl min-h-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
+        {body}
+      </DialogContent>
       <ModelDownloadModal
         open={downloadModal !== null}
         onOpenChange={(o) => !o && setDownloadModal(null)}

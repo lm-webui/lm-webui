@@ -35,6 +35,8 @@ interface SettingsProps {
   onModelChange?: (value: string) => void;
   showRawResponse?: boolean;
   onRawResponseToggle?: (value: boolean) => void;
+  /** When true, renders the settings tabs inline as a page instead of a Dialog modal. */
+  inline?: boolean;
 }
 
 export function Settings({
@@ -49,6 +51,7 @@ export function Settings({
   showRawResponse = false,
   onRawResponseToggle = () => {},
   trigger,
+  inline = false,
 }: SettingsProps) {
   const [openAIKey, setOpenAIKey] = useState("");
   const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
@@ -108,7 +111,7 @@ export function Settings({
       }
     };
 
-    if (isOpen) {
+    if (isOpen || inline) {
       loadSettings();
       setLoadingModels(true);
       Promise.all([
@@ -130,7 +133,7 @@ export function Settings({
         }).catch(() => {}),
       ]).finally(() => setLoadingModels(false));
     }
-  }, [isOpen]);
+  }, [isOpen, inline]);
 
   const saveSettings = async () => {
     const settings = {
@@ -173,40 +176,24 @@ export function Settings({
     }
   };
 
-  return (
+  const content = (
     <>
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogTrigger asChild>
-          {trigger ? (
-            trigger
-          ) : variant === "icon" ? (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-            >
-              <SettingsIcon className="h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 rounded-3xl hover:rounded-3xl hover:shadow-inner hover:bg-zinc-200 dark:hover:bg-zinc-800 px-2 py-2"
-            >
-              <SettingsIcon className="h-4 w-4" />
-              Settings
-            </Button>
-          )}
-        </DialogTrigger>
-        <DialogContent className="min-h-[85vh] max-h-[85vh] sm:max-w-2xl overflow-hidden flex flex-col bg-neutral-100/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
-          <div className="flex flex-col space-y-1.5 text-center sm:text-left pb-2 shrink-0">
-            <DialogTitle className="text-lg font-semibold leading-none tracking-tight mb-1">
-              Settings
-            </DialogTitle>
-            <DialogDescription className="text-[9px] md:text-sm text-zinc-500 dark:text-zinc-400">
-              Configure your AI assistant with advanced options and
-              integrations.
-            </DialogDescription>
-          </div>
+      {inline ? (
+        <div className="flex items-center gap-2">
+          <SettingsIcon className="h-5 w-5" />
+          <h2 className="text-lg font-semibold">Settings</h2>
+        </div>
+      ) : (
+        <div className="flex flex-col space-y-1.5 text-center sm:text-left pb-2 shrink-0">
+          <DialogTitle className="text-lg font-semibold leading-none tracking-tight mb-1">
+            Settings
+          </DialogTitle>
+          <DialogDescription className="text-[9px] md:text-sm text-zinc-500 dark:text-zinc-400">
+            Configure your AI assistant with advanced options and
+            integrations.
+          </DialogDescription>
+        </div>
+      )}
 
                     <Tabs
             defaultValue="inference"
@@ -330,6 +317,43 @@ export function Settings({
               <Button onClick={saveSettings}>Save Settings</Button>
             </div>
           </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="h-full overflow-y-auto p-6 space-y-4">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogTrigger asChild>
+          {trigger ? (
+            trigger
+          ) : variant === "icon" ? (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              <SettingsIcon className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 rounded-3xl hover:rounded-3xl hover:shadow-inner hover:bg-zinc-200 dark:hover:bg-zinc-800 px-2 py-2"
+            >
+              <SettingsIcon className="h-4 w-4" />
+              Settings
+            </Button>
+          )}
+        </DialogTrigger>
+        <DialogContent className="min-h-[85vh] max-h-[85vh] sm:max-w-2xl overflow-hidden flex flex-col bg-neutral-100/90 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl">
+          {content}
         </DialogContent>
       </Dialog>
 
