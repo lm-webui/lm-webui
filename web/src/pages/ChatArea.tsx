@@ -208,7 +208,7 @@ export default function ChatArea({
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100/50 dark:bg-zinc-950">
         <Header
-          createNewChat={handleNewChat}
+          createNewChat={() => { handleNewChat(); setActiveView("chat"); }}
           sidebarCollapsed={sidebarCollapsed}
           setSidebarOpen={setSidebarOpen}
           selectedLLM={selectedLLM}
@@ -228,7 +228,7 @@ export default function ChatArea({
             isLoading={isLoading}
             searchStatus={searchStatus}
             isThinking={false}
-            onPauseThinking={() => chatWebSocket.cancel()}
+            onPauseThinking={() => {}}
             isSearchEnabled={isSearchEnabled}
             setIsSearchEnabled={setIsSearchEnabled}
             isImageMode={isImageMode}
@@ -253,7 +253,16 @@ export default function ChatArea({
             inline
           />
         )}
-        {activeView === "settings" && <Settings inline />}
+        {activeView === "settings" && (
+          <Settings
+            inline
+            selectedLLM={selectedLLM}
+            onLLMChange={setSelectedLLM}
+            availableModels={allModels}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+          />
+        )}
       </main>
     </div>
   );

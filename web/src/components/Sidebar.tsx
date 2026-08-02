@@ -5,11 +5,12 @@ import {
   SearchIcon,
   Plus,
   Edit2,
+  X,
   Trash2,
   Check,
-  X,
   LayoutGrid,
   Briefcase,
+  Palette,
   FolderKanban,
   Loader2,
   MoreHorizontal,
@@ -20,7 +21,6 @@ import { cn } from "@/lib/utils";
 import { authFetch } from "@/utils/api";
 import { ChatConversation } from "@/types/chat-ui";
 import { Button } from "./ui/button";
-import { ThemeToggle } from "./ui/theme-toggle";
 import { ProfilePopover } from "./ui/profile-popover";
 import {
   DropdownMenu,
@@ -32,7 +32,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
-import { Settings as SettingsModal } from "./settings/Settings";
 import { Input } from "./ui/input";
 import { toast } from "sonner";
 import { useChatStore, useIsLoadingMessages } from "@/store/chatStore";
@@ -56,6 +55,7 @@ function ConversationItem({
   conversation,
   isSelected,
   onSelect,
+  onClose,
   onEditTitle,
   onDelete,
   isLoadingMessages,
@@ -318,7 +318,7 @@ export default function Sidebar({
   if (sidebarCollapsed) {
     return (
       <aside className="z-50 flex h-full w-16 shrink-0 flex-col border-r border-zinc-300/60 bg-neutral-300 transition-[width] duration-200 dark:border-zinc-800 dark:bg-neutral-900">
-        <div className="flex items-center px-3 py-[9.5px] justify-center border-b border-stone-400/50 dark:border-zinc-800">
+        <div className="flex items-center px-3 py-[7.5px] justify-center border-b border-stone-400/50 dark:border-zinc-800">
           <Button
             variant="ghost"
             size="icon"
@@ -350,7 +350,7 @@ export default function Sidebar({
             title="Studio"
             onClick={() => onViewChange?.("workspace")}
           >
-            <Briefcase className="h-5 w-5 text-zinc-500" />
+            <Palette className="h-5 w-5 text-zinc-500" />
           </Button>
           <Button
             variant="ghost"
@@ -397,7 +397,7 @@ export default function Sidebar({
           "fixed inset-y-0 left-0 md:static md:translate-x-0",
         )}
       >
-        <div className="flex items-center justify-between px-2 py-4 md:px-3 md:py-5 ml-2 pb-4 md:pb-6">
+        <div className="flex items-center justify-between px-2 py-3 md:px-3 md:py-4 ml-2 pb-3 md:pb-4">
           <div className="flex items-center gap-8 md:gap-28">
             <div className="flex items-center gap-2 md:gap-3 ml-1">
               <img
@@ -408,7 +408,7 @@ export default function Sidebar({
               <img
                 src="/text41.png"
                 alt="AI Assistant"
-                className="h-3 md:h-4 object-contain hidden dark:block"
+                className="h-3.5 md:h-4 object-contain hidden dark:block"
               />
               <img
                 src="/text49.png"
@@ -419,7 +419,7 @@ export default function Sidebar({
             <Button
               variant="ghost"
               size="icon"
-              className="-ml-2"
+              className="ml-14"
               onClick={() => {
                 if (window.innerWidth < 768) onClose?.();
                 else setSidebarCollapsed(true);
@@ -430,26 +430,26 @@ export default function Sidebar({
           </div>
         </div>
 
-        <div className="px-6 mb-3">
+        <div className="px-4 mb-2 md:mb-3">
           <div className="relative group">
             <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-600 dark:group-focus-within:text-zinc-300 transition-colors" />
             <Input
               placeholder="Search for chats"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-10 rounded-full bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner focus-visible:outline-none focus-visible:ring-neutral-200/5 dark:focus-visible:ring-neutral-500/5 transition-all outline-none"
+              className="pl-9 h-9 text-xs rounded-full bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner focus-visible:outline-none focus-visible:ring-neutral-200/5 dark:focus-visible:ring-neutral-500/5 transition-all outline-none"
             />
           </div>
         </div>
 
-        <div className="px-4 mb-2 hidden md:block">
+        <div className="px-4 mb-1 hidden md:block">
           <Button
             onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             variant="ghost"
-            className="w-full flex items-center justify-start gap-3 rounded-full h-12 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            className="w-full flex items-center justify-start gap-3 rounded-full h-10 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full shadow-inner hover:shadow-inner bg-stone-100/60 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-              <Plus className="h-4 w-4" />
+            <div className="flex h-6 w-6 items-center justify-center rounded-full shadow-inner hover:shadow-inner bg-stone-100/60 dark:bg-zinc-800">
+              <Plus className="h-3.5 w-3.5" />
             </div>
             <span className="font-small text-zinc-600 dark:text-zinc-400">
               New chat
@@ -457,8 +457,8 @@ export default function Sidebar({
           </Button>
         </div>
 
-        <div className="px-3 mb-3">
-          <div className="space-y-1">
+        <div className="px-3 mb-1.5 md:mb-2.5">
+          <div className="space-y-0.5">
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 px-4 h-10 rounded-full font-normal text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
@@ -472,7 +472,7 @@ export default function Sidebar({
               className="w-full justify-start gap-3 px-4 h-10 rounded-full font-normal text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               onClick={() => onViewChange?.("workspace")}
             >
-              <Briefcase className="h-4 w-4" />
+              <Palette className="h-4 w-4" />
               <span>Studio</span>
             </Button>
             <Button
@@ -546,19 +546,6 @@ export default function Sidebar({
         </nav>
 
         <div className="mt-auto border-t border-zinc-200/60 px-4 py-3 mb-2 dark:border-zinc-800">
-          <div className="flex items-center justify-between mb-3 mt-1 gap-3">
-            <SettingsModal
-              selectedLLM="openai"
-              onLLMChange={() => {}}
-              variant="button"
-              availableModels={[]}
-              selectedModel=""
-              onModelChange={() => {}}
-              showRawResponse={false}
-              onRawResponseToggle={() => {}}
-            />
-            <ThemeToggle />
-          </div>
           <ProfilePopover />
         </div>
       </aside>

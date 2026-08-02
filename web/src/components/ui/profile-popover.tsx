@@ -1,15 +1,17 @@
 import React, { useState } from "react";
-import { LogOut, Users, BarChart3 } from "lucide-react";
+import { LogOut, Users, BarChart3, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserManagementModal } from "@/components/auth/UserManagementModal";
 import { UsageAnalyticsModal } from "@/components/auth/UsageAnalyticsModal";
+import { PreferencesModal } from "./PreferencesModal";
 
 export function ProfilePopover() {
   const [open, setOpen] = useState(false);
   const { user, logout } = useAuth();
   const [userManagementOpen, setUserManagementOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -37,6 +39,9 @@ export function ProfilePopover() {
       </PopoverTrigger>
       <PopoverContent className="w-48 p-0" align="start" side="top">
         <div className="p-2">
+          <button onClick={() => { setPreferencesOpen(true); setOpen(false); }} className={menuItemClass}>
+            <Settings2 className="h-4 w-4" /><span>Preference</span>
+          </button>
           {user?.role === "admin" && <button onClick={() => { setUserManagementOpen(true); setOpen(false); }} className={menuItemClass}><Users className="h-4 w-4" /><span>User management</span></button>}
           {user?.role === "admin" && <button onClick={() => { setUsageOpen(true); setOpen(false); }} className={menuItemClass}><BarChart3 className="h-4 w-4" /><span>Usage analytics</span></button>}
           <button
@@ -48,6 +53,7 @@ export function ProfilePopover() {
           </button>
         </div>
       </PopoverContent>
+      <PreferencesModal open={preferencesOpen} onOpenChange={setPreferencesOpen} />
       <UserManagementModal open={userManagementOpen} onOpenChange={setUserManagementOpen} />
       <UsageAnalyticsModal open={usageOpen} onOpenChange={setUsageOpen} />
     </Popover>
