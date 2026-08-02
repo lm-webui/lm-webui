@@ -562,7 +562,7 @@ export default function Sidebar({
           </div>
         </nav>
 
-        <div className="mt-auto border-t border-zinc-200/60 px-4 py-3 mb-2 dark:border-zinc-800">
+        <div className="mt-auto border-t px-4 py-3 mb-1 border-neutral-400/30 dark:border-neutral-800/50">
           <ProfilePopover />
         </div>
       </aside>

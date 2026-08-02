@@ -8,6 +8,7 @@ export interface ChatMessage {
   isLoading?: boolean;
   generatedImageUrl?: string;
   type?: string;
+  model?: string;
 }
 
 export interface ChatConversation {

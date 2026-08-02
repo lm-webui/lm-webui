@@ -68,8 +68,8 @@ export function useChatCreation(options?: UseChatCreationOptions) {
   const currentConversationId = activeChatId || options?.currentConversationId || "";
   const currentSessionId = activeChatId || options?.currentSessionId || "";
 
-  const handleSendMessage = useCallback(async (message: string, fileReferences: any[] = []) => {
-    if (!message.trim()) return;
+  const handleSendMessage = useCallback(async (message: string, fileReferences: any[] = []): Promise<boolean> => {
+    if (!message.trim()) return false;
 
     const streamMessageChunk = useChatStore.getState().streamMessageChunk;
     const targetIdRef = { current: "" };
@@ -91,12 +91,12 @@ export function useChatCreation(options?: UseChatCreationOptions) {
     // Validate required fields before sending
     if (!hookOptions.selectedLLM || !hookOptions.selectedLLM.trim()) {
       toast.error("Please select an AI provider before sending a message");
-      return;
+      return false;
     }
 
     if (!hookOptions.selectedModel || !hookOptions.selectedModel.trim()) {
       toast.error("Please select a model before sending a message");
-      return;
+      return false;
     }
 
     const intent = detectMessageIntent(message);
@@ -150,6 +150,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
     // Initialize AbortController for the current request
     abortControllerRef.current = new AbortController();
 
+    let sent = true;
     try {
     // Check if image mode is enabled and route to image generation
     if (hookOptions.isImageMode) {
@@ -277,6 +278,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         }
       }
     } catch (error: any) {
+      sent = false;
       if (error.name === "AbortError") {
         toast.info("Chat stopped by user.");
       } else {
@@ -294,6 +296,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       setSearchStatus(""); // Clear search status
       abortControllerRef.current = null; // Clear the controller
     }
+    return sent;
   }, [options, activeChatId, messages, conversations, addMessage, createNewChat, setActiveChat, startImageGeneration, completeImageGeneration, startConversationCreation, completeConversationCreation]);
 
   const handleStopMessage = useCallback(() => {

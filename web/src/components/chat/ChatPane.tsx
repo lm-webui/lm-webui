@@ -101,10 +101,10 @@ export default function ChatPane({
       isCodingMode={isCodingMode}
       setIsCodingMode={setIsCodingMode}
       selectedModel={selectedModel || ""}
-      selectedLLM={selectedLLM}
-      onLLMChange={onLLMChange}
-      onModelChange={onModelChange}
-      availableModels={availableModels}
+      selectedLLM={selectedLLM || ""}
+      {...(onLLMChange ? { onLLMChange } : {})}
+      {...(onModelChange ? { onModelChange } : {})}
+      {...(availableModels ? { availableModels } : {})}
       initialValue={promptTemplate}
     />
   );
@@ -150,13 +150,13 @@ export default function ChatPane({
               <LegacyMessage
                 message={{
                   id: m.id,
-                  role: m.role as any,
+                  role: m.role as "user" | "assistant",
                   content: m.content,
                   timestamp: new Date(m.created_at),
                   isLoading: !!m.isLoading,
-                  type: m.type,
-                  generatedImageUrl: m.generatedImageUrl,
-                  model: m.model,
+                  ...(m.type ? { type: m.type } : {}),
+                  ...(m.generatedImageUrl ? { generatedImageUrl: m.generatedImageUrl } : {}),
+                  ...(m.model ? { model: m.model } : {}),
                 }}
               />
             </div>

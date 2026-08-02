@@ -10,6 +10,7 @@ export const mapToMessage = (msg: any): ChatMessage => {
     isLoading: msg.isLoading,
     generatedImageUrl: msg.generatedImageUrl || msg.metadata?.generatedImageUrl,
     type: msg.type,
+    model: msg.model,
   };
 };
 

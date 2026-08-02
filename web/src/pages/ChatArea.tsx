@@ -170,8 +170,8 @@ export default function ChatArea({
     }
 
     try {
-      await chatCreationHandleSendMessage(content, files);
-      return true;
+      const ok = await chatCreationHandleSendMessage(content, files);
+      return ok;
     } catch (e) {
       console.error("Message send failed:", e);
       toast.error("Message failed to send. Check your model connection.");

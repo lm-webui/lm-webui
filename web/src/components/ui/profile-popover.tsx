@@ -24,7 +24,7 @@ export function ProfilePopover() {
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="w-full flex items-center gap-2.5 rounded-3xl shadow-inner hover:shadow-inner bg-neutral-200 p-1 hover:bg-zinc-100 focus-visible:outline-none dark:bg-zinc-800/60 dark:hover:bg-zinc-700/60 transition-colors">
-          <div className="grid h-6 w-6 md:h-7 md:w-7 ml-1 mr-0.5 place-items-center rounded-full bg-zinc-900/50 shadow-inner text-xs font-bold text-white dark:bg-white/90 dark:text-zinc-900">
+          <div className="grid h-6 w-6 md:h-7 md:w-7 ml-1.5 mr-0.5 place-items-center rounded-full bg-zinc-900/50 shadow-inner text-xs font-bold text-white dark:bg-white/90 dark:text-zinc-900">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
           <div className="min-w-0 flex-1 text-left">

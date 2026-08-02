@@ -23,10 +23,10 @@ export function MessageBubble({
     // Short messages
     if (contentLength < 50) return "rounded-3xl";
 
-    // Medium messages 
+    // Medium messages
     if (contentLength < 200) return "rounded-3xl";
 
-    // Long messages 
+    // Long messages
     return "rounded-3xl";
   };
 
@@ -39,8 +39,8 @@ export function MessageBubble({
           ? "bg-neutral-400/70 dark:bg-neutral-700/70 text-chat-user-foreground ml-20 pr-1 md:pr-4 mt-2"
           : "bg-neutral-200/20 dark:bg-neutral-900/20 text-chat-assistant-foreground border border-border/10",
         isMobile
-          ? "max-w-[378px] p-3 text-sm"
-          : "max-w-[700px] p-4 text-base",
+          ? "max-w-[378px] p-3 pr-3 text-md"
+          : "max-w-[698px] p-4 text-md",
         "hover:shadow-none",
         className
       )}
