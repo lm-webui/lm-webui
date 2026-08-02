@@ -73,6 +73,13 @@ except Exception:
     echo "   Data at $LMWEBUI_HOME/data/ will be preserved."
     echo ""
 
+    # Stop the app first so files aren't locked during replace/build
+    "$0" stop || true
+    sleep 1
+
+    # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
+    sudo -v 2>/dev/null || true
+
     # Fix ownership first so cp/rm can write
     OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
     if [ "$OWNER" = "root" ]; then
@@ -109,13 +116,19 @@ except Exception:
       fi
     fi
 
-    # Rebuild frontend (clean install + build to pick up new deps)
-    if command -v npm &>/dev/null && [ -f "$LMWEBUI_HOME/web/package.json" ]; then
-      cd "$LMWEBUI_HOME/web" && rm -rf node_modules && npm install --quiet && npm run build
-      echo "   Frontend rebuilt."
+    # Rebuild frontend (build to pick up new deps) — fail loudly, never silent skip
+    if command -v npm >/dev/null 2>&1 && [ -f "$LMWEBUI_HOME/web/package.json" ]; then
+      cd "$LMWEBUI_HOME/web" \
+        && npm install --quiet \
+        && npm run build \
+        && echo "   Frontend rebuilt." \
+        || { echo "❌ Frontend build failed — update incomplete."; exit 1; }
+    else
+      echo "❌ npm not found or web/package.json missing — frontend NOT rebuilt."
+      exit 1
     fi
 
-    "$0" restart || true
+    "$0" start || true
     echo ""
     echo "✅ LM-WebUI updated successfully."
     echo "   Data preserved at $LMWEBUI_HOME/data/"
