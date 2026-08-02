@@ -18,20 +18,20 @@ export function ProfilePopover() {
     setOpen(false);
   };
 
-  const menuItemClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800";
+  const menuItemClass = "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="w-full flex items-center gap-2.5 rounded-3xl shadow-inner hover:shadow-inner bg-neutral-200 p-1.5 hover:bg-zinc-100 focus-visible:outline-none dark:bg-zinc-800/60 dark:hover:bg-zinc-700/60 transition-colors">
-          <div className="grid h-8 w-8 ml-1.5 mr-0.5 place-items-center rounded-full bg-zinc-900/50 shadow-inner text-xs font-bold text-white dark:bg-white/90 dark:text-zinc-900">
+        <button className="w-full flex items-center gap-2.5 rounded-3xl shadow-inner hover:shadow-inner bg-neutral-200 p-1 hover:bg-zinc-100 focus-visible:outline-none dark:bg-zinc-800/60 dark:hover:bg-zinc-700/60 transition-colors">
+          <div className="grid h-6 w-6 md:h-7 md:w-7 ml-1 mr-0.5 place-items-center rounded-full bg-zinc-900/50 shadow-inner text-xs font-bold text-white dark:bg-white/90 dark:text-zinc-900">
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate text-sm font-medium text-neutral-600 dark:text-neutral-300">
+            <div className="truncate text-[10px] md:text-sm font-medium text-neutral-600 dark:text-neutral-300">
               {user?.email?.split("@")[0] || "User"}
             </div>
-            <div className="truncate text-xs capitalize text-zinc-500 dark:text-zinc-400">
+            <div className="truncate text-[7px] md:text-[8px] capitalize text-zinc-500/50 dark:text-neutral-400/50">
               {user?.role || "user"} workspace
             </div>
           </div>

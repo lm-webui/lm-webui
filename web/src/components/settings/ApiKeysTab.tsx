@@ -7,7 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { notifyModelsChanged } from "@/features/models/modelEvents";
 import { Zap, Database, Wifi, WifiOff, RefreshCw, Gem, Key, Save, Trash2, Bot, Globe, Monitor } from "lucide-react";
+import { RiOpenaiFill } from "react-icons/ri"
 
 export function ApiKeysTab() {
   const [selectedProvider, setSelectedProvider] = useState("openai");
@@ -19,12 +21,12 @@ export function ApiKeysTab() {
 
   // Provider configuration - using backend provider names for consistency
   const providers = [
-    { id: "openai", name: "OpenAI", icon: Zap, type: "cloud", placeholder: "sk-..." },
+    { id: "openai", name: "OpenAI", icon: RiOpenaiFill, type: "cloud", placeholder: "sk-..." },
     { id: "google", name: "Google (Gemini)", icon: Gem, type: "cloud", placeholder: "AIza..." },
     { id: "anthropic", name: "Anthropic (Claude)", icon: Bot, type: "cloud", placeholder: "sk-ant-..." },
     { id: "xai", name: "Grok (xAI)", icon: Bot, type: "cloud", placeholder: "xai-..." },
     { id: "deepseek", name: "DeepSeek", icon: Bot, type: "cloud", placeholder: "sk-..." },
-    { id: "vllm", name: "vLLM", icon: Zap, type: "local", placeholder: "http://localhost:7070" },
+    { id: "vllm", name: "vLLM", icon: Zap, type: "local", placeholder: "http://localhost:8000" },
     { id: "lmstudio", name: "LM Studio", icon: Monitor, type: "local", placeholder: "http://localhost:1234" },
     { id: "ollama", name: "Ollama", icon: Database, type: "local", placeholder: "http://localhost:11434" },
   ];
@@ -84,12 +86,12 @@ export function ApiKeysTab() {
   const validateInput = (providerId: string, input: string): { isValid: boolean; error?: string } => {
     const provider = providers.find(p => p.id === providerId);
     if (!provider) return { isValid: false, error: "Unknown provider" };
-    
+
     const trimmedInput = input.trim();
     if (!trimmedInput) {
       return { isValid: false, error: `${provider.type === "local" ? "Server URL" : "API key"} is required` };
     }
-    
+
     // Local provider URL validation
     if (provider.type === "local") {
       // Basic URL validation
@@ -100,7 +102,7 @@ export function ApiKeysTab() {
         }
         // Check for localhost or private IP (basic security)
         const hostname = url.hostname;
-        if (!hostname.match(/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/) && 
+        if (!hostname.match(/^(localhost|127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/) &&
             !hostname.match(/^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/)) {
           return { isValid: false, error: "Please enter a valid server URL" };
         }
@@ -109,7 +111,7 @@ export function ApiKeysTab() {
         return { isValid: false, error: "Please enter a valid URL (e.g., http://localhost:1234)" };
       }
     }
-    
+
     // Cloud provider API key validation
     if (providerId === "openai" && !trimmedInput.startsWith("sk-")) {
       return { isValid: false, error: "OpenAI API keys should start with 'sk-'" };
@@ -132,14 +134,15 @@ export function ApiKeysTab() {
     try {
       await addApiKey(selectedProvider, apiKey);
       setStoredApiKeys(prev => ({ ...prev, [selectedProvider]: true }));
-      
+
       // Save last used URL for local providers
       if (currentProvider?.type === "local") {
         saveLastUsedUrl(selectedProvider, apiKey);
       }
-      
+
       setApiKey(""); // Clear input
       setConnectionStatus("connected");
+      notifyModelsChanged();
       toast.success(`${currentProvider?.name} ${currentProvider?.type === "local" ? "server URL" : "API key"} saved successfully!`);
     } catch (error: any) {
       console.error(`Failed to save ${selectedProvider} API key:`, error);
@@ -162,6 +165,7 @@ export function ApiKeysTab() {
       });
       setConnectionStatus("disconnected");
       setApiKey("");
+      notifyModelsChanged();
       toast.success(`${providers.find(p => p.id === selectedProvider)?.name} API key deleted successfully!`);
     } catch (error: any) {
       console.error(`Failed to delete ${selectedProvider} API key:`, error);
@@ -208,14 +212,14 @@ export function ApiKeysTab() {
 
       // Use the new test endpoint
       const testResult = await testApiKey(selectedProvider);
-      
+
       if (testResult.valid) {
         setConnectionStatus("connected");
         toast.success(`Successfully connected to ${currentProvider?.name}! ${testResult.message}`);
       } else {
         setConnectionStatus("disconnected");
         toast.error(`Connection failed: ${testResult.message}`);
-        
+
         // If we just saved it for testing and it failed, delete it
         if (!isConfigured && apiKey) {
           try {
@@ -232,9 +236,9 @@ export function ApiKeysTab() {
       }
     } catch (error: any) {
       setConnectionStatus("disconnected");
-      
+
       // More specific error messages
-      if (error.message?.includes("Invalid") || error.message?.includes("API key") || error.message?.includes("authentication") || 
+      if (error.message?.includes("Invalid") || error.message?.includes("API key") || error.message?.includes("authentication") ||
           error.message?.includes("401") || error.message?.includes("403")) {
         toast.error(`Invalid ${currentProvider?.type === "local" ? "server URL or connection failed" : "API key"} for ${currentProvider?.name}`);
       } else if (error.message?.includes("network") || error.message?.includes("timeout") || error.message?.includes("fetch")) {
@@ -246,7 +250,7 @@ export function ApiKeysTab() {
       } else {
         toast.error(`Failed to connect to ${currentProvider?.name}: ${error.message || "Unknown error"}`);
       }
-      
+
       // If we just saved it for testing and it failed, delete it
       if (!isConfigured && apiKey) {
         try {
@@ -398,20 +402,16 @@ export function ApiKeysTab() {
                       onChange={(e) => setApiKey(e.target.value)}
                       className="text-sm"
                     />
-                    <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    <div className="text-xs text-zinc-500/70 dark:text-zinc-400/70">
                       {currentProvider?.type === "local"
-                        ? "Enter the server URL (e.g., http://localhost:1234)"
+                        ? "Enter the server URL (e.g., http://localhost:11434, http://{server_ip}:11434)"
                         : "Your API key is stored securely and encrypted."}
                     </div>
-                    {selectedProvider === "ollama" && (
-                      <div className="text-xs text-amber-600 dark:text-amber-400 mt-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-                        Running Ollama locally? Go to <strong>Runtime Manager → Ollama tab</strong> to manage your local instance.
-                      </div>
-                    )}
+                    {selectedProvider === "ollama"}
                   </div>
                 ) : (
                   <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {currentProvider?.type === "local" 
+                    {currentProvider?.type === "local"
                       ? "Server URL is configured."
                       : "API key is configured and stored securely."}
                   </div>

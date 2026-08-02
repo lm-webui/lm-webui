@@ -14,7 +14,10 @@ import {
   Search,
   HardDrive,
   Globe,
+  RefreshCw,
 } from "lucide-react";
+import { SiOllama } from "react-icons/si";
+import { notifyModelsChanged } from "@/features/models/modelEvents";
 
 interface ModelSelectorProps {
   selectedLLM: string;
@@ -36,7 +39,7 @@ const providerConfig: Record<
 > = {
   openai: { name: "OpenAI", icon: Globe, color: "text-green-500" },
   google: { name: "Google Gemini", icon: Globe, color: "text-blue-500" },
-  ollama: { name: "Ollama", icon: Cpu, color: "text-cyan-500" },
+  ollama: { name: "Ollama", icon: SiOllama, color: "text-cyan-500" },
   gguf: { name: "GGUF", icon: HardDrive, color: "text-gray-500" },
   mlx: { name: "MLX", icon: Cpu, color: "text-purple-500" },
 };
@@ -143,15 +146,26 @@ export function ModelSelector({
         align="start"
       >
         <div className="p-4 space-y-4">
-          {/* Search — no outline, minimal */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
-            <input
-              placeholder="Search models..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-3 py-2 text-sm bg-transparent border-b border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-400 transition-colors"
-            />
+          {/* Search + refresh — no outline, minimal */}
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-400" />
+              <input
+                placeholder="Search models..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm bg-transparent border-b border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-none focus:border-zinc-500 dark:focus:border-zinc-400 transition-colors"
+              />
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0 rounded-full text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-200"
+              onClick={notifyModelsChanged}
+              title="Refresh models"
+            >
+              <RefreshCw className="h-3.5 w-3.5" />
+            </Button>
           </div>
 
           {/* Models grouped by provider */}

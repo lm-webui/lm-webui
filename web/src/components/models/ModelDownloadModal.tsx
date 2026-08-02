@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Button } from "@/components/ui/button";
 import { Loader2, Download, Search, X, Check, HardDrive, Cpu } from "lucide-react";
 import { toast } from "sonner";
+import { notifyModelsChanged } from "@/features/models/modelEvents";
 
 interface Props {
   open: boolean;
@@ -81,6 +82,7 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
             else toast.error(st.error || "Download failed");
             setDownloading(false);
             onComplete();
+            notifyModelsChanged();
             onOpenChange(false);
           }
         }, 800);
@@ -103,6 +105,7 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
         await new Promise(r => setTimeout(r, 500));
         setDownloading(false);
         onComplete();
+        notifyModelsChanged();
         onOpenChange(false);
       }
     } catch (e: any) {

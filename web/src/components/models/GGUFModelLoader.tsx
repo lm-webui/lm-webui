@@ -10,6 +10,7 @@ import {
   FolderOpen, AlertTriangle, CheckCircle, XCircle, Info, ChevronDown, ChevronUp 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { notifyModelsChanged } from "@/features/models/modelEvents";
 import axios from "axios";
 
 interface GGUFModel {
@@ -214,6 +215,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
           description: `Downloaded ${taskInfo.filename} successfully`,
         });
         loadLocalModels();
+        notifyModelsChanged();
         // Remove completed task from state after a delay
         setTimeout(() => {
           setDownloadTasks(prev => {

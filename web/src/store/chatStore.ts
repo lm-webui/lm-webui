@@ -288,12 +288,9 @@ export const useChatStore = create<ChatStore>()(
                     conversations: {
                       ...otherConvs,
                       [backendConversationId]: {
+                        ...oldConv,
                         id: backendConversationId,
-                        title: oldConv.title,
-                        messages: oldConv.messages,
-                        created_at: oldConv.created_at,
                         isBackendConfirmed: true,
-                        metadata: oldConv.metadata,
                       },
                     },
                   };

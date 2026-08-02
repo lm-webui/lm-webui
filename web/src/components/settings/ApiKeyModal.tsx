@@ -9,6 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Zap, Database, Brain, Code, Cpu, Wifi, WifiOff, RefreshCw, Sparkles, Gem, Key, Save, Trash2 } from "lucide-react";
+import { RiOpenaiFill } from "react-icons/ri";
+import { SiOllama } from "react-icons/si";
 
 interface ApiKeyModalProps {
   isOpen: boolean;
@@ -192,7 +194,7 @@ export function ModelsApiKeysContent({
                   <SelectContent>
                   <SelectItem value="openai">
                     <div className="flex items-center gap-2">
-                      <Zap className="h-4 w-4" />
+                      <RiOpenaiFill className="h-4 w-4" />
                       OpenAI
                     </div>
                   </SelectItem>
@@ -222,7 +224,7 @@ export function ModelsApiKeysContent({
                   </SelectItem>
                   <SelectItem value="ollama">
                     <div className="flex items-center gap-2">
-                      <Database className="h-4 w-4" />
+                      <SiOllama className="h-4 w-4" />
                       Ollama (Local)
                     </div>
                   </SelectItem>
@@ -495,8 +497,8 @@ export function ModelsApiKeysContent({
     }
 
 // Original modal component that uses the reusable content
-export default function ApiKeyModal({ 
-  isOpen, 
+export default function ApiKeyModal({
+  isOpen,
   onClose,
   selectedLLM = "openai",
   onLLMChange = () => {},
@@ -512,7 +514,7 @@ export default function ApiKeyModal({
             AI Models & API Keys
           </DialogTitle>
         </DialogHeader>
-        
+
         <ModelsApiKeysContent
           selectedLLM={selectedLLM}
           onLLMChange={onLLMChange}

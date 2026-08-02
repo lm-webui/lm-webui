@@ -167,7 +167,7 @@ function ConversationItem({
                 )}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="rounded-xl min-w-[180px]" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuContent align="end" className="min-w-[180px]" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem onClick={() => setIsEditing(true)}>
                 <Edit2 className="h-3.5 w-3.5 mr-2" /> Rename
               </DropdownMenuItem>
@@ -180,7 +180,7 @@ function ConversationItem({
                 <DropdownMenuSubTrigger className="cursor-pointer">
                   <FolderKanban className="h-3.5 w-3.5 mr-2" /> Add to Project
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="rounded-xl">
+                <DropdownMenuSubContent>
                   {projects?.map((p: any) => (
                     <DropdownMenuItem key={p.id} onClick={() => onAssignProject?.(conversation.id, p.id)}>
                       {p.name}
