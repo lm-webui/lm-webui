@@ -28,10 +28,10 @@ export function ProfilePopover() {
             {user?.email?.charAt(0).toUpperCase() || "U"}
           </div>
           <div className="min-w-0 flex-1 text-left">
-            <div className="truncate text-[10px] md:text-sm font-medium text-neutral-600 dark:text-neutral-300">
+            <div className="truncate text-[11px] md:text-sm font-medium text-neutral-600 dark:text-neutral-300">
               {user?.email?.split("@")[0] || "User"}
             </div>
-            <div className="truncate text-[7px] md:text-[8px] capitalize text-zinc-500/50 dark:text-neutral-400/50">
+            <div className="truncate text-[8px] capitalize text-zinc-500/50 dark:text-neutral-400/50">
               {user?.role || "user"} workspace
             </div>
           </div>
