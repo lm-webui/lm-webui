@@ -14,6 +14,7 @@ import {
   FolderKanban,
   Loader2,
   MoreHorizontal,
+  FileText,
   Server,
   Settings as SettingsIcon,
 } from "lucide-react";
@@ -38,6 +39,7 @@ import { useChatStore, useIsLoadingMessages } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
 import { mapToConversation } from "@/utils/chatUtils";
 import { selectConversations } from "@/store/chatStore";
+import { createArtifactFromConversation } from "@/features/artifacts/artifactService";
 
 interface SidebarProps {
   open: boolean;
@@ -63,6 +65,7 @@ function ConversationItem({
   onAssignProject,
   onCreateProject,
   projectName,
+  onCreateDocument,
 }: {
   conversation: ChatConversation;
   isSelected: boolean;
@@ -75,6 +78,7 @@ function ConversationItem({
   onCreateProject?: (conversationId: string, name: string) => void;
   projectName?: string;
   onClose?: () => void;
+  onCreateDocument?: (conversationId: string, title: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(conversation.title);
@@ -166,6 +170,10 @@ function ConversationItem({
             <DropdownMenuContent align="end" className="rounded-xl min-w-[180px]" onClick={(e) => e.stopPropagation()}>
               <DropdownMenuItem onClick={() => setIsEditing(true)}>
                 <Edit2 className="h-3.5 w-3.5 mr-2" /> Rename
+              </DropdownMenuItem>
+
+              <DropdownMenuItem onClick={() => onCreateDocument?.(conversation.id, conversation.title)}>
+                <FileText className="h-3.5 w-3.5 mr-2" /> Create document
               </DropdownMenuItem>
 
               <DropdownMenuSub>
@@ -298,6 +306,13 @@ export default function Sidebar({
       if (res && !res.error) toast.success("Conversation added to project");
       else toast.error("Failed to add to project");
     } catch { toast.error("Failed to add to project"); }
+  };
+
+  const handleCreateDocument = async (conversationId: string, title: string) => {
+    try {
+      const a = await createArtifactFromConversation(conversationId, title);
+      useChatStore.getState().setArtifact(a);
+    } catch { toast.error("Failed to create document"); }
   };
 
   const handleCreateProject = async (conversationId: string, name: string) => {
@@ -510,6 +525,7 @@ export default function Sidebar({
                     onCreateProject={handleCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
                     onClose={onClose}
+                    onCreateDocument={handleCreateDocument}
                   />
                 ))}
               </div>
@@ -539,6 +555,7 @@ export default function Sidebar({
                     onCreateProject={handleCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
                     onClose={onClose}
+                    onCreateDocument={handleCreateDocument}
                 />
               ))
             )}

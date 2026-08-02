@@ -41,6 +41,10 @@ interface ChatStore {
   // Background processing
   processingImages: Set<string>;
 
+  // Shared artifact (created from sidebar "..." menu, displayed in ArtifactDrawer)
+  artifact: any | null;
+  setArtifact: (a: any | null) => void;
+
   // Actions
   setActiveChat: (chatId: string) => void;
   createNewChat: () => string;
@@ -98,6 +102,8 @@ export const useChatStore = create<ChatStore>()(
       // Error handling
       lastError: null,
       retryableOperations: new Map(),
+      artifact: null,
+      setArtifact: (a) => set({ artifact: a }),
 
       // Background processing
       processingImages: new Set(),

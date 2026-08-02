@@ -19,7 +19,7 @@ import { ModelSelector } from "./models/ModelSelector";
 import { generateImage } from "@/utils/api";
 
 interface ComposerProps {
-  onSend: (text: string, files: any[]) => void;
+  onSend: (text: string, files: any[]) => Promise<boolean>;
   busy: boolean;
   conversationId?: string;
   isSearchEnabled: boolean;
@@ -104,15 +104,18 @@ export default function Composer({
   const handleSend = async () => {
     if (!value.trim() || busy) return;
 
+    let ok = false;
     if (isImageMode) {
-      onSend(value, [{ type: "generating_image", prompt: value, provider: selectedLLM, model: selectedModel }]);
-      setValue("");
-      return;
+      ok = await onSend(value, [{ type: "generating_image", prompt: value, provider: selectedLLM, model: selectedModel }]);
+    } else {
+      ok = await onSend(value, uploadedFiles);
     }
 
-    onSend(value, uploadedFiles);
-    setValue("");
-    setUploadedFiles([]);
+    // Only clear the prompt on success — on failure, restore it so the user can retry
+    if (ok) {
+      setValue("");
+      setUploadedFiles([]);
+    }
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {

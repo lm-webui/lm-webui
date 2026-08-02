@@ -8,13 +8,10 @@ import { Welcome } from "../Welcome";
 import { useChatStore } from "@/store/chatStore";
 import { FolderKanban } from "lucide-react";
 import { authFetch } from "@/utils/api";
-import { Button } from "@/components/ui/button";
-import { createArtifactFromConversation } from "@/features/artifacts/artifactService";
-import ArtifactDrawer from "@/features/artifacts/ArtifactDrawer";
 
 interface ChatPaneProps {
   conversation: ChatConversation | null;
-  onSend: (content: string, files?: any[]) => Promise<void>;
+  onSend: (content: string, files?: any[]) => Promise<boolean>;
   isLoading: boolean;
   searchStatus?: string;
   isThinking: boolean;
@@ -55,7 +52,6 @@ export default function ChatPane({
 }: ChatPaneProps) {
   const [promptTemplate, setPromptTemplate] = React.useState("");
   const [projectName, setProjectName] = useState("");
-  const [artifact, setArtifact] = useState<any>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
@@ -82,17 +78,7 @@ export default function ChatPane({
   };
   const handleSend = (text: string, files?: any[]) => {
     setPromptTemplate("");
-    onSend(text, files);
-  };
-
-  const handleCreateArtifact = async () => {
-    if (!conversation?.id) return;
-    try {
-      const created = await createArtifactFromConversation(conversation.id, conversation.title || "Conversation document");
-      setArtifact(created);
-    } catch (error: any) {
-      console.error("Artifact creation failed:", error);
-    }
+    return onSend(text, files);
   };
 
   const scrollToBottom = () => {
@@ -150,14 +136,13 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col relative bg-neutral-200/70 dark:bg-neutral-900/50">
-      {artifact && <ArtifactDrawer artifact={artifact} onClose={() => setArtifact(null)} />}
       <div className="flex-1 space-y-6 overflow-y-auto px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="mb-8 hidden md:block">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-dark">
               {conversation.title}
             </h1>
-            <div className="mt-1 flex items-center justify-between gap-3"><p className="text-sm text-zinc-500">{conversation.messages.length} messages · Updated recently</p><Button size="sm" variant="outline" onClick={handleCreateArtifact}>Create document</Button></div>
+            <p className="mt-1 text-sm text-zinc-500">{conversation.messages.length} messages · Updated recently</p>
           </div>
 
           {conversation.messages.map((m) => (

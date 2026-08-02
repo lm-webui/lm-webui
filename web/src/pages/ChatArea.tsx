@@ -18,6 +18,7 @@ import ImageGallery from "@/features/images/ImageGallery";
 import ProjectsWorkspace from "@/features/projects/ProjectsWorkspace";
 import RuntimeManager from "../components/models/RuntimeManager";
 import { Settings } from "../components/settings/Settings";
+import ArtifactDrawer from "@/features/artifacts/ArtifactDrawer";
 
 export default function ChatArea({
   isAuthenticated,
@@ -49,6 +50,7 @@ export default function ChatArea({
 
   const activeConversation = activeChatId ? conversations[activeChatId] : null;
   const modernConversation = useMemo(() => activeConversation ? mapToConversation(activeConversation) : null, [activeConversation, messages]);
+  const artifact = useChatStore((s) => s.artifact);
 
   const isLoadingMessages = useIsLoadingMessages();
 
@@ -103,8 +105,8 @@ export default function ChatArea({
     setIsImageMode
   });
 
-  const handleSendMessage = async (content: string, files: any[] = []) => {
-    if (!content.trim() && files.length === 0) return;
+  const handleSendMessage = async (content: string, files: any[] = []): Promise<boolean> => {
+    if (!content.trim() && files.length === 0) return false;
 
     // Auto-detect intent (optional: could auto-enable modes)
     const intent = detectMessageIntent(content);
@@ -162,11 +164,19 @@ export default function ChatArea({
             messages: conv.messages.filter((m: any) => m.id !== skeletonId),
           });
         }
+        return false;
       }
-      return;
+      return true;
     }
 
-    await chatCreationHandleSendMessage(content, files);
+    try {
+      await chatCreationHandleSendMessage(content, files);
+      return true;
+    } catch (e) {
+      console.error("Message send failed:", e);
+      toast.error("Message failed to send. Check your model connection.");
+      return false;
+    }
   };
 
   const handleNewChat = async () => {
@@ -207,6 +217,7 @@ export default function ChatArea({
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100/50 dark:bg-zinc-950">
+        {artifact && <ArtifactDrawer artifact={artifact} onClose={() => useChatStore.getState().setArtifact(null)} />}
         <Header
           createNewChat={() => { handleNewChat(); setActiveView("chat"); }}
           sidebarCollapsed={sidebarCollapsed}
