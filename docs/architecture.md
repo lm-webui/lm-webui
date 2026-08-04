@@ -28,8 +28,7 @@ web/src/
 │   ├── models/     # Model fetching + management
 │   └── sessions/   # Session management
 ├── store/          # Zustand stores (chat, reasoning)
-├── services/       # WebSocket client
-└── utils/          # API client, model providers, storage
+└── utils/          # API + WebSocket client, model providers, storage
 ```
 
 ## Backend

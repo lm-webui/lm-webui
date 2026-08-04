@@ -42,7 +42,7 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # 3. Frontend setup
-cd ../frontend
+cd ../web
 npm install
 
 # 4. Start services
@@ -50,7 +50,7 @@ npm install
 cd backend && uvicorn app.main:app --host 0.0.0.0 --port 7070 --reload
 
 # Terminal 2: Frontend
-cd frontend && npm run dev
+cd web && npm run dev
 
 # Access at http://localhost:5177
 ```
@@ -95,9 +95,11 @@ If you want to use cloud-based AI models:
 ### 4. Try Advanced Features
 
 - **Upload files**: Drag and drop images or documents
-- **Enable streaming**: Toggle "Deep Thinking" mode for step-by-step reasoning
+- **Search mode**: Toggle web search from the composer's tools menu
+- **Image mode**: Switch the composer to image generation
+- **Coding mode**: Enable a programming-oriented assistant for code prompts
 - **Use RAG**: Enable "Use Context" for retrieval-augmented responses
-- **Download GGUF models**: Go to Models section to download local models
+- **Download GGUF models**: Go to the Models section to download local models
 
 ## Basic Configuration
 
@@ -173,12 +175,9 @@ llm:
    - **Documents**: PDF, DOCX (text content will be extracted)
 3. Files are automatically added to conversation context
 
-### Enable Real-time Streaming
+### Streaming and cancellation
 
-1. Toggle "Deep Thinking" mode in chat settings
-2. Send a message
-3. Watch the AI think step-by-step
-4. You can stop generation at any time
+Responses stream into the chat as they're generated. While a response is being generated you can stop it from the composer. You can also toggle Search, Image, and Coding modes from the composer's tools menu to change how a message is handled.
 
 ## Troubleshooting Common Issues
 

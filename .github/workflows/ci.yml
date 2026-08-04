@@ -183,28 +183,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image for runtime test
-        run: docker build -t $IMAGE_NAME:test .
-
-      - name: Run container and verify health
-        run: |
-          docker run -d -p 7070:7070 --name app_test $IMAGE_NAME:test
-          sleep 15  # Give container time to start
-          # Test health endpoints
-          echo "Testing health endpoint..."
-          curl --fail --retry 5 --retry-delay 5 --retry-max-time 30 http://localhost:7070/api/health
-          echo "Container health verification passed"
       - name: Run Docker Compose integration test
         run: |
-          docker compose up -d
+          docker compose up -d --build
           sleep 30
           docker compose ps
           # Debug logs if startup fails
           docker compose logs lm-webui
           # Test through docker compose
           echo "Testing docker compose health..."
-          curl --fail http://localhost:7070/api/health
+          curl --fail --retry 5 --retry-delay 5 --retry-max-time 30 http://localhost:7070/api/health
+          echo "Container health verification passed"
       - name: Cleanup
         if: always()
         run: |
-          docker rm -f app_test
+          docker compose down -v

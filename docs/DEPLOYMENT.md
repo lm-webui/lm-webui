@@ -1,39 +1,57 @@
 ---
 title: Deployment
-description: Deploy LM-WebUI as one application container with external runtimes.
+description: Deploy LM-WebUI with the native service manager, or as a Docker container.
 section: Operate
 order: 4
 ---
 
 # Deployment
 
-LM-WebUI uses one application container. Hardware-specific runtimes run on the host or as separate services and are connected through the admin Runtime Manager.
+LM-WebUI runs as a native application managed by a service, with hardware-specific runtimes (MLX, ComfyUI) connected through the admin Runtime Manager. A Docker image is also available as an alternative for containerized environments.
 
 ```text
-LM-WebUI container → runtime connector → host runtime
+LM-WebUI service → runtime connector → host runtime
 ```
 
-## Recommended Docker deployment
+## Recommended native installation
 
 Requirements:
 
-- Docker
-- Docker Compose v2
-- Python 3.10+ for the optional host CLI
+- Python 3.10+
+- Node.js (for building the frontend)
+- git
 
 Run the installer:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh -o install.sh
-bash install.sh
+curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
 ```
 
-Or run manually:
+This installs the application to `~/.lmwebui/` (configurable via `LMWEBUI_HOME`):
+
+- Application code under `app/` and `web/`
+- Data under `data/`
+- Models under `models/`
+- Logs under `logs/`
+
+It registers a `systemd` service (Linux) or `launchd` service (macOS), installs an `lm-webui` CLI (`start|stop|restart|status|logs|update`), and starts the app on `http://localhost:7070`.
+
+Check readiness with:
+
+```bash
+lm-webui status
+curl http://localhost:7070/api/health
+```
+
+The app serves both the frontend and API. It does not install host drivers or host runtimes.
+
+## Docker (alternative)
+
+For containerized deployments, a Docker image bundles the application in one container:
 
 ```bash
 git clone https://github.com/lm-webui/lm-webui.git
 cd lm-webui
-mkdir -p .lmwebui/models .lmwebui/secrets
 docker compose up -d --build
 ```
 
@@ -48,20 +66,20 @@ The container serves both the frontend and API. It does not install host drivers
 
 ## Persistence
 
-The default Compose deployment persists:
+Native install keeps data on the host under `~/.lmwebui/`. Docker uses volumes mounted into the container:
 
-| Data | Location |
-| --- | --- |
-| SQLite/application data | Docker volume `app_data` → `/backend/data` |
-| Generated media/uploads | Docker volume `app_media` → `/backend/media` |
-| Local models | `./.lmwebui/models` → `/backend/models` |
-| Secrets | `./.lmwebui/secrets` → `/backend/.secrets` |
+| Data | Native | Docker |
+| --- | --- | --- |
+| SQLite/application data | `~/.lmwebui/data` | volume `app_data` → `/backend/data` |
+| Generated media/uploads | `~/.lmwebui/data` | volume `app_media` → `/backend/media` |
+| Local models | `~/.lmwebui/models` | `./.lmwebui/models` → `/backend/models` |
+| Secrets | `~/.lmwebui/.secrets` | `./.lmwebui/secrets` → `/backend/.secrets` |
 
-Back up the Docker volumes and `./.lmwebui/models` before upgrades. Never commit `.env`, `.secrets`, API keys, databases, or model files.
+Back up the data and models before upgrades. Never commit `.env`, `.secrets`, API keys, databases, or model files.
 
 ## GGUF engine tuning
 
-GGUF (llama.cpp) is bundled in-container with hardware-aware defaults. Override via environment variables on the `lm-webui` service in `docker-compose.yml`:
+GGUF (llama.cpp) is bundled with hardware-aware defaults. Override via environment variables on the `lm-webui` service in `docker-compose.yml` (Docker) or in the native service environment:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -99,8 +117,8 @@ The Runtime Manager auto-detects running external services via HTTP probes on `l
 
 For a small office or SMB deployment:
 
-1. Run LM-WebUI on a trusted internal server with `docker compose up`.
-2. GGUF (llama.cpp) inference is available immediately — bundled in-container with hardware-accelerated defaults.
+1. Run LM-WebUI on a trusted internal server (native install or Docker).
+2. GGUF (llama.cpp) inference is available immediately — bundled with hardware-accelerated defaults.
 3. For additional runtimes:
    - Install MLX on a macOS workstation, or Ollama/vLLM/ComfyUI on any host machine.
    - The Runtime Manager auto-detects running services via `localhost` (native) or `host.docker.internal` (Docker) probes.
@@ -108,18 +126,24 @@ For a small office or SMB deployment:
 4. Configure API providers (OpenAI, Anthropic, Google, Ollama, vLLM) in Settings → API Providers.
 5. Create users through the admin user-management menu.
 
-> **Runtime Manager scope**: Manages GGUF (in-container engine config), MLX (external server on Apple Silicon), and ComfyUI (external server for image gen). Ollama and vLLM are configured as API providers, not managed runtimes.
-6. Monitor metadata-only usage analytics.
+> **Runtime Manager scope**: Manages GGUF (engine config), MLX (external server on Apple Silicon), and ComfyUI (external server for image gen). Ollama and vLLM are configured as API providers, not managed runtimes.
 
 Normal users cannot install runtimes, change endpoints, or control host services.
 
-## Native accelerated deployment
-
-Use native installation when maximum host acceleration is important, especially on Apple Silicon. Docker Desktop does not provide native Metal acceleration to Linux containers. MLX should therefore run natively on the host and be exposed through a supported local service when integration is required.
-
-GPU drivers and kernel components must be installed through the host operating system. LM-WebUI does not install them automatically.
-
 ## Operations
+
+Native install:
+
+```bash
+lm-webui start
+lm-webui stop
+lm-webui restart
+lm-webui status
+lm-webui logs
+lm-webui update
+```
+
+Docker:
 
 ```bash
 docker compose logs -f
@@ -128,6 +152,6 @@ docker compose down
 docker compose up -d --build
 ```
 
-Do not use the old GPU-specific Compose files as the default deployment path. They are retained only as advanced/experimental configurations while the external-runtime path is the supported installation model.
+GPU drivers and kernel components must be installed through the host operating system. LM-WebUI does not install them automatically.
 
 See [CLI reference](./cli.md), [Architecture](./architecture.md), and [Security](../SECURITY.md).

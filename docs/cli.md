@@ -1,10 +1,28 @@
 # LM-WebUI CLI
 
-LM-WebUI uses one application container. Hardware-specific runtimes run on the host or as separate services. The host CLI installs and checks those runtimes without giving the application container host-level privileges.
+LM-WebUI ships two command-line tools:
 
-## Install the host CLI
+- **`lm-webui`** — the service manager for a native install (start/stop/restart/status/logs/update). Installed by `install.sh` and symlinked to `/usr/local/bin/lm-webui`.
+- **`lm-webui-host`** — the host-runtime helper that installs and checks hardware-specific runtimes (MLX, ComfyUI) without giving the app host-level privileges.
 
-From a checkout:
+## Service CLI (`lm-webui`)
+
+The native install uses a service manager for the application:
+
+```bash
+lm-webui start       # Start the service (systemd on Linux, launchd on macOS)
+lm-webui stop        # Stop the service
+lm-webui restart     # Restart the service
+lm-webui status      # Show health (checks GET /api/health)
+lm-webui logs        # Follow service logs
+lm-webui update      # Pull latest code, rebuild frontend, restart (preserves data)
+```
+
+Data lives in `~/.lmwebui/` (configurable via `LMWEBUI_HOME`): application code under `app/`/`web/`, data in `data/`, models in `models/`, logs in `logs/`.
+
+## Host runtime CLI (`lm-webui-host`)
+
+Install from a checkout:
 
 ```bash
 python -m venv .venv

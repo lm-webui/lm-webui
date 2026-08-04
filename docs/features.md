@@ -70,9 +70,9 @@ LM-WebUI separates model providers from local runtimes. A provider is the interf
 | DeepSeek | Cloud | Chat |
 | xAI | Cloud | Chat |
 | vLLM | Local or self-hosted | Chat |
-| Ollama | Local | Chat and model discovery |
+| Ollama | Local | Chat |
 | GGUF | Local | Chat through llama.cpp |
-| MLX | Local Apple Silicon | Chat |
+| MLX | Local Apple Silicon | Chat through MLX |
 | ComfyUI | Local image runtime | Image generation |
 
 Provider and model availability is dynamic. Cloud providers require configured credentials, while local providers require a reachable or installed runtime.
@@ -166,11 +166,10 @@ API keys are managed through the authenticated settings flow. Do not commit keys
 
 ## Authentication and planned governance features
 
-Authentication currently protects registration, login, refresh, logout, user sessions, conversations, projects, files, settings, and generated media.
+Authentication protects registration, login, refresh, logout, user sessions, conversations, projects, files, settings, and generated media. Role-based user/admin management is available to admins (user management, role/status changes, and usage analytics).
 
 The following governance capabilities are planned for a future implementation phase and are intentionally listed here as roadmap items rather than completed features:
 
-- Role-based user/admin management
 - Rate limiting and DDoS protection
 - CSRF protection
 

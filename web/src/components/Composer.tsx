@@ -165,13 +165,13 @@ export default function Composer({
           </div>
         )}
 
-        <div className="flex-1 px-3 pt-2 md:px-4 md:pt-4">
+        <div className="flex-1 px-3 pt-2 ml-1 md:px-4 md:pt-4">
           <textarea
             ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={"Ask LM WebUI..."}
-            className="w-full resize-none bg-transparent text-md outline-none placeholder:text-zinc-700/30 dark:placeholder:text-zinc-400/30 min-h-[24px] max-h-[50vh] overflow-y-auto leading-6"
+            className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-zinc-700/30 dark:placeholder:text-zinc-400/30 min-h-[24px] max-h-[50vh] overflow-y-auto leading-6"
             rows={1}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
