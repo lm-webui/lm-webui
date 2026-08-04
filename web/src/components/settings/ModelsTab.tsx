@@ -4,7 +4,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Zap, Database, Cpu, Wifi, WifiOff, Gem, Eye, EyeOff } from "lucide-react";
+import { Wifi, WifiOff, Eye, EyeOff } from "lucide-react";
+import { PROVIDERS } from "@/utils/modelProviders";
 
 interface ModelInfo {
   id: string;
@@ -21,12 +22,12 @@ export function ModelsTab() {
   const [modelVisibility, setModelVisibility] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  const providerConfig = {
-    openai: { name: "OpenAI", icon: Zap },
-    google: { name: "Google Gemini", icon: Gem },
-    ollama: { name: "Ollama", icon: Database },
-    gguf: { name: "GGUF", icon: Cpu },
-    mlx: { name: "MLX", icon: Cpu },
+  const providerConfig: Record<string, { name: string; icon: any }> = {
+    openai: { name: PROVIDERS.openai!.name, icon: PROVIDERS.openai!.icon },
+    google: { name: PROVIDERS.google!.name, icon: PROVIDERS.google!.icon },
+    ollama: { name: PROVIDERS.ollama!.name, icon: PROVIDERS.ollama!.icon },
+    gguf: { name: PROVIDERS.gguf!.name, icon: PROVIDERS.gguf!.icon },
+    mlx: { name: PROVIDERS.mlx!.name, icon: PROVIDERS.mlx!.icon },
   };
 
   // Load model visibility preferences from localStorage

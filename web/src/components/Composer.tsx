@@ -14,7 +14,8 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
 import { FileService } from "../features/files/fileService";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "./ui/popover";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ModelSelector } from "./models/ModelSelector";
 import { generateImage } from "@/utils/api";
 
@@ -60,6 +61,8 @@ export default function Composer({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevSearchRef = useRef(false);
+  const [modelOpen, setModelOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Image mode switching — save text model, load image model, restore on exit
   const prevModelRef = useRef("");
@@ -145,6 +148,8 @@ export default function Composer({
 
   return (
     <div className="border-none backdrop-blur-sm bg-transparent pt-2">
+      <Popover open={modelOpen} onOpenChange={setModelOpen}>
+      <PopoverAnchor asChild>
       <div className="mx-auto flex flex-col rounded-3xl border border-zinc-200 bg-neutral-300 dark:border-zinc-800/50 dark:bg-neutral-900 shadow-inner transition-all duration-200 relative">
         {uploadedFiles.length > 0 && (
           <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
@@ -271,6 +276,10 @@ export default function Composer({
 
           <div className="flex items-center gap-3 text-neutral-400 hover:text-neutral-300">
             <ModelSelector
+              external
+              open={modelOpen}
+              onOpenChange={setModelOpen}
+              side={isMobile ? "bottom" : "top"}
               selectedLLM={selectedLLM || "openai"}
               onLLMChange={onLLMChange || (() => {})}
               selectedModel={selectedModel || ""}
@@ -310,6 +319,8 @@ export default function Composer({
           </div>
         </div>
       </div>
+      </PopoverAnchor>
+      </Popover>
       <div className="flex items-center justify-center text-[7px] text-neutral-500/50 mt-1 -mb-1">
         <p>LLM can make mistakes, please double check</p>
       </div>

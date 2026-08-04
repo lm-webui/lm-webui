@@ -5,6 +5,7 @@ import {
 } from "@/components/ui/select";
 import { Sparkles, Loader2, Wifi, WifiOff } from "lucide-react";
 import { generateImage, fetchSettings, updateSettings } from "@/utils/api";
+import { PROVIDERS } from "@/utils/modelProviders";
 import { toast } from "sonner";
 
 interface ProviderStatus {
@@ -69,12 +70,12 @@ export default function ImageWorkspace() {
 
         setProviders({
           openai: {
-            label: "OpenAI", icon: "cloud",
+            label: PROVIDERS.openai!.name, icon: "cloud",
             connected: status.providers?.openai === "ready",
             models: apiModels.openai || ["dall-e-3", "dall-e-2"],
           },
           google: {
-            label: "Google", icon: "cloud",
+            label: PROVIDERS.google!.name, icon: "cloud",
             connected: status.providers?.google === "ready",
             models: apiModels.google || ["imagen-3", "gemini-2.5-flash-image"],
           },

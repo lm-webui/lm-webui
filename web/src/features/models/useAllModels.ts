@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ModelService } from "./modelService";
 import { MODELS_CHANGED_EVENT } from "./modelEvents";
+import { MODEL_PROVIDERS } from "@/utils/modelProviders";
 
 interface UseAllModelsOptions {
   isAuthenticated: boolean;
@@ -25,7 +26,7 @@ interface AllModelsState {
 export function useAllModels({
   isAuthenticated,
   storedApiKeys,
-  providers = ["openai", "google", "ollama", "gguf", "mlx"]
+  providers = MODEL_PROVIDERS.map((p) => p.id)
 }: UseAllModelsOptions): AllModelsState {
   const [state, setState] = useState<AllModelsState>({
     allModels: [],

@@ -8,8 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { notifyModelsChanged } from "@/features/models/modelEvents";
-import { Zap, Database, Wifi, WifiOff, RefreshCw, Gem, Key, Save, Trash2, Bot, Globe, Monitor } from "lucide-react";
-import { RiOpenaiFill } from "react-icons/ri"
+import { PROVIDERS, Provider } from "@/utils/modelProviders";
+import { Wifi, WifiOff, RefreshCw, Key, Save, Trash2 } from "lucide-react";
 
 export function ApiKeysTab() {
   const [selectedProvider, setSelectedProvider] = useState("openai");
@@ -19,17 +19,18 @@ export function ApiKeysTab() {
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
 
-  // Provider configuration - using backend provider names for consistency
-  const providers = [
-    { id: "openai", name: "OpenAI", icon: RiOpenaiFill, type: "cloud", placeholder: "sk-..." },
-    { id: "google", name: "Google (Gemini)", icon: Gem, type: "cloud", placeholder: "AIza..." },
-    { id: "anthropic", name: "Anthropic (Claude)", icon: Bot, type: "cloud", placeholder: "sk-ant-..." },
-    { id: "xai", name: "Grok (xAI)", icon: Bot, type: "cloud", placeholder: "xai-..." },
-    { id: "deepseek", name: "DeepSeek", icon: Bot, type: "cloud", placeholder: "sk-..." },
-    { id: "vllm", name: "vLLM", icon: Zap, type: "local", placeholder: "http://localhost:8000" },
-    { id: "lmstudio", name: "LM Studio", icon: Monitor, type: "local", placeholder: "http://localhost:1234" },
-    { id: "ollama", name: "Ollama", icon: Database, type: "local", placeholder: "http://localhost:11434" },
-  ];
+  // Provider configuration - sourced from centralized PROVIDERS (canonical icons)
+  const providerOrder = ["openai", "google", "anthropic", "xai", "deepseek", "vllm", "lmstudio", "ollama"];
+  const providers = providerOrder
+    .map((id) => PROVIDERS[id])
+    .filter((p): p is Provider => !!p)
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      icon: p.icon,
+      type: p.type,
+      placeholder: p.placeholder,
+    }));
 
   // Load last used URL from localStorage for local providers
   const loadLastUsedUrl = (providerId: string) => {
