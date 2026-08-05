@@ -90,6 +90,16 @@ paths:
   data_dir: "$LMWEBUI_HOME/data"
   media_dir: "$LMWEBUI_HOME/media"
   models_dir: "$LMWEBUI_HOME/models"
+rag:
+  enabled: true
+  embedding_model: "BAAI/bge-small-en-v1.5"
+  reranker_model: "ms-marco-MultiBERT-L-12"
+  chunk_size: 512
+  chunk_overlap: 64
+  top_k_retrieval: 20
+  scope: "user"
+  context_token_budget: 2000
+  query_rewrite: false
 CONFIGEOF
     log_success "Created config.yaml"
   fi

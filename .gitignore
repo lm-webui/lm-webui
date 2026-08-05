@@ -3,6 +3,8 @@ __pycache__/
 backend/venv/
 backend/.venv/
 backend/.coverage
+backend/.coveragerc
+backend/coverage.xml
 backend/.pytest_cache/
 
 # --- Node ---

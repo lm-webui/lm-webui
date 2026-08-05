@@ -11,6 +11,8 @@ from fastapi.staticfiles import StaticFiles
 import logging
 import re
 import time
+
+logger = logging.getLogger(__name__)
 import datetime
 import asyncio
 import json

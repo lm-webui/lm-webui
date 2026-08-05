@@ -307,21 +307,42 @@ class OrchestratorController:
         return "duckduckgo"
 
     async def _get_file_context(self, file_references: list) -> str:
-        """Read file content from media_library for context injection."""
+        """Read file content from media_library for context injection.
+
+        If a file's extracted_text isn't ready yet (background extraction is still
+        running), fall back to reading a truncated preview of the raw file bytes so
+        the model still has content instead of nothing.
+        """
         from app.database import get_db
         db = get_db()
         cursor = db.cursor()
         context_parts = []
         for ref in file_references:
             file_id = ref.get("media_id") or ref.get("id")
-            if file_id:
-                cursor.execute(
-                    "SELECT filename, file_path, extracted_text FROM media_library WHERE id = ?",
-                    (file_id,)
-                )
-                row = cursor.fetchone()
-                if row and row[2]:  # extracted_text exists
-                    context_parts.append(f"--- {row[0]} ---\n{row[2]}")
+            if not file_id:
+                continue
+            cursor.execute(
+                "SELECT filename, file_path, extracted_text FROM media_library WHERE id = ?",
+                (file_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                continue
+            filename, file_path, extracted = row[0], row[1], row[2]
+            if extracted:
+                context_parts.append(f"--- {filename} ---\n{extracted}")
+                continue
+            # Fallback: raw-file preview while extraction is pending.
+            try:
+                import os
+                if file_path and os.path.exists(file_path):
+                    with open(file_path, "rb") as fh:
+                        raw = fh.read(20000)
+                    preview = raw.decode("utf-8", errors="ignore").strip()
+                    if preview:
+                        context_parts.append(f"--- {filename} (raw preview) ---\n{preview[:6000]}")
+            except Exception:
+                pass
         return "\n\n".join(context_parts)
 
     def _retrieve_context(self, user_message: str, user_id: int, conversation_id: str | None = None) -> str:
