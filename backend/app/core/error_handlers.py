@@ -6,6 +6,7 @@ It follows DRY principles and provides reusable error handlers for common scenar
 """
 
 import logging
+import functools
 from typing import Any, Dict, Optional, Union
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
@@ -482,6 +483,7 @@ def with_error_handling(
 ):
     """Decorator to add standardized error handling to functions"""
     def decorator(func):
+        @functools.wraps(func)  # preserve the endpoint signature for FastAPI introspection
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)

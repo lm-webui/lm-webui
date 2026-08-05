@@ -75,7 +75,19 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     // Handle non-401 errors
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      const detail = errorData.detail;
+      let msg = errorData.message;
+      if (!msg) {
+        if (Array.isArray(detail)) {
+          // FastAPI validation errors — surface field + message instead of [object Object]
+          msg = detail.map((d: any) => `${(d?.loc || []).join('.')}: ${d?.msg}`).join('; ');
+        } else if (detail && typeof detail === 'object') {
+          msg = JSON.stringify(detail);
+        } else {
+          msg = detail || `HTTP ${response.status}: ${response.statusText}`;
+        }
+      }
+      throw new Error(msg || `HTTP ${response.status}: ${response.statusText}`);
     }
     
     return await parseResponse(response, url);
