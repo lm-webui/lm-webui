@@ -114,7 +114,7 @@ export default function ChatArea({
       toast.info("Switching to coding mode", { duration: 1000 });
       setIsCodingMode(true);
     }
-    
+
 
     const genFile = files.find((f: any) => f.type === "generating_image");
     if (genFile && activeChatId) {
@@ -216,7 +216,7 @@ export default function ChatArea({
         onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
       />
 
-      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-100/50 dark:bg-zinc-950">
+      <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-300/50 dark:bg-neutral-900/30">
         {artifact && <ArtifactDrawer artifact={artifact} onClose={() => useChatStore.getState().setArtifact(null)} />}
         <Header
           createNewChat={() => { handleNewChat(); setActiveView("chat"); }}

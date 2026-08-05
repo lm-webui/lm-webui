@@ -70,8 +70,16 @@ class RAGProcessor:
         # chunking will split further, but cap the raw input).
         text = text[:100_000]
 
-        # 2. Chunk.
+        # 2. Chunk (honor configured chunk size/overlap).
+        from app.core.config_manager import get_config
         from app.rag.chunking import chunk_text
+
+        try:
+            rag_cfg = get_config().rag
+            chunk_size = rag_cfg.chunk_size
+            chunk_overlap = rag_cfg.chunk_overlap
+        except Exception:
+            chunk_size, chunk_overlap = 512, 64
 
         chunks = chunk_text(
             text,
@@ -79,6 +87,8 @@ class RAGProcessor:
             conversation_id=conversation_id,
             user_id=user_id,
             file_name=file_name,
+            chunk_size=chunk_size,
+            overlap=chunk_overlap,
         )
         if not chunks:
             return {"status": "skipped", "reason": "text too short to chunk"}

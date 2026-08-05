@@ -103,6 +103,7 @@ def hybrid_search(
     filters: dict[str, Any] | None = None,
     user_id: int = 1,
     top_k: int = 20,
+    conversation_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Hybrid vector + full-text search with optional metadata filters.
 
@@ -120,6 +121,8 @@ def hybrid_search(
         Table owner.
     top_k : int
         Number of results to return after RRF fusion.
+    conversation_id : str or None
+        When provided, restrict retrieval to chunks scoped to this conversation.
 
     Returns
     -------
@@ -127,6 +130,10 @@ def hybrid_search(
         Each dict matches ``ChunkModel`` fields plus a ``_score`` key.
     """
     table = _get_table(user_id)
+
+    if conversation_id:
+        filters = dict(filters or {})
+        filters["conversation_id"] = conversation_id
 
     # --- Vector search ---
     vec_query = table.search(query_vector).metric("cosine")
@@ -167,6 +174,8 @@ def _build_where(filters: dict[str, Any]) -> str:
         elif isinstance(value, list):
             formatted = ", ".join(str(v) for v in value)
             clauses.append(f"{field} IN ({formatted})")
+        elif isinstance(value, str):
+            clauses.append(f"{field} = '{value}'")
         else:
             clauses.append(f"{field} = {value}")
     return " AND ".join(clauses)

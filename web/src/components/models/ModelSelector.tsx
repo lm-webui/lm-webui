@@ -36,16 +36,10 @@ interface ModelSelectorProps {
   side?: "top" | "bottom";
 }
 
-const providerConfig: Record<
-  string,
-  { name: string; icon: any; color?: string }
-> = {
-  openai: { ...PROVIDERS.openai! },
-  google: { ...PROVIDERS.google! },
-  ollama: { ...PROVIDERS.ollama! },
-  gguf: { ...PROVIDERS.gguf! },
-  mlx: { ...PROVIDERS.mlx! },
-};
+// Derive all providers from the centralized PROVIDERS config (not a hardcoded list)
+const providerConfig: Record<string, { name: string; icon: any; color?: string }> = Object.fromEntries(
+  Object.entries(PROVIDERS).map(([id, p]) => [id, { ...p }]),
+);
 
 const parsePrefixedModel = (
   prefixedModel: string,

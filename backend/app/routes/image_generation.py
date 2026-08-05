@@ -80,6 +80,7 @@ async def generate_image(
         size=raw_size or "1024x1024",
         quality=params.get("quality", "standard"),
         style=params.get("style", "vivid"),
+        negative=params.get("negative") or None,  # ComfyUI local path only
         user_id=user_id["id"],
         conversation_id=request.get("conversation_id"),
     )

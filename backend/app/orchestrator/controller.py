@@ -104,38 +104,27 @@ class OrchestratorController:
             if chat_request.file_references:
                 context = self._get_file_context(chat_request.file_references)
             elif chat_request.requires_rag:
-                context = self._retrieve_context(chat_request.message, user_id)
+                context = self._retrieve_context(chat_request.message, user_id, actual_conversation_id)
 
-            # 3b. Web search — inject results as context when search mode is enabled
+            # 3b. Web search — inject results as context when search mode is enabled.
+            # Uses the configured search engine (default duckduckgo), with SearXNG
+            # and other providers available via the search registry.
             if chat_request.webSearch and chat_request.message.strip():
                 try:
-                    import requests
-                    from urllib.parse import quote
-                    import re
                     query = chat_request.message.strip()[:200]
-                    # Use DuckDuckGo HTML search for real web results
-                    resp = requests.post(
-                        "https://html.duckduckgo.com/html/",
-                        data={"q": query},
-                        headers={"User-Agent": "Mozilla/5.0"},
-                        timeout=10,
-                    )
-                    if resp.status_code == 200:
-                        results = []
-                        # Extract result blocks: <a rel="nofollow" href="...">title</a>
-                        for a_tag in re.findall(r'<a rel="nofollow" href="(https?://[^"]+)"[^>]*>(.*?)</a>', resp.text):
-                            url, title = a_tag
-                            title = re.sub(r'<[^>]+>', '', title).strip()
-                            results.append(f"- [{title}]({url})")
-                            if len(results) >= 5:
-                                break
-                        if results:
-                            context += ("\n\n" if context else "") + "Web search results:\n" + "\n".join(results)
-                            logger.info(f"Web search returned {len(results)} results for: {query[:60]}...")
-                        else:
-                            logger.warning(f"Web search returned 0 results for: {query[:60]}...")
+                    engine = self._get_search_engine(user_id)
+                    from app.search import get_search_provider
+                    provider = get_search_provider(engine)
+                    results = await provider.search(query)
+                    if results:
+                        lines = [
+                            f"- [{r.title}]({r.url})" + (f" — {r.snippet}" if r.snippet else "")
+                            for r in results
+                        ]
+                        context += ("\n\n" if context else "") + "Web search results:\n" + "\n".join(lines)
+                        logger.info(f"Web search ({provider.name}) returned {len(results)} results for: {query[:60]}...")
                     else:
-                        logger.warning(f"Web search returned status {resp.status_code}")
+                        logger.warning(f"Web search ({provider.name}) returned 0 results for: {query[:60]}...")
                 except Exception as e:
                     logger.warning(f"Web search failed: {e}")
 
@@ -262,6 +251,23 @@ class OrchestratorController:
                 pass
             yield ModelEvent.done()
             
+    def _get_search_engine(self, user_id: int) -> str:
+        """Read the user's selected search engine (default duckduckgo)."""
+        try:
+            from app.database import get_db
+            import json as _json
+            db = get_db()
+            row = db.execute(
+                "SELECT settings_json FROM user_settings WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            if row and row[0]:
+                prefs = _json.loads(row[0])
+                return prefs.get("selectedSearchEngine", "duckduckgo") or "duckduckgo"
+        except Exception:
+            pass
+        return "duckduckgo"
+
     async def _get_file_context(self, file_references: list) -> str:
         """Read file content from media_library for context injection."""
         from app.database import get_db
@@ -280,10 +286,12 @@ class OrchestratorController:
                     context_parts.append(f"--- {row[0]} ---\n{row[2]}")
         return "\n\n".join(context_parts)
 
-    def _retrieve_context(self, user_message: str, user_id: int) -> str:
+    def _retrieve_context(self, user_message: str, user_id: int, conversation_id: str | None = None) -> str:
         """Retrieve relevant context using RAG pipeline (LanceDB + FlashRank).
 
-        Falls back to empty string if RAG is not configured.
+        Falls back to empty string if RAG is not configured. When RAG is enabled
+        but yields no hits, returns an explicit note so the model can say so.
+        Sources are numbered [n] so the model can cite them.
         """
         try:
             from app.core.config_manager import get_config
@@ -305,26 +313,28 @@ class OrchestratorController:
             # Step 2: Embed query
             query_vec = embed_query(user_message)
 
-            # Step 3: Hybrid search with filters
+            # Step 3: Hybrid search with filters (optionally scoped to the conversation)
+            scope_conv = getattr(cfg.rag, "scope", "user") == "conversation"
             candidates = hybrid_search(
                 query_vec, user_message,
                 filters=filters or None,
                 user_id=user_id,
-                top_k=20,
+                top_k=getattr(cfg.rag, "top_k_retrieval", 20),
+                conversation_id=conversation_id if scope_conv else None,
             )
             if not candidates:
-                return ""
+                return "No relevant documents were found in your knowledge base for this query."
 
             # Step 4: Rerank → Top 5
             top_chunks = rerank(user_message, candidates, top_k=5)
             if not top_chunks:
                 top_chunks = candidates[:5]
 
-            # Step 5: Format for LLM
+            # Step 5: Format for LLM with numbered sources so it can cite [n]
             parts = []
-            for c in top_chunks:
+            for i, c in enumerate(top_chunks):
                 source = c.get("file_name", "source")
-                parts.append(f"--- {source} ---\n{c['text']}")
+                parts.append(f"[{i+1}] {source}\n{c['text']}")
             return "\n\n".join(parts)
 
         except Exception as exc:
@@ -338,7 +348,7 @@ class OrchestratorController:
         # System Prompt — use user's custom prompt if set, otherwise default
         system_prompt = system_prompt or "You are a helpful AI assistant."
         if context:
-            system_prompt += f"\n\nWeb search results are provided below. Use them to answer the user's question factually. If the results contain relevant information, cite them in your answer. If the results don't contain enough information, say so and use your own knowledge.\n\n{context}"
+            system_prompt += f"\n\nRelevant context is provided below (from web search or your knowledge base). Use it to answer the user's question factually, citing numbered sources as [n] where referenced. If the context doesn't contain enough information, say so and use your own knowledge.\n\n{context}"
             
         messages.append({"role": "system", "content": system_prompt})
         

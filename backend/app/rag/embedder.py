@@ -20,16 +20,18 @@ def _get_model():
 
     from fastembed import TextEmbedding
 
-    from app.core.config_manager import get_data_dir
+    from app.core.config_manager import get_config, get_data_dir
+    try:
+        model_name = get_config().rag.embedding_model or "BAAI/bge-small-en-v1.5"
+    except Exception:
+        model_name = "BAAI/bge-small-en-v1.5"
+
     default_cache = os.path.join(str(get_data_dir()), "cache", "fastembed")
     cache_dir = os.environ.get("FASTEMBED_CACHE_PATH", default_cache)
     os.makedirs(cache_dir, exist_ok=True)
-    logger.info("Loading embedding model BAAI/bge-small-en-v1.5 ...")
-    _model = TextEmbedding(
-        "BAAI/bge-small-en-v1.5",
-        cache_dir=cache_dir,
-    )
-    logger.info("Embedding model ready (384-dim, %d MB cache)", 67)
+    logger.info("Loading embedding model %s ...", model_name)
+    _model = TextEmbedding(model_name, cache_dir=cache_dir)
+    logger.info("Embedding model ready")
     return _model
 
 

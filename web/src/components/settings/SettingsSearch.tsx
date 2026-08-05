@@ -20,6 +20,7 @@ export function SettingsSearch({
 }: SettingsSearchProps) {
   const searchEngines = [
     { id: "duckduckgo", name: "DuckDuckGo", icon: Globe, needsKey: false },
+    { id: "searxng", name: "SearXNG", icon: Globe, needsKey: false },
     { id: "google_search", name: "Google Search", icon: Globe, needsKey: true },
     { id: "google_cx", name: "Google CX", icon: Globe, needsKey: true },
     { id: "bing_search", name: "Bing Search", icon: Globe, needsKey: true },

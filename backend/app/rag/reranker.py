@@ -20,7 +20,12 @@ def _get_ranker():
     """Lazy-load FlashRank ranker (cached)."""
     global _ranker, _model_name
 
-    _model_name = os.environ.get("RERANKER_MODEL", "ms-marco-MultiBERT-L-12")
+    from app.core.config_manager import get_config
+    try:
+        cfg_model = get_config().rag.reranker_model
+    except Exception:
+        cfg_model = None
+    _model_name = cfg_model or os.environ.get("RERANKER_MODEL", "ms-marco-MultiBERT-L-12")
 
     if _model_name.lower() in ("", "none", "false", "0"):
         return None

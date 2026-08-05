@@ -81,8 +81,9 @@ export default function ImageWorkspace() {
           },
           local: {
             label: "Local", icon: "server",
-            connected: runtimes.ollama?.installed || runtimes.gguf?.installed,
-            models: apiModels.local || ["sdxl", "flux-dev", "flux-schnell", "ltx"],
+            // "local" routes to the ComfyUI runtime pipeline (backend provider "comfyui")
+            connected: !!runtimes.comfyui?.installed,
+            models: apiModels.local || ["sdxl", "flux-dev", "flux-schnell", "sd3", "ltx"],
           },
         });
       } catch { /* ignore */ }
@@ -149,9 +150,13 @@ export default function ImageWorkspace() {
     try {
       for (let i = 0; i < batch; i++) {
         const imageUrl = await generateImage({
-          provider, model, prompt,
+          provider: provider === "local" ? "comfyui" : provider, model, prompt,
           conversation_id: convId,
-          params: { size, quality, steps, seed: seed >= 0 ? seed + i : undefined },
+          params: {
+            size, quality, steps, seed: seed >= 0 ? seed + i : undefined,
+            // negative prompt applies only to the local ComfyUI path
+            ...(provider === "local" ? { negative } : {}),
+          },
         } as any);
         if (imageUrl) setResults((prev) => [imageUrl, ...prev]);
         if (i < batch - 1) await new Promise(r => setTimeout(r, 300));
@@ -177,7 +182,7 @@ export default function ImageWorkspace() {
           rows={3} />
       </div>
 
-      {provider === "comfyui" && (
+      {provider === "local" && (
         <div className="mb-4">
           <label className="mb-1 block text-xs font-medium text-zinc-500">Negative prompt</label>
           <input value={negative} onChange={(e) => setNegative(e.target.value)}
@@ -269,7 +274,7 @@ export default function ImageWorkspace() {
           </Select>
         </div>
 
-        {provider === "comfyui" && (
+        {provider === "local" && (
           <>
             <div className="w-20">
               <label className="mb-1 block text-xs font-medium text-zinc-500">Steps</label>

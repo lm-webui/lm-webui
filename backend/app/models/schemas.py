@@ -17,6 +17,7 @@ class ChatRequest(BaseModel):
     size: Optional[str] = None
     quality: Optional[str] = "standard"
     style: Optional[str] = "vivid"
+    negative: Optional[str] = None  # ComfyUI negative prompt (local image path only)
     metadata: Optional[dict] = None
 
 

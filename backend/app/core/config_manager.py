@@ -95,6 +95,7 @@ class RAGConfig(BaseModel):
     chunk_size: int = Field(default=512, ge=128, le=4096, description="Target characters per chunk")
     chunk_overlap: int = Field(default=64, ge=0, le=256, description="Overlap between adjacent chunks")
     top_k_retrieval: int = Field(default=20, ge=1, le=100, description="Pool size before reranking")
+    scope: str = Field(default="user", description="Retrieval scope: 'user' (all docs) or 'conversation'")
     top_k_rerank: int = Field(default=5, ge=1, le=20, description="Final items after reranking")
 
 class LLMConfig(BaseModel):

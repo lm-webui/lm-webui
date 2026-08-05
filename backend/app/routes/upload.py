@@ -453,7 +453,14 @@ async def delete_uploaded_file(filename: str, user_id: dict = Depends(get_curren
     # Delete from database
     cursor.execute("DELETE FROM media_library WHERE filename = ? AND user_id = ?", (filename, user_id["id"]))
     db.commit()
-    
+
+    # Remove any RAG chunks for this file so deleted docs don't resurface.
+    try:
+        from app.rag.vector_store import delete_file_chunks
+        delete_file_chunks(file_path, user_id["id"])
+    except Exception as e:
+        logger.warning(f"Failed to delete RAG chunks for {filename}: {e}")
+
     return {
         "success": True,
         "message": f"Deleted {filename}",

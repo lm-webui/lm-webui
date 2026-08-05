@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wifi, WifiOff, Eye, EyeOff } from "lucide-react";
+import { Wifi, Eye, EyeOff } from "lucide-react";
 import { PROVIDERS } from "@/utils/modelProviders";
 
 interface ModelInfo {
@@ -16,19 +16,29 @@ interface ModelInfo {
   type?: string;
 }
 
+// Local runtimes managed by the Runtime Manager — never stored as API keys,
+// so they're always considered connected regardless of the api_keys table.
+const KEYLESS_RUNTIMES = ["gguf", "mlx"];
+
 export function ModelsTab() {
-  const [selectedProvider, setSelectedProvider] = useState("openai");
-  const [providers, setProviders] = useState<Record<string, { models: ModelInfo[]; isConnected: boolean }>>({});
+  const [selectedProvider, setSelectedProvider] = useState("");
+  const [providers, setProviders] = useState<Record<string, { models: ModelInfo[] }>>({});
+  const [connectedProviders, setConnectedProviders] = useState<Set<string>>(new Set());
   const [modelVisibility, setModelVisibility] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  const providerConfig: Record<string, { name: string; icon: any }> = {
-    openai: { name: PROVIDERS.openai!.name, icon: PROVIDERS.openai!.icon },
-    google: { name: PROVIDERS.google!.name, icon: PROVIDERS.google!.icon },
-    ollama: { name: PROVIDERS.ollama!.name, icon: PROVIDERS.ollama!.icon },
-    gguf: { name: PROVIDERS.gguf!.name, icon: PROVIDERS.gguf!.icon },
-    mlx: { name: PROVIDERS.mlx!.name, icon: PROVIDERS.mlx!.icon },
-  };
+  // Derive all providers from the centralized PROVIDERS config (not a hardcoded list)
+  const providerConfig: Record<string, { name: string; icon: any }> = Object.fromEntries(
+    Object.entries(PROVIDERS).map(([id, p]) => [id, { name: p.name, icon: p.icon }]),
+  );
+
+  // Single source of truth for "connected": a provider is connected if it has a
+  // stored API key/endpoint, OR it's a keyless local runtime (gguf, mlx).
+  const isProviderConnected = (id: string, connected: Set<string> = connectedProviders): boolean =>
+    KEYLESS_RUNTIMES.includes(id) || connected.has(id);
+
+  // Only providers that are connected appear in the dropdown.
+  const visibleProviderIds = Object.keys(providerConfig).filter(isProviderConnected);
 
   // Load model visibility preferences from localStorage
   useEffect(() => {
@@ -53,13 +63,16 @@ export function ModelsTab() {
       try {
         // Get stored API keys to determine connected providers (backend provider names)
         const storedKeys = await listApiKeys();
-        const connectedProviders = new Set(storedKeys.map((key: any) => key.provider));
-
-        console.log('Connected providers from backend:', Array.from(connectedProviders));
+        const connected = new Set(storedKeys.map((key: any) => key.provider));
+        setConnectedProviders(connected);
 
         const backendToFrontendMapping: Record<string, string> = {
           'openai': 'openai',
           'google': 'google',
+          'anthropic': 'anthropic',
+          'xai': 'xai',
+          'deepseek': 'deepseek',
+          'vllm': 'vllm',
           'ollama': 'ollama',
           'gguf': 'gguf',
           'mlx': 'mlx',
@@ -69,10 +82,8 @@ export function ModelsTab() {
         const allModelsResponse = await fetchModels(undefined, { allProviders: true });
         const modelsByProvider = allModelsResponse as Record<string, string[]>;
 
-        console.log('Models by provider from backend:', modelsByProvider);
-
         // Convert to our format
-        const providerData: Record<string, { models: ModelInfo[]; isConnected: boolean }> = {};
+        const providerData: Record<string, { models: ModelInfo[] }> = {};
 
         Object.entries(modelsByProvider).forEach(([backendProvider, modelNames]) => {
           // Map backend provider name to frontend provider name
@@ -85,15 +96,9 @@ export function ModelsTab() {
             provider: frontendProvider,
           }));
 
-          providerData[frontendProvider] = {
-            models: models,
-            isConnected: connectedProviders.has(backendProvider) || ['ollama', 'gguf'].includes(frontendProvider),
-          };
-
-          console.log(`Mapped ${backendProvider} -> ${frontendProvider}, models:`, models.length);
+          providerData[frontendProvider] = { models };
         });
 
-        console.log('Final provider data:', providerData);
         setProviders(providerData);
       } catch (error: any) {
         console.error("Failed to load models:", error);
@@ -105,6 +110,13 @@ export function ModelsTab() {
 
     loadModelsAndConnections();
   }, []);
+
+  // Keep the selected provider on a connected one once the key list is known.
+  useEffect(() => {
+    if (!visibleProviderIds.includes(selectedProvider)) {
+      setSelectedProvider(visibleProviderIds[0] ?? "");
+    }
+  }, [connectedProviders]);
 
   // Toggle individual model visibility
   const toggleModelVisibility = (modelId: string) => {
@@ -141,8 +153,23 @@ export function ModelsTab() {
     );
   }
 
+  // No connected providers to manage — prompt the user to add an API key first.
+  if (!visibleProviderIds.length) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="py-8 text-center">
+            <div className="text-sm text-zinc-500 dark:text-zinc-400">No connected providers yet.</div>
+            <div className="text-xs mt-1 text-zinc-400">
+              Add an API key in the API Keys tab to manage its models here.
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   const currentProviderData = providers[selectedProvider];
-  const currentProviderConfig = providerConfig[selectedProvider as keyof typeof providerConfig];
 
   return (
     <div className="space-y-6">
@@ -163,20 +190,14 @@ export function ModelsTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {Object.entries(providerConfig).map(([providerId, config]) => {
-                    const providerData = providers[providerId];
-                    const isConnected = providerData?.isConnected;
-
+                  {visibleProviderIds.map((providerId) => {
+                    const config = providerConfig[providerId];
                     return (
                       <SelectItem key={providerId} value={providerId}>
                         <div className="flex items-center gap-2 w-full">
                           <config.icon className="h-4 w-4" />
                           <span className="flex-1">{config.name}</span>
-                          {isConnected ? (
-                            <Wifi className="h-3 w-3 text-green-500" />
-                          ) : (
-                            <WifiOff className="h-3 w-3 text-red-500/50" />
-                          )}
+                          <Wifi className="h-3 w-3 text-green-500" />
                         </div>
                       </SelectItem>
                     );
@@ -244,9 +265,6 @@ export function ModelsTab() {
                   ) : (
                     <div className="text-center py-4 text-zinc-500 dark:text-zinc-400">
                       <div className="text-sm">No models available</div>
-                      {currentProviderData && !currentProviderData.isConnected && (
-                        <div className="text-xs mt-1">Configure API key in API Keys tab</div>
-                      )}
                     </div>
                   )}
                 </div>

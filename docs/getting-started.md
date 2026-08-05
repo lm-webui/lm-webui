@@ -57,19 +57,13 @@ cd web && npm run dev
 
 ### Option 3: Docker (For Server Deployment)
 
-```bash
-git clone https://github.com/lm-webui/lm-webui.git
-cd lm-webui
-docker compose up --build
-```
-
-Access the application at `http://localhost:7070`. Docker is an alternative for containerized server environments.
+For containerized server environments, deploy with Docker instead. See the [Deployment guide](./DEPLOYMENT.md) for the Docker setup and production configuration.
 
 ## First Steps
 
 ### 1. Create an Account
 
-1. Open `http://localhost:7070` (Docker) or `http://localhost:5177` (manual) in your browser
+1. Open the app in your browser — `http://localhost:7070` for the one-line install, or `http://localhost:5177` for the manual development setup
 2. Click "Register" to create a new account
 3. Enter your email and password
 4. You'll be automatically logged in after registration

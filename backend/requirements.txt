@@ -33,7 +33,9 @@ beautifulsoup4>=4.12.0
 Pillow>=11.0.0
 
 # Vector Search & RAG
-lancedb>=0.8.0
+# lancedb ships cp39-abi3 wheels (Python 3.9-3.13); bound to the validated
+# 0.36.x line so installs don't drift to an untested version.
+lancedb>=0.36,<0.37
 fastembed>=0.3.0
 pyarrow>=15.0.0
 flashrank>=0.2.0

@@ -15,41 +15,22 @@ LM-WebUI is a React + FastAPI application with a modular monolith backend and a 
 
 **Stack:** React 19, TypeScript, Vite, Tailwind CSS, Zustand
 
-```
-web/src/
-├── components/     # UI components (shadcn/ui + custom)
-│   ├── chat/       # Message bubbles, composer, loading
-│   ├── models/     # Model selector, runtime manager
-│   ├── settings/   # Settings modal with tabs
-│   └── ui/         # Shadcn primitives
-├── features/       # Domain logic
-│   ├── chat/       # Chat service + creation hooks
-│   ├── images/     # Studio (image gen), Gallery
-│   ├── models/     # Model fetching + management
-│   └── sessions/   # Session management
-├── store/          # Zustand stores (chat, reasoning)
-└── utils/          # API + WebSocket client, model providers, storage
-```
+The frontend is organized by feature area (chat, images, models, sessions), backed by Zustand stores and a shared API/WebSocket client. UI primitives are shadcn/ui plus a small set of custom components.
 
 ## Backend
 
 **Stack:** FastAPI, SQLite, aiohttp
 
-```
-backend/app/
-├── routes/         # REST + WebSocket endpoints
-├── providers/      # AI provider implementations
-│   ├── remote/     # OpenAI, Gemini
-│   └── local/      # Ollama, GGUF, MLX
-├── services/       # Image generation, file storage, model management
-├── orchestrator/   # Chat flow controller
-├── chat/           # Chat session + message persistence
-├── database/       # SQLite schema + connection pool
-├── hardware/       # GPU/CPU detection
-├── memory/         # Context assembly + summarization
-├── runtime/        # Runtime detection and external runtime metadata
-└── security/       # JWT auth + encryption
-```
+The backend is a modular monolith. Key modules:
+
+- **routes** — REST + WebSocket endpoints
+- **providers** — AI provider implementations (`remote/` for cloud APIs, `local/` for local runtimes)
+- **orchestrator** — chat flow controller
+- **chat / memory** — session and message persistence, context assembly + summarization
+- **database** — SQLite schema + connection pool
+- **hardware / runtime** — GPU/CPU detection and external runtime metadata
+- **security** — JWT auth + encryption
+- **services / files** — image generation, file storage, model management
 
 ## Data Flow
 
@@ -74,6 +55,10 @@ Model Selector → GET /api/models/* → Model Registry → Provider.list_models
 |---|---|---|---|
 | OpenAI | Cloud | ✅ | ✅ |
 | Google Gemini | Cloud | ✅ | ✅ |
+| Anthropic (Claude) | Cloud | ✅ | ❌ |
+| DeepSeek | Cloud (OpenAI-compatible) | ✅ | ❌ |
+| xAI | Cloud (OpenAI-compatible) | ✅ | ❌ |
+| vLLM | Self-hosted (OpenAI-compatible) | ✅ | ❌ |
 | Ollama | Local | ✅ | ❌ |
 | GGUF (llama.cpp) | In-container | ✅ | ❌ |
 | MLX | External (host server) | ✅ | ❌ |

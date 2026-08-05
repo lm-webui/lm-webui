@@ -34,7 +34,7 @@ export default function Header({
   const { user } = useAuth();
 
   return (
-    <header className="sticky top-0 z-30 px-3 py-[20px] md:py-[21px] flex h-12 shrink-0 items-center justify-between border-b border-stone-400/50 bg-neutral-300/50 backdrop-blur-sm dark:border-zinc-800 dark:bg-neutral-900/25">
+    <header className="sticky top-0 z-30 px-3 py-[19px] md:py-[20px] flex h-12 shrink-0 items-center justify-between border-b border-stone-400/50 bg-neutral-300/50 backdrop-blur-sm dark:border-zinc-700/50 dark:bg-neutral-900/50">
       <div className="flex items-center gap-3">
         <Button
           variant="ghost"

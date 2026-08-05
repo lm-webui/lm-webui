@@ -333,7 +333,7 @@ export default function Sidebar({
   if (sidebarCollapsed) {
     return (
       <aside className="z-50 flex h-full w-16 shrink-0 flex-col border-r border-zinc-300/60 bg-neutral-300 transition-[width] duration-200 dark:border-zinc-800 dark:bg-neutral-900">
-        <div className="flex items-center px-3 py-[7.5px] justify-center border-b border-stone-400/50 dark:border-zinc-800">
+        <div className="flex items-center px-3 py-[6.5px] justify-center border-b border-stone-400/50 dark:border-zinc-800">
           <Button
             variant="ghost"
             size="icon"

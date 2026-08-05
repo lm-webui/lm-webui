@@ -52,6 +52,7 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
                 "width": width,
                 "height": height,
                 "seed": seed,
+                "negative": getattr(req, "negative", "") or "",
             }
 
             async with session.post(
@@ -101,7 +102,7 @@ async def _build_workflow(params: dict) -> dict:
         "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": params["model"] + ".safetensors"}},
         "5": {"class_type": "EmptyLatentImage", "inputs": {"width": params["width"], "height": params["height"], "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": params["prompt"], "clip": ["4", 1]}},
-        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": "", "clip": ["4", 1]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {"text": params.get("negative", ""), "clip": ["4", 1]}},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
         "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "lmwebui", "images": ["8", 0]}},
     }
