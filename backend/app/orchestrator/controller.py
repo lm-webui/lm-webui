@@ -137,17 +137,18 @@ class OrchestratorController:
                     query = chat_request.message.strip()[:200]
                     engine = self._get_search_engine(user_id)
                     from app.search import get_search_provider
-                    provider = get_search_provider(engine)
-                    results = await provider.search(query)
+                    # NOTE: use a distinct name — `provider` is the resolved LLM provider.
+                    search_provider = get_search_provider(engine)
+                    results = await search_provider.search(query)
                     if results:
                         lines = [
                             f"- [{r.title}]({r.url})" + (f" — {r.snippet}" if r.snippet else "")
                             for r in results
                         ]
                         context += ("\n\n" if context else "") + "Web search results:\n" + "\n".join(lines)
-                        logger.info(f"Web search ({provider.name}) returned {len(results)} results for: {query[:60]}...")
+                        logger.info(f"Web search ({search_provider.name}) returned {len(results)} results for: {query[:60]}...")
                     else:
-                        logger.warning(f"Web search ({provider.name}) returned 0 results for: {query[:60]}...")
+                        logger.warning(f"Web search ({search_provider.name}) returned 0 results for: {query[:60]}...")
                 except Exception as e:
                     logger.warning(f"Web search failed: {e}")
 
