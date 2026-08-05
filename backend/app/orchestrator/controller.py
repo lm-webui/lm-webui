@@ -29,17 +29,17 @@ class OrchestratorController:
 
     def __init__(self):
         self.session_manager = get_chat_session_manager()
-        
-    async def process_request(self, 
-                            chat_request: ChatRequest, 
-                            user_id: int, 
+
+    async def process_request(self,
+                            chat_request: ChatRequest,
+                            user_id: int,
                             conversation_id: str) -> AsyncGenerator[ModelEvent, None]:
         """
         Process a chat request through the full pipeline.
         """
         logger.info(f"Orchestrator processing request: {chat_request.sessionId}")
         usage_started = time.monotonic()
-        
+
         # 1. Session & Conversation Management
         if not self.session_manager.start_streaming(chat_request.sessionId, chat_request.job_id):
             yield ModelEvent.error("Session already streaming")
@@ -48,27 +48,27 @@ class OrchestratorController:
         try:
             # Ensure conversation exists
             actual_conversation_id = ensure_conversation_exists(
-                conversation_id or chat_request.conversationId or chat_request.sessionId, 
+                conversation_id or chat_request.conversationId or chat_request.sessionId,
                 user_id
             )
-            
+
             # Yield metadata event with actual conversation ID
             yield ModelEvent.metadata({
                 "conversation_id": actual_conversation_id,
                 "session_id": chat_request.sessionId
             })
-            
+
             # Save user message
             save_message(
-                actual_conversation_id, 
-                user_id, 
-                "user", 
-                chat_request.message, 
+                actual_conversation_id,
+                user_id,
+                "user",
+                chat_request.message,
                 {"attachments": chat_request.file_references} if chat_request.file_references else None,
-                model=chat_request.model, 
+                model=chat_request.model,
                 provider=chat_request.provider
             )
-            
+
             yield ModelEvent.typing()
 
             # 2. Provider Resolution (direct from request, no routing layer)
@@ -104,7 +104,30 @@ class OrchestratorController:
             if chat_request.file_references:
                 context = self._get_file_context(chat_request.file_references)
             elif chat_request.requires_rag:
-                context = self._retrieve_context(chat_request.message, user_id, actual_conversation_id)
+                # Optional query rewriting (#3, config-gated) — runs async on the loop
+                # so short/pronoun-heavy follow-ups embed a self-contained query.
+                rag_query = chat_request.message
+                try:
+                    from app.core.config_manager import get_config as _get_cfg
+                    rag_cfg = _get_cfg().rag
+                except Exception:
+                    rag_cfg = None
+                if rag_cfg is not None and getattr(rag_cfg, "query_rewrite", False) and actual_conversation_id:
+                    try:
+                        from app.chat.service import get_last_n_messages
+                        from app.rag.query_rewriter import rewrite_query
+
+                        _key = self._get_user_api_key(user_id, provider_id)
+                        history = get_last_n_messages(actual_conversation_id, n=6)
+                        rag_query = await rewrite_query(
+                            chat_request.message, history, provider, model_id, _key
+                        )
+                    except Exception as exc:
+                        logger.warning("Query rewrite skipped: %s", exc)
+                        rag_query = chat_request.message
+                # Run the blocking RAG retrieval (embed + vector search + rerank) in a
+                # worker thread so it doesn't stall the FastAPI event loop.
+                context = await asyncio.to_thread(self._retrieve_context, rag_query, user_id, actual_conversation_id)
 
             # 3b. Web search — inject results as context when search mode is enabled.
             # Uses the configured search engine (default duckduckgo), with SearXNG
@@ -182,7 +205,7 @@ class OrchestratorController:
                 actual_conversation_id,
                 system_prompt=user_system_prompt,
             )
-            
+
             # 5. Generation
             # Resolve API key from user's stored keys
             from app.database import get_db as _get_db
@@ -202,7 +225,7 @@ class OrchestratorController:
                 top_p=user_top_p,
                 api_key=_api_key,
             )
-            
+
             response_content = ""
             try:
                 async for event in provider.stream(req):
@@ -233,24 +256,38 @@ class OrchestratorController:
                     output_tokens=estimate_tokens(response_content),
                     duration_ms=int((time.monotonic() - usage_started) * 1000),
                 )
-                
+
             # 7. Background Tasks (Summary)
             # This should ideally be offloaded to a background task queue
             if should_summarize_conversation(actual_conversation_id):
                 # Placeholder: Trigger summary generation
                 pass
-                
+
         finally:
             self.session_manager.stop_streaming(chat_request.sessionId)
             # Clean up provider's aiohttp session to avoid unclosed connector warnings
+            # (asyncio is imported at module scope — no local import, or it would make
+            # `asyncio` a function-local name and break earlier asyncio.to_thread calls).
             try:
-                import asyncio
                 if hasattr(provider, '_session') and provider._session and not provider._session.closed:
                     asyncio.ensure_future(provider._session.close())
             except Exception:
                 pass
             yield ModelEvent.done()
-            
+
+    def _get_user_api_key(self, user_id: int, provider_id: str) -> str | None:
+        """Return the user's stored API key for a provider, if any."""
+        try:
+            from app.database import get_db
+            db = get_db()
+            row = db.execute(
+                "SELECT encrypted_key FROM api_keys WHERE user_id = ? AND provider = ?",
+                (user_id, provider_id),
+            ).fetchone()
+            return row[0] if row else None
+        except Exception:
+            return None
+
     def _get_search_engine(self, user_id: int) -> str:
         """Read the user's selected search engine (default duckduckgo)."""
         try:
@@ -325,16 +362,42 @@ class OrchestratorController:
             if not candidates:
                 return "No relevant documents were found in your knowledge base for this query."
 
-            # Step 4: Rerank → Top 5
-            top_chunks = rerank(user_message, candidates, top_k=5)
-            if not top_chunks:
-                top_chunks = candidates[:5]
+            # Step 4: Dedup candidates BEFORE reranking so the reranker's limited
+            # top-k slots aren't wasted on duplicate content (#6). Use a None-safe
+            # dedup key so chunks missing chunk_id aren't silently dropped (#5).
+            seen: set = set()
+            unique: list = []
+            for c in candidates:
+                cid = c.get("chunk_id") or hash(c.get("text", ""))
+                if cid in seen:
+                    continue
+                seen.add(cid)
+                unique.append(c)
 
-            # Step 5: Format for LLM with numbered sources so it can cite [n]
-            parts = []
-            for i, c in enumerate(top_chunks):
+            top_chunks = rerank(user_message, unique, top_k=5)
+            if not top_chunks:
+                top_chunks = unique[:5]
+
+            # Step 5: Assemble under a strict token budget so the injected context
+            # stays bounded (avoids overflow, cost, "lost in the middle"). Use a
+            # conservative chars/token ratio (#4) that's safe for code/JSON/non-English.
+            budget = getattr(cfg.rag, "context_token_budget", 3000)
+            parts: list[str] = []
+            used_tokens = 0
+            n = 0
+            for c in top_chunks:
+                text = c.get("text", "")
                 source = c.get("file_name", "source")
-                parts.append(f"[{i+1}] {source}\n{c['text']}")
+                formatted = f"[{n+1}] {source}\n{text}"
+                approx = max(1, len(formatted) // 3)
+                if used_tokens + approx > budget:
+                    break
+                used_tokens += approx
+                n += 1
+                parts.append(formatted)
+
+            if not parts:
+                return "No relevant documents were found in your knowledge base for this query."
             return "\n\n".join(parts)
 
         except Exception as exc:
@@ -349,24 +412,24 @@ class OrchestratorController:
         system_prompt = system_prompt or "You are a helpful AI assistant."
         if context:
             system_prompt += f"\n\nRelevant context is provided below (from web search or your knowledge base). Use it to answer the user's question factually, citing numbered sources as [n] where referenced. If the context doesn't contain enough information, say so and use your own knowledge.\n\n{context}"
-            
+
         messages.append({"role": "system", "content": system_prompt})
-        
+
         # Conversation Summary
         summary = get_conversation_summary(conversation_id)
         if summary:
             messages.append({"role": "system", "content": f"Conversation Summary: {summary}"})
-            
+
         # Recent History
         history = get_last_n_messages(conversation_id, n=5)
         for msg in history:
             messages.append({"role": msg["role"], "content": msg["content"]})
-            
+
         # Current Message
         messages.append({"role": "user", "content": user_message})
-        
+
         return messages
-    
+
     async def cancel_chat(self, session_id: str) -> bool:
         """Cancel an active chat session"""
         return self.session_manager.cancel_session(session_id)

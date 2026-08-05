@@ -46,11 +46,14 @@ async function parseResponse(response: Response, url: string): Promise<any> {
 
 // Helper function to create standardized fetch options
 function createFetchOptions(options: RequestInit = {}): RequestInit {
+  const isFormData = options.body instanceof FormData;
   return {
     ...options,
     credentials: 'include',
     headers: {
-      'Content-Type': 'application/json',
+      // For FormData (multipart uploads), let the browser set the Content-Type
+      // with the multipart boundary — forcing application/json breaks uploads.
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...options.headers,
     },
   };

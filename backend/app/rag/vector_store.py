@@ -67,6 +67,43 @@ def _get_table(user_id: int) -> Any:
 # ── Public API ──────────────────────────────────────────────────────────
 
 
+def _ensure_indexes(table: Any) -> None:
+    """Idempotently build search indexes so queries aren't linear scans.
+
+    Best-effort: each index is guarded by ``list_indices()`` and wrapped in its
+    own try/except so a missing/unsupported index never breaks ingestion.
+    """
+    try:
+        existing = {getattr(idx, "name", None) for idx in table.list_indices()}
+    except Exception:
+        existing = set()
+
+    # Full-text (BM25) index — required for the FTS half of hybrid search.
+    if "text_idx" not in existing:
+        try:
+            table.create_fts_index("text", name="text_idx")
+        except Exception as exc:
+            logger.warning("Could not create FTS index: %s", exc)
+
+    # Scalar indexes on common filter fields (string fields quoted in filters).
+    for col in ("file_id", "conversation_id"):
+        name = f"{col}_idx"
+        if name not in existing:
+            try:
+                table.create_scalar_index(col, index_type="BTREE", name=name)
+            except Exception as exc:
+                logger.warning("Could not create scalar index on %s: %s", col, exc)
+
+    # Vector index (IVF-PQ) — only once there's enough data (LanceDB needs a
+    # minimum row count to build an IVF index; avoid failing on small tables).
+    if "vector_idx" not in existing:
+        try:
+            if table.count_rows() > 256:
+                table.create_index(metric="cosine", index_type="IVF_PQ", name="vector_idx")
+        except Exception as exc:
+            logger.warning("Could not create vector index: %s", exc)
+
+
 def insert_chunks(records: list[dict[str, Any]], user_id: int) -> int:
     """Insert chunk records into the user's LanceDB table.
 
@@ -85,6 +122,7 @@ def insert_chunks(records: list[dict[str, Any]], user_id: int) -> int:
     """
     table = _get_table(user_id)
     table.add(records)
+    _ensure_indexes(table)
     logger.info("Inserted %d chunks for user %d", len(records), user_id)
     return len(records)
 

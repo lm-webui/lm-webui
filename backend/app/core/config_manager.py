@@ -96,6 +96,8 @@ class RAGConfig(BaseModel):
     chunk_overlap: int = Field(default=64, ge=0, le=256, description="Overlap between adjacent chunks")
     top_k_retrieval: int = Field(default=20, ge=1, le=100, description="Pool size before reranking")
     scope: str = Field(default="user", description="Retrieval scope: 'user' (all docs) or 'conversation'")
+    context_token_budget: int = Field(default=2000, ge=100, le=32000, description="Max tokens of RAG context injected into the prompt")
+    query_rewrite: bool = Field(default=False, description="Rewrite short/ambiguous queries via LLM before embedding (conversational RAG)")
     top_k_rerank: int = Field(default=5, ge=1, le=20, description="Final items after reranking")
 
 class LLMConfig(BaseModel):
