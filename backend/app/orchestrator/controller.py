@@ -103,7 +103,6 @@ class OrchestratorController:
                 message=chat_request.message,
                 file_references=chat_request.file_references,
                 web_search=chat_request.webSearch,
-                requires_rag=chat_request.requires_rag,
                 image_mode=getattr(chat_request, "isImageMode", False),
             )
 

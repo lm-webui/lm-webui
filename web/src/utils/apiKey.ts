@@ -15,7 +15,7 @@ export async function getApiKeyForProvider(
   if (isAuthenticated) {
     try {
       const backendProvider = PROVIDER_MAPPING[provider as keyof typeof PROVIDER_MAPPING] || provider;
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       
       const data = await authFetch(`${API_BASE_URL}/api/api_keys/${backendProvider}`);
       return data.api_key;

@@ -15,7 +15,6 @@ class ChatRequest:
     message: str
     model: str
     provider: Optional[str] = "openai"
-    requires_rag: bool = True
     file_references: Optional[List[str]] = None
     metadata: Optional[Dict[str, Any]] = None
     # Reasoning-specific fields
@@ -60,7 +59,6 @@ class ChatRequest:
             message=data["message"],
             model=data.get("model", "gpt-4.1-mini"),
             provider=data.get("provider", "openai"),
-            requires_rag=data.get("requires_rag", True),
             file_references=data.get("file_references"),
             metadata=metadata,
             conversationId=conversationId,

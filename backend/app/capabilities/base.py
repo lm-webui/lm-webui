@@ -24,7 +24,6 @@ class CapabilityContext:
     top_p: Any = None
 
     # mutable outputs
-    context: str = ""  # (legacy aggregate; kept for compat)
     results: List[Any] = field(default_factory=list)
     messages: List[dict] = field(default_factory=list)
     images: Optional[List[str]] = None

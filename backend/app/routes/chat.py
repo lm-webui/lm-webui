@@ -53,9 +53,6 @@ async def chat_completion(
             conversationId=request.get("conversation_id"),
             webSearch=request.get("web_search", False),
             file_references=request.get("file_references", []),
-            # RAG is a capability, not the default — only retrieve when the
-            # user explicitly asked for knowledge (frontend sends `use_rag`).
-            requires_rag=request.get("requires_rag", request.get("use_rag", False)),
         )
         
         # Determine Conversation ID (or let orchestrator handle it, but we need it for response)
@@ -95,9 +92,6 @@ async def chat_completion(
             "response": full_response,
             "conversation_id": actual_conversation_id,
             "image_url": generated_image_url,
-            "context_used": {
-                "used_rag": chat_req.requires_rag
-            }
         }
         
     except ValueError as e:

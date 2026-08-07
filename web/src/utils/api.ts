@@ -134,17 +134,12 @@ function validateChatRequest(req: ChatRequest): void {
 
 export async function chatWithModel(req: ChatRequest): Promise<any> {
   validateChatRequest(req);
-  return await _chatWithModel(req, false, false);
+  return await _chatWithModel(req, false);
 }
 
 export async function chatWithModelStream(req: ChatRequest, onChunk?: (chunk: string) => void, onStatus?: (status: string) => void): Promise<string> {
   validateChatRequest(req);
-  return await _chatWithModel(req, true, false, onChunk, onStatus);
-}
-
-export async function chatWithRAG(req: ChatRequest): Promise<string> {
-  validateChatRequest(req);
-  return await _chatWithModel(req, false, true);
+  return await _chatWithModel(req, true, onChunk, onStatus);
 }
 
 export async function chatWithRAGStream(req: ChatRequest, onChunk?: (chunk: string) => void, onStatus?: (status: string) => void): Promise<string> {
@@ -153,9 +148,8 @@ export async function chatWithRAGStream(req: ChatRequest, onChunk?: (chunk: stri
 }
 
 async function _chatWithModel(
-  req: ChatRequest, 
-  stream: boolean = false, 
-  useRAG: boolean = false,
+  req: ChatRequest,
+  stream: boolean = false,
   onChunk?: (chunk: string) => void,
   onStatus?: (status: string) => void
 ): Promise<string> {
@@ -163,7 +157,6 @@ async function _chatWithModel(
   const requestWithKey = {
     ...req,
     api_key: req.api_key,
-    use_rag: useRAG,  // Add use_rag parameter for enhanced endpoint
   };
 
   console.log('🔍 DEBUG _chatWithModel requestWithKey:', {

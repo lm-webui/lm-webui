@@ -19,7 +19,7 @@ export class FileService {
       formData.append('conversation_id', currentConversationId);
     }
 
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
     const result = await authFetch(`${API_BASE_URL}/api/upload/files`, {
       method: 'POST',

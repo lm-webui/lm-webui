@@ -37,7 +37,6 @@ def plan(
     message: str = "",
     file_references: List[dict] | None = None,
     web_search: bool = False,
-    requires_rag: bool = False,
     image_mode: bool = False,
 ) -> ExecutionPlan:
     """Classify intent, then build the minimal capability plan."""

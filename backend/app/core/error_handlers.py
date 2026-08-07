@@ -7,6 +7,7 @@ It follows DRY principles and provides reusable error handlers for common scenar
 
 import logging
 import functools
+import inspect
 from typing import Any, Dict, Optional, Union
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
@@ -484,10 +485,14 @@ def with_error_handling(
     """Decorator to add standardized error handling to functions"""
     def decorator(func):
         @functools.wraps(func)  # preserve the endpoint signature for FastAPI introspection
-        def wrapper(*args, **kwargs):
+        async def wrapper(*args, **kwargs):
             try:
-                return func(*args, **kwargs)
-            except (ValidationException, AuthenticationException, 
+                result = func(*args, **kwargs)
+                # Handle both sync and async endpoints.
+                if inspect.isawaitable(result):
+                    result = await result
+                return result
+            except (ValidationException, AuthenticationException,
                    AuthorizationException, NotFoundException,
                    ConflictException, RateLimitException, ProviderException) as e:
                 # Re-raise our custom exceptions
@@ -496,7 +501,7 @@ def with_error_handling(
                 # Re-raise HTTP exceptions
                 raise e
             except Exception as e:
-                # Handle generic exceptions
+                # Handle generic exceptions (incl. async) so they don't surface as raw 500s
                 logger.error(f"{error_message}: {e}", exc_info=True)
                 raise BaseAPIException(
                     status_code=status_code,

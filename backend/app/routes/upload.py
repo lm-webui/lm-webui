@@ -208,7 +208,7 @@ async def _handle_general_upload(
             user_id["id"],
             final_filename,
             str(file_path),
-            file.content_type,
+            file.content_type or "application/octet-stream",  # NOT NULL column; fallback if missing
             file_size,
             conversation_id,
             file_type_db

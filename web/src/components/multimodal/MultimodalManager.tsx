@@ -73,7 +73,7 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
     setState(prev => ({ ...prev, isMediaLibraryLoading: true }));
     
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await fetch(
         `${API_BASE_URL}/api/multimodal/media-library?limit=100&offset=0&include_generated=true`,
         {
@@ -106,7 +106,7 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
   // Load images for a specific conversation
   const loadConversationImages = useCallback(async (conversationId: string) => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await fetch(`${API_BASE_URL}/api/multimodal/conversation/${conversationId}/images`, {
         credentials: 'include',
       });
@@ -125,7 +125,7 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
   // Delete a media library entry
   const deleteMediaEntry = useCallback(async (mediaId: string): Promise<boolean> => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       const response = await fetch(`${API_BASE_URL}/api/multimodal/media-library/${mediaId}`, {
         method: 'DELETE',
         credentials: 'include',
@@ -163,7 +163,7 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
     setState(prev => ({ ...prev, isGeneratingImage: true }));
 
     try {
-      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8008';
+      const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
       console.log("🌐 API_BASE_URL:", API_BASE_URL);
 
       let finalConversationId = conversationId || activeChatId;
