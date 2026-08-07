@@ -40,24 +40,6 @@ export interface ChatSlice extends BaseSlice {
   isImageProcessing: (imageId: string) => boolean;
 }
 
-  // State
-  sessions: Record<string, any>;
-  activeSessionId: string | null;
-  connected: boolean;
-  metrics: any;
-  
-  // Actions
-  setConnected: (connected: boolean) => void;
-  setActiveSession: (sessionId: string) => void;
-  handleWebSocketEvent: (event: any) => void;
-  updateMetrics: (metrics: any) => void;
-  clearSession: (sessionId: string) => void;
-  
-  // Selectors
-  activeSession: () => any | null;
-  sessionSteps: (sessionId: string) => any[];
-}
-
 // Context slice state and actions
 export interface ContextSlice extends BaseSlice {
   // State

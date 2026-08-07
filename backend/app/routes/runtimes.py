@@ -169,7 +169,7 @@ async def get_vision_status(_: dict = Depends(require_permission("runtime.view")
     bundles = scan_vision_models()
     return {
         "runtime": "vision",
-        "available": bool(bundles) and shutil.which("llama-server") is not None,
+        "available": bool(bundles) and all(b.get("mmproj") for b in bundles) and shutil.which("llama-server") is not None,
         "bundles": bundles,
         "bundle_count": len(bundles),
         "llama_server_available": shutil.which("llama-server") is not None,
