@@ -206,10 +206,15 @@ async def health():
     }
 
 
-# CORS — allow any origin (safe for local AI tool with JWT auth)
+# CORS — explicit origins (browsers reject `*` with credentials).
+# Override via CORS_ORIGINS (comma-separated) for the deployed origin.
+_cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] or [
+    "http://localhost:5177",
+    "http://localhost:7070",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[

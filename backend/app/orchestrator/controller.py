@@ -212,7 +212,7 @@ class OrchestratorController:
                     event_type="chat",
                     provider=provider_id,
                     model=model_id,
-                    input_tokens=sum(estimate_tokens(str(m.get("content", ""))) for m in messages),
+                    input_tokens=sum(estimate_tokens(str(m.get("content", ""))) for m in ctx.messages),
                     output_tokens=estimate_tokens(response_content),
                     duration_ms=int((time.monotonic() - usage_started) * 1000),
                 )

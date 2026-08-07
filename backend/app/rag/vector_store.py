@@ -9,36 +9,51 @@ import os
 import logging
 from typing import Any
 
-import lancedb
-from lancedb.pydantic import LanceModel, Vector
+# Lazy lancedb import — RAG degrades gracefully when lancedb isn't installed,
+# instead of crashing every RAG path at module import time.
+try:
+    import lancedb
+    from lancedb.pydantic import LanceModel, Vector
+    _LANCE_OK = True
+except ImportError:  # pragma: no cover
+    lancedb = None
+    LanceModel = None
+    Vector = None
+    _LANCE_OK = False
 
 logger = logging.getLogger(__name__)
 
 # ── Schema ──────────────────────────────────────────────────────────────
 
 
-class ChunkModel(LanceModel):
-    """A single chunk stored in LanceDB."""
+if _LANCE_OK:
+    class ChunkModel(LanceModel):
+        """A single chunk stored in LanceDB."""
 
-    chunk_id: str
-    text: str
-    vector: Vector(384)
-    file_id: str
-    conversation_id: str | None = None
-    user_id: int
-    year: int | None = None
-    uploaded_at: str | None = None
-    file_name: str | None = None
-    chunk_index: int | None = None
+        chunk_id: str
+        text: str
+        vector: Vector(384)
+        file_id: str
+        conversation_id: str | None = None
+        user_id: int
+        year: int | None = None
+        uploaded_at: str | None = None
+        file_name: str | None = None
+        chunk_index: int | None = None
+else:
+    ChunkModel = None
 
 
 # ── Connection ──────────────────────────────────────────────────────────
 
-_db: lancedb.DBConnection | None = None
+_db: Any = None
 
 
-def _get_db() -> lancedb.DBConnection:
+def _get_db() -> Any:
     global _db
+    if not _LANCE_OK:
+        logger.warning("lancedb not installed — RAG vector store disabled")
+        raise RuntimeError("lancedb not installed")
     if _db is not None:
         return _db
     from app.core.config_manager import get_data_dir
@@ -120,19 +135,39 @@ def insert_chunks(records: list[dict[str, Any]], user_id: int) -> int:
     int
         Number of records inserted.
     """
-    table = _get_table(user_id)
-    table.add(records)
-    _ensure_indexes(table)
-    logger.info("Inserted %d chunks for user %d", len(records), user_id)
-    return len(records)
+    if not _LANCE_OK:
+        logger.warning("lancedb not installed — skipping chunk insert")
+        return 0
+    try:
+        table = _get_table(user_id)
+        table.add(records)
+        _ensure_indexes(table)
+        logger.info("Inserted %d chunks for user %d", len(records), user_id)
+        return len(records)
+    except RuntimeError as exc:  # lancedb missing
+        logger.warning("RAG insert skipped: %s", exc)
+        return 0
+    except Exception as exc:
+        logger.warning("Chunk insert failed: %s", exc)
+        return 0
 
 
 def delete_file_chunks(file_id: str, user_id: int) -> int:
     """Remove all chunks belonging to a specific file."""
-    table = _get_table(user_id)
-    result = table.delete(f"file_id = '{file_id}'")
-    logger.info("Deleted chunks for file %s (user %d)", file_id, user_id)
-    return result
+    if not _LANCE_OK:
+        logger.warning("lancedb not installed — skipping chunk delete")
+        return 0
+    try:
+        table = _get_table(user_id)
+        result = table.delete(f"file_id = '{file_id}'")
+        logger.info("Deleted chunks for file %s (user %d)", file_id, user_id)
+        return result
+    except RuntimeError as exc:
+        logger.warning("RAG delete skipped: %s", exc)
+        return 0
+    except Exception as exc:
+        logger.warning("Chunk delete failed: %s", exc)
+        return 0
 
 
 def hybrid_search(
@@ -167,7 +202,17 @@ def hybrid_search(
     list[dict]
         Each dict matches ``ChunkModel`` fields plus a ``_score`` key.
     """
-    table = _get_table(user_id)
+    if not _LANCE_OK:
+        logger.warning("lancedb not installed — RAG retrieval disabled")
+        return []
+    try:
+        table = _get_table(user_id)
+    except RuntimeError as exc:
+        logger.warning("RAG search skipped: %s", exc)
+        return []
+    except Exception as exc:
+        logger.warning("RAG search failed to open table: %s", exc)
+        return []
 
     if conversation_id:
         filters = dict(filters or {})

@@ -416,10 +416,17 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Available GGUF Files</h3>
         {resolvedData?.is_vision && (
-          <p className="text-xs text-muted-foreground">
-            🖼️ Vision model — download the main model <b>and</b> the <b>mmproj</b> file;
-            they will be bundled together.
-          </p>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
+            <div className="font-semibold">🖼️ Vision model</div>
+            <p className="mt-1">You must download the main model <b>AND</b> the <b>mmproj</b>;
+            vision won't work without the mmproj.</p>
+            {resolvedData.files?.some((f) => f.filename.toLowerCase().includes("mmproj")) &&
+              resolvedData.files?.some((f) => f.filename.toLowerCase().endsWith(".gguf")) && (
+                <p className="mt-1 font-medium text-green-700 dark:text-green-400">
+                  ✓ Vision-ready — both files will be bundled together.
+                </p>
+              )}
+          </div>
         )}
         <ScrollArea className="h-[200px] rounded-md border">
           <div className="p-2 space-y-2">
@@ -435,7 +442,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
                       <div className="text-sm font-medium truncate">{file.filename}</div>
                       <div className="text-xs text-muted-foreground">{file.human_size}</div>
                       {file.filename.toLowerCase().includes('mmproj') && (
-                        <Badge variant="secondary" className="mt-1">mmproj (vision projector)</Badge>
+                        <Badge className="mt-1 bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Required · mmproj</Badge>
                       )}
                     </div>
                     <div className="flex items-center gap-2">

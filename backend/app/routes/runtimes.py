@@ -176,3 +176,34 @@ async def get_vision_status(_: dict = Depends(require_permission("runtime.view")
         "running": vision_runtime.running,
         "port": vision_runtime._port,
     }
+
+
+@router.get("/gguf/health")
+async def get_gguf_runtime_health(_: dict = Depends(require_permission("runtime.view"))):
+    """GGUF runtime executables + version + API reachability (prompt8 validation)."""
+    import shutil
+    import subprocess
+
+    def _have(bin_name: str) -> bool:
+        return shutil.which(bin_name) is not None
+
+    def _version(bin_name: str) -> str:
+        try:
+            out = subprocess.run(
+                [bin_name, "--version"], capture_output=True, text=True, timeout=5
+            )
+            return (out.stdout or out.stderr or "").strip().splitlines()[:1]
+        except Exception:
+            return []
+
+    return {
+        "runtime": "gguf",
+        "executables": {
+            "llama_server": _have("llama-server"),
+            "llama_cli": _have("llama-cli"),
+            "llama_bench": _have("llama-bench"),
+            "llama_quantize": _have("llama-quantize"),
+        },
+        "version": _version("llama-server"),
+        "api_reachable": False,  # llama-server /health when running; see vision_runtime
+    }

@@ -178,6 +178,28 @@ install_llamacpp() {
   fi
 }
 
+check_gguf_runtime() {
+  log_info "Checking llama.cpp runtime..."
+  missing=0
+  for bin in llama-server llama-cli llama-bench llama-quantize; do
+    if command -v "$bin" &>/dev/null; then
+      log_success "  $bin: found"
+    else
+      log_warning "  $bin: not found"
+      missing=1
+    fi
+  done
+  if command -v llama-server &>/dev/null; then
+    log_info "  llama-server version: $(llama-server --version 2>&1 | head -1)"
+  fi
+  if [ "$missing" -eq 1 ]; then
+    log_warning "llama.cpp CLI binaries missing — GGUF inference still works via llama-cpp-python,"
+    log_warning "but Vision (VL) models require the llama-server binary. Install it from llama.cpp releases."
+  else
+    log_success "llama.cpp runtime OK — vision ready."
+  fi
+}
+
 install_service() {
   log_info "Installing service..."
   case "$(uname)" in
@@ -315,6 +337,7 @@ main() {
   build_frontend
   install_dependencies
   install_llamacpp
+  check_gguf_runtime
   install_service
   install_cli
   wait_for_ready

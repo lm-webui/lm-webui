@@ -142,11 +142,6 @@ export async function chatWithModelStream(req: ChatRequest, onChunk?: (chunk: st
   return await _chatWithModel(req, true, onChunk, onStatus);
 }
 
-export async function chatWithRAGStream(req: ChatRequest, onChunk?: (chunk: string) => void, onStatus?: (status: string) => void): Promise<string> {
-  validateChatRequest(req);
-  return await _chatWithModel(req, true, true, onChunk, onStatus);
-}
-
 async function _chatWithModel(
   req: ChatRequest,
   stream: boolean = false,
