@@ -47,6 +47,7 @@ interface ResolveResponse {
   type: string;
   repo_id?: string;
   tag?: string;
+  is_vision?: boolean;
   files?: ResolvedFile[];
   file_url?: string;
   filename?: string;
@@ -163,9 +164,16 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
     setIsDownloading(true);
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+      // Vision models: route all files (main GGUF + mmproj) into the same
+      // models/vision/<model>/ bundle folder so the runtime can load both.
+      const subdir =
+        resolvedData?.is_vision && resolvedData?.repo_id
+          ? `vision/${resolvedData.repo_id.split('/').pop()}`
+          : undefined;
       const response = await axios.post(`${API_BASE_URL}/api/models/download`, {
         file_url: file.url,
-        filename: file.filename
+        filename: file.filename,
+        ...(subdir ? { subdir } : {}),
       });
 
       const taskId = response.data.task_id;
@@ -407,6 +415,12 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
     return (
       <div className="space-y-2">
         <h3 className="text-sm font-medium">Available GGUF Files</h3>
+        {resolvedData?.is_vision && (
+          <p className="text-xs text-muted-foreground">
+            🖼️ Vision model — download the main model <b>and</b> the <b>mmproj</b> file;
+            they will be bundled together.
+          </p>
+        )}
         <ScrollArea className="h-[200px] rounded-md border">
           <div className="p-2 space-y-2">
             {resolvedData.files.map((file) => {
@@ -420,6 +434,9 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{file.filename}</div>
                       <div className="text-xs text-muted-foreground">{file.human_size}</div>
+                      {file.filename.toLowerCase().includes('mmproj') && (
+                        <Badge variant="secondary" className="mt-1">mmproj (vision projector)</Badge>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       {badgeInfo && (

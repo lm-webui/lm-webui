@@ -24,6 +24,8 @@ class GenerateRequest(BaseModel):
     model: str
     messages: List[Dict[str, str]]
     api_key: Optional[str] = None
+    # Multimodal — base64 data-URIs of images for vision-capable providers.
+    images: Optional[List[str]] = None
     max_tokens: int = 4000
     temperature: float = 0.7
     top_p: Optional[float] = None

@@ -52,7 +52,10 @@ async def chat_completion(
             provider=request.get("provider", "openai"),
             conversationId=request.get("conversation_id"),
             webSearch=request.get("web_search", False),
-            file_references=request.get("file_references", [])
+            file_references=request.get("file_references", []),
+            # RAG is a capability, not the default — only retrieve when the
+            # user explicitly asked for knowledge (frontend sends `use_rag`).
+            requires_rag=request.get("requires_rag", request.get("use_rag", False)),
         )
         
         # Determine Conversation ID (or let orchestrator handle it, but we need it for response)
@@ -63,13 +66,16 @@ async def chat_completion(
         
         # Process Request (Collect Stream)
         full_response = ""
+        generated_image_url = None
         context_used = {} # Placeholder for now
-        
+
         actual_conversation_id = conversation_id
-        
+
         async for event in orchestrator.process_request(chat_req, user_id_int, conversation_id or "new"):
             if event.type == "token" and event.content:
                 full_response += event.content
+            elif event.type == "image" and event.data:
+                generated_image_url = event.data.get("image_url")
             elif event.type == "metadata" and event.content:
                 if isinstance(event.content, dict):
                     cid = event.content.get("conversation_id")
@@ -77,7 +83,7 @@ async def chat_completion(
                         actual_conversation_id = cid
             elif event.type == "error":
                 raise HTTPException(500, f"Orchestrator error: {event.content}")
-                
+
         # Post-processing (Formatting)
         if not request.get("show_raw_response", False):
             try:
@@ -88,6 +94,7 @@ async def chat_completion(
         return {
             "response": full_response,
             "conversation_id": actual_conversation_id,
+            "image_url": generated_image_url,
             "context_used": {
                 "used_rag": chat_req.requires_rag
             }

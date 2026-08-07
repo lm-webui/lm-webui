@@ -9,6 +9,17 @@ from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+_ocr_engine_instance = None
+
+
+def _get_ocr_engine():
+    """Lazy, cached RapidOCR engine (avoid reloading the model per file)."""
+    global _ocr_engine_instance
+    if _ocr_engine_instance is None:
+        from rapidocr import RapidOCR
+        _ocr_engine_instance = RapidOCR()
+    return _ocr_engine_instance
+
 
 class FileProcessor:
     """Extracts text content from files."""
@@ -40,27 +51,91 @@ class FileProcessor:
         if suffix == '.docx':
             return self._extract_docx(path)
 
-        # Images — no text extraction; LLM reads them via vision
+        # Images — OCR text (if OCR installed), otherwise note for vision
         if suffix in ('.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'):
-            return "[Image file — processed via LLM vision when referenced in chat]"
+            try:
+                from PIL import Image
+                pil = Image.open(str(path))
+                text = self._ocr_image(pil)
+                return text.strip() if text and text.strip() else "[Image — no text detected; may need vision analysis]"
+            except ImportError:
+                return "[Image — OCR (rapidocr/pillow) not installed]"
 
         return "[Unsupported file format]"
 
     def _extract_pdf(self, path: Path) -> str:
-        """Extract text from PDF."""
+        """Extract text from PDF. If the PDF is scanned (no embedded text),
+        fall back to rendering pages and OCR-ing them (pypdfium2 + RapidOCR)."""
+        text = ""
         try:
             import pdfplumber
             with pdfplumber.open(str(path)) as pdf:
                 pages = [page.extract_text() for page in pdf.pages if page.extract_text()]
-                return "\n\n".join(pages)
+                text = "\n\n".join(pages)
         except ImportError:
             logger.warning("pdfplumber not installed, trying pypdf")
             try:
                 from pypdf import PdfReader
                 reader = PdfReader(str(path))
-                return "\n\n".join(p.extract_text() for p in reader.pages if p.extract_text())
+                text = "\n\n".join(p.extract_text() for p in reader.pages if p.extract_text())
             except ImportError:
                 return "[PDF — install pypdf or pdfplumber for text extraction]"
+        except Exception as exc:
+            logger.warning("PDF text extraction failed: %s", exc)
+
+        if text and text.strip():
+            return text
+
+        # Scanned PDF (no embedded text) — OCR the rendered pages.
+        logger.info("No embedded text in %s — running OCR", path.name)
+        return self._ocr_pdf(path)
+
+    def _ocr_pdf(self, path: Path) -> str:
+        """Render each PDF page to an image (pypdfium2) and OCR it (RapidOCR)."""
+        try:
+            import pypdfium2 as pdfium
+        except ImportError:
+            return "[PDF — install pypdfium2 for scanned-page OCR]"
+        try:
+            pdf = pdfium.PdfDocument(str(path))
+        except Exception as exc:
+            logger.warning("Could not open PDF for OCR: %s", exc)
+            return ""
+        parts = []
+        try:
+            for i in range(len(pdf)):
+                page = pdf[i]
+                bitmap = page.render(scale=2.0)  # ~144 DPI
+                try:
+                    pil = bitmap.to_pil().convert("RGB")
+                finally:
+                    bitmap.close()
+                page_text = self._ocr_image(pil)
+                if page_text and page_text.strip():
+                    parts.append(page_text)
+        except Exception as exc:
+            logger.warning("PDF OCR failed: %s", exc)
+        finally:
+            pdf.close()
+        return "\n\n".join(parts)
+
+    def _ocr_image(self, pil_image) -> str:
+        """OCR a PIL image with RapidOCR (cached engine). Returns '' on failure."""
+        try:
+            from rapidocr import RapidOCR
+        except ImportError:
+            logger.warning("RapidOCR not installed")
+            return ""
+        try:
+            engine = _get_ocr_engine()
+            out = engine(pil_image)
+            if out is None:
+                return ""
+            texts = getattr(out, "txts", None) or []
+            return "\n".join(str(t).strip() for t in texts if t and str(t).strip())
+        except Exception as exc:
+            logger.warning("OCR failed: %s", exc)
+            return ""
 
     def _extract_docx(self, path: Path) -> str:
         """Extract text from DOCX."""

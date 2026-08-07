@@ -25,3 +25,7 @@ rag:
   scope: "user"
   context_token_budget: 2000
   query_rewrite: false
+
+vision:
+  provider: ""
+  model: "unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf"

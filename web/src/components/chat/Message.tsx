@@ -666,6 +666,21 @@ export function Message({
                     >
                       <Download className="h-3 w-3" />
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="absolute bottom-1 right-8 opacity-40 hover:opacity-100 transition-opacity h-6 w-6 p-0 bg-background/90 backdrop-blur-sm border-border/50 hover:border-border"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.dispatchEvent(new CustomEvent("studio-load", {
+                          detail: { prompt: message.content || "", imageUrl: message.generatedImageUrl },
+                        }));
+                        window.dispatchEvent(new Event("navigate-studio"));
+                      }}
+                      title="Open in Image Studio"
+                    >
+                      <Image className="h-3 w-3" />
+                    </Button>
                   </div>
                 </div>
               )}

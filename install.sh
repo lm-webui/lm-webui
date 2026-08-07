@@ -67,7 +67,7 @@ setup_environment() {
     sudo mkdir -p "$LMWEBUI_HOME" && sudo chown -R "$(whoami)" "$LMWEBUI_HOME" || {
       log_error "Cannot write to $LMWEBUI_HOME. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
   fi
-  mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,cache/fastembed,cache/flashrank,secrets,logs}
+  mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,models/vision,cache/fastembed,cache/flashrank,secrets,logs}
   # Check if config.yaml needs creation or upgrade from old format
   _NEEDS_CONFIG=false
   if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
@@ -100,6 +100,9 @@ rag:
   scope: "user"
   context_token_budget: 2000
   query_rewrite: false
+vision:
+  provider: ""
+  model: "unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf"
 CONFIGEOF
     log_success "Created config.yaml"
   fi

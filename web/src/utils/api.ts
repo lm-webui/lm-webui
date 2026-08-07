@@ -132,7 +132,7 @@ function validateChatRequest(req: ChatRequest): void {
   }
 }
 
-export async function chatWithModel(req: ChatRequest): Promise<string> {
+export async function chatWithModel(req: ChatRequest): Promise<any> {
   validateChatRequest(req);
   return await _chatWithModel(req, false, false);
 }
@@ -186,7 +186,7 @@ async function _chatWithModel(
     throw new Error(response.message || response.error);
   }
 
-  return response.response;
+  return response;  // full object: { response, image_url?, conversation_id }
 }
 
 export async function searchQuery(query: string): Promise<Array<{title: string, link: string, snippet: string}>> {

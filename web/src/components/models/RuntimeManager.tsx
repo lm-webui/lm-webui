@@ -18,7 +18,7 @@ import {
   HardDrive, Trash2, Cpu, CloudDownload, RefreshCw,
   Loader2, CheckCircle, XCircle, Server, Search, FolderOpen,
   ChevronDown, Image, Copy, ScanLine, ExternalLink, Download,
-  Cpu as ChipIcon, Zap,
+  Cpu as ChipIcon, Zap, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authFetch } from "@/utils/api";
@@ -79,6 +79,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [downloadModal, setDownloadModal] = useState<"gguf" | null>(null);
   const [mlxStatus, setMlxStatus] = useState<MLXStatus | null>(null);
   const [loadingMlx, setLoadingMlx] = useState(false);
+  const [visionStatus, setVisionStatus] = useState<any>(null);
+  const [loadingVision, setLoadingVision] = useState(false);
   const [installingMlx, setInstallingMlx] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [detectedExternals, setDetectedExternals] = useState<DetectedExternal[]>([]);
@@ -99,6 +101,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       fetchRuntimes();
       fetchModels();
       fetchMlxInfo();
+      fetchVisionInfo();
       fetchGgufConfig();
       scanExternals();
       fetchGpuInfo();
@@ -135,6 +138,18 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       console.error("Failed to fetch MLX info:", error);
     } finally {
       setLoadingMlx(false);
+    }
+  };
+
+  const fetchVisionInfo = async () => {
+    setLoadingVision(true);
+    try {
+      const data = await authFetch("/api/runtimes/vision/status");
+      setVisionStatus(data);
+    } catch (error) {
+      console.error("Failed to fetch vision info:", error);
+    } finally {
+      setLoadingVision(false);
     }
   };
 
@@ -318,10 +333,11 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         </div>
 
         <Tabs defaultValue="gguf" className="flex-1 flex flex-col overflow-hidden">
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="gguf" className="gap-2"><HardDrive className="h-4 w-4" /> GGUF</TabsTrigger>
             <TabsTrigger value="mlx" className="gap-2"><Cpu className="h-4 w-4" /> MLX</TabsTrigger>
             <TabsTrigger value="comfyui" className="gap-2"><Image className="h-4 w-4" /> ComfyUI</TabsTrigger>
+            <TabsTrigger value="vision" className="gap-2"><Eye className="h-4 w-4" /> Vision</TabsTrigger>
           </TabsList>
 
         <TabsContent value="gguf" className="m-0 overflow-y-auto scrollbar-hide flex-1">
@@ -672,6 +688,45 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             )}
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="vision" className="m-0 overflow-y-auto scrollbar-hide flex-1">
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                  <Eye className="h-5 w-5 text-purple-600" />
+                  <CardTitle className="text-base">Vision (VL models)</CardTitle>
+                  <Badge className={visionStatus?.available ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
+                    <CheckCircle className="h-3 w-3 mr-1" />
+                    {visionStatus?.available ? "Ready" : "Not configured"}
+                  </Badge>
+                  <Button size="sm" variant="ghost" className="h-7 gap-1" onClick={fetchVisionInfo} disabled={loadingVision}>
+                    <RefreshCw className="h-3 w-3" /> Refresh
+                  </Button>
+                </div>
+                <CardDescription>
+                  Vision bundles (main GGUF + mmproj) served via llama-server. Download the model
+                  and its mmproj into models/vision/&lt;model&gt;/ to enable image analysis.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-sm text-muted-foreground">
+                  llama-server: {visionStatus?.llama_server_available ? "available" : "not found on PATH"} · running: {visionStatus?.running ? "yes" : "no"}
+                </div>
+                {(visionStatus?.bundles?.length || 0) > 0 ? (
+                  <div className="space-y-2">
+                    {visionStatus.bundles.map((b: any) => (
+                      <div key={b.path} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm">
+                        <span className="font-medium truncate">{b.name}</span>
+                        <span className="text-xs text-muted-foreground">{b.size}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-zinc-400">No vision bundles installed yet.</div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
     </>

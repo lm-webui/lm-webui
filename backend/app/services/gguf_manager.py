@@ -47,6 +47,44 @@ def scan_local_models() -> List[Dict[str, str]]:
     """
     return list_local_models()
 
+def get_models_base() -> Path:
+    """Root models directory (parent of gguf/). Subdirs: gguf, vision, mlx, ..."""
+    return MODELS_DIR.parent
+
+def scan_vision_models() -> List[Dict[str, str]]:
+    """
+    Scan models/vision/* for vision bundles (main GGUF + optional mmproj.gguf).
+    Returns per-model metadata including the mmproj path (vision capability).
+    """
+    base = MODELS_DIR.parent / "vision"
+    models = []
+    try:
+        if not base.exists():
+            return models
+        for bundle_dir in base.iterdir():
+            if not bundle_dir.is_dir():
+                continue
+            gguvs = [f for f in bundle_dir.iterdir() if f.suffix.lower() == ".gguf" and "mmproj" not in f.name.lower()]
+            if not gguvs:
+                continue
+            main = gguvs[0]
+            mmproj = bundle_dir / "mmproj.gguf"
+            has_mmproj = mmproj.exists()
+            file_size = main.stat().st_size
+            models.append({
+                "name": bundle_dir.name,
+                "size": _format_file_size(file_size),
+                "size_bytes": file_size,
+                "path": str(main),
+                "mmproj": str(mmproj) if has_mmproj else None,
+                "is_vision": True,
+            })
+        logger.info(f"Found {len(models)} vision model bundles")
+        return models
+    except Exception as e:
+        logger.error(f"Error scanning vision models: {e}")
+        return []
+
 def download_model(url: str) -> Dict[str, str]:
     """
     Download a GGUF model file from a URL with streaming

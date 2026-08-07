@@ -104,10 +104,11 @@ async def start_gguf_download(download_request: dict, _: dict = Depends(require_
     try:
         file_url = download_request.get("file_url", "").strip()
         filename = download_request.get("filename", "").strip()
-        
+        subdir = download_request.get("subdir", "").strip()  # e.g. "vision/Qwen3-VL-2B..."
+
         if not file_url:
             raise HTTPException(status_code=400, detail="file_url parameter is required")
-        
+
         # Extract filename from URL if not provided
         if not filename:
             from urllib.parse import urlparse
@@ -115,19 +116,26 @@ async def start_gguf_download(download_request: dict, _: dict = Depends(require_
             filename = Path(parsed_url.path).name
             if not filename.endswith('.gguf'):
                 filename = f"model_{filename}.gguf"
-        
+
         # Validate filename
         if not filename.endswith('.gguf'):
             raise HTTPException(status_code=400, detail="Filename must end with .gguf")
-        
+
+        # Compute target dir: vision bundles go under models/vision/<name>/, text GGUF stay in models/gguf/.
+        target_dir = None
+        if subdir:
+            from app.services.gguf_manager import get_models_base
+            target_dir = get_models_base() / subdir
+
         # Start download
-        task_id = await gguf_downloader.start_download(file_url, filename)
-        
+        task_id = await gguf_downloader.start_download(file_url, filename, target_dir)
+
         return {
             "task_id": task_id,
             "status": "starting",
             "websocket_url": f"/api/models/download-ws/{task_id}",
-            "filename": filename
+            "filename": filename,
+            "target_dir": str(target_dir) if target_dir else None
         }
         
     except HTTPException:

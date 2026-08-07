@@ -132,6 +132,12 @@ class ServerConfig(BaseModel):
             raise ValueError(f"Invalid log level '{v}'. Must be one of: {valid_levels}")
         return v.upper()
 
+class VisionConfig(BaseModel):
+    """Vision (image understanding) configuration."""
+    provider: str = Field(default="", description="Vision provider (empty = use active chat provider)")
+    model: str = Field(default="unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf", description="Default vision model")
+
+
 class AppConfig(BaseModel):
     """Main application configuration"""
     environment: Environment = Field(default=Environment.DEVELOPMENT, description="Application environment")
@@ -145,6 +151,7 @@ class AppConfig(BaseModel):
     llm: LLMConfig = Field(default_factory=LLMConfig)
     rag: RAGConfig = Field(default_factory=RAGConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
+    vision: VisionConfig = Field(default_factory=VisionConfig)
     
     class Config:
         env_prefix = "APP_"

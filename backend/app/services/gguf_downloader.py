@@ -68,14 +68,16 @@ class GGUFDownloadManager:
             logger.error(f"URL validation error: {e}")
             return False
 
-    async def start_download(self, url: str, filename: str) -> str:
+    async def start_download(self, url: str, filename: str, target_dir: Optional[Path] = None) -> str:
         """
         Start a GGUF download with progress tracking
-        
+
         Args:
             url: Download URL
             filename: Target filename
-            
+            target_dir: Optional target directory (e.g. a vision bundle folder);
+                        defaults to the text-GGUF models dir.
+
         Returns:
             Task ID for progress tracking
         """
@@ -84,7 +86,7 @@ class GGUFDownloadManager:
             raise ValueError("Invalid download URL. Domain not allowed or resolves to private IP.")
 
         task_id = str(uuid.uuid4())
-        
+
         # Initialize task info
         self.download_tasks[task_id] = {
             "task_id": task_id,
@@ -96,23 +98,26 @@ class GGUFDownloadManager:
             "total_bytes": 0,
             "error": None
         }
-        
+
         # Start background download
-        asyncio.create_task(self._download_with_progress(task_id, url, filename))
-        
+        asyncio.create_task(self._download_with_progress(task_id, url, filename, target_dir))
+
         return task_id
-    
-    async def _download_with_progress(self, task_id: str, url: str, filename: str):
+
+    async def _download_with_progress(self, task_id: str, url: str, filename: str, target_dir: Optional[Path] = None):
         """
         Download file with progress tracking using async I/O
-        
+
         Args:
             task_id: Download task ID
             url: Download URL
             filename: Target filename
+            target_dir: Optional target directory; defaults to the text-GGUF dir.
         """
         try:
-            file_path = self.models_dir / filename
+            dest_dir = target_dir if target_dir else self.models_dir
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            file_path = dest_dir / filename
             
             # Check if file already exists
             if file_path.exists():

@@ -240,6 +240,12 @@ export class ChatService {
     }
 
     let processedResponse = response;
+    let generatedImageUrl: string | undefined;
+    // Non-streaming /api/chat now returns { response, image_url?, conversation_id }.
+    if (typeof response === "object" && response !== null) {
+      generatedImageUrl = response.image_url;
+      processedResponse = response.response || response.content || "";
+    }
     if (showRawResponse) {
       try {
         // Try to parse as JSON and extract content
@@ -289,6 +295,7 @@ export class ChatService {
       content: processedResponse,
       timestamp: new Date(),
       model: selectedModel,
+      ...(generatedImageUrl ? { generatedImageUrl } : {}),
     };
 
     return {

@@ -22,12 +22,18 @@ openai
 
 # Document Processing (text extraction, no RAG/vector)
 pdfplumber
+pypdfium2
 python-docx
 python-pptx
 pylightxl
 xlrd
 markdown
 beautifulsoup4>=4.12.0
+
+# OCR — scanned PDFs / images -> text (CPU, ONNX, no system deps)
+rapidocr
+onnxruntime
+pillow
 
 # Image
 Pillow>=11.0.0

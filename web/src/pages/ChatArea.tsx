@@ -77,6 +77,13 @@ export default function ChatArea({
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<"chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
+
+  // "Open in Image Studio" from a chat message -> switch to the Studio view.
+  useEffect(() => {
+    const go = () => setActiveView("workspace");
+    window.addEventListener("navigate-studio", go);
+    return () => window.removeEventListener("navigate-studio", go);
+  }, []);
   const {
     messages: chatMessages, // unused but returned
     conversations: chatConversations, // unused but returned

@@ -31,9 +31,24 @@ class OpenAIProvider(BaseProvider):
         )
         max_key = "max_completion_tokens" if needs_completion_tokens else "max_tokens"
 
+        messages = request.messages
+        # Vision: attach images to the last user message as OpenAI multimodal content.
+        if getattr(request, "images", None):
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i].get("role") == "user":
+                    text = messages[i].get("content", "") or ""
+                    content: list = [{"type": "text", "text": text}]
+                    content += [
+                        {"type": "image_url", "image_url": {"url": uri}}
+                        for uri in request.images
+                    ]
+                    messages = [*messages]
+                    messages[i] = {"role": "user", "content": content}
+                    break
+
         payload = {
             "model": request.model,
-            "messages": request.messages,
+            "messages": messages,
             max_key: request.max_tokens,
             "stream": stream,
         }

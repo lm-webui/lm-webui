@@ -157,3 +157,22 @@ async def get_mlx_status(_: dict = Depends(require_permission("runtime.view"))):
         "models": models,
         "models_dir": str(MLX_DIR),
     }
+
+
+@router.get("/vision/status")
+async def get_vision_status(_: dict = Depends(require_permission("runtime.view"))):
+    """Vision runtime status — installed bundles, llama-server availability, running state."""
+    import shutil
+    from app.services.gguf_manager import scan_vision_models
+    from app.runtime.vision_runtime import vision_runtime
+
+    bundles = scan_vision_models()
+    return {
+        "runtime": "vision",
+        "available": bool(bundles) and shutil.which("llama-server") is not None,
+        "bundles": bundles,
+        "bundle_count": len(bundles),
+        "llama_server_available": shutil.which("llama-server") is not None,
+        "running": vision_runtime.running,
+        "port": vision_runtime._port,
+    }

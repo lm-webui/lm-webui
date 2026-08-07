@@ -1,0 +1,38 @@
+"""Typed results produced by each capability. The PromptBuilder merges them
+into LLM messages — capabilities never build prompt text themselves."""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Any, List, Optional
+
+
+@dataclass
+class FileResult:
+    """Extracted text from document attachments."""
+    text: str = ""
+
+
+@dataclass
+class RetrievalResult:
+    """RAG chunks retrieved for a knowledge query."""
+    chunks: List[str] = field(default_factory=list)
+
+
+@dataclass
+class SearchResult:
+    """Web search results."""
+    items: List[Any] = field(default_factory=list)
+
+
+@dataclass
+class VisionResult:
+    """Prepared image attachments + the vision provider to use."""
+    images: Optional[List[str]] = None
+    provider: Any = None
+    ready: bool = False
+
+
+@dataclass
+class ImageGenResult:
+    """Generated image URL (image-generation intent)."""
+    image_url: str = ""

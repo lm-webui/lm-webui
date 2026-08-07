@@ -98,12 +98,19 @@ class GGUFResolver:
                 compatibility = self._analyze_compatibility(file_info)
                 file_info["compatibility"] = compatibility
                 files_with_compatibility.append(file_info)
-            
+
+            # Classify: vision models carry an mmproj (multimodal projector) file.
+            mmproj_files = [f for f in files_with_compatibility if "mmproj" in f["filename"].lower()]
+            main_files = [f for f in files_with_compatibility if f not in mmproj_files]
+
             return {
                 "type": "repository",
                 "repo_id": repo_id,
                 "tag": tag,
                 "files": files_with_compatibility,
+                "main_files": main_files,
+                "mmproj_files": mmproj_files,
+                "is_vision": bool(mmproj_files),
                 "model_name": repo_info.get('modelId', repo_id)
             }
             
