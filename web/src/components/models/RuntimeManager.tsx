@@ -13,12 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ModelDownloadModal from "@/components/models/ModelDownloadModal";
 import {
   HardDrive, Trash2, Cpu, CloudDownload, RefreshCw,
   Loader2, CheckCircle, XCircle, Server, Search, FolderOpen,
   ChevronDown, Image, Copy, ScanLine, ExternalLink, Download,
-  Cpu as ChipIcon, Zap, Eye,
+  Cpu as ChipIcon, Zap, Eye, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authFetch } from "@/utils/api";
@@ -39,7 +40,8 @@ interface Runtime {
 interface GGUFModel {
   name: string;
   path: string;
-  size: number;
+  size: number | string;
+  size_bytes?: number;
   quantization?: string;
 }
 
@@ -76,11 +78,10 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [loading, setLoading] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [ggufQuery, setGgufQuery] = useState("");
-  const [downloadModal, setDownloadModal] = useState<"gguf" | null>(null);
+  const [downloadModal, setDownloadModal] = useState<"gguf" | "vision" | null>(null);
   const [mlxStatus, setMlxStatus] = useState<MLXStatus | null>(null);
   const [loadingMlx, setLoadingMlx] = useState(false);
   const [visionStatus, setVisionStatus] = useState<any>(null);
-  const [loadingVision, setLoadingVision] = useState(false);
   const [ggufHealth, setGgufHealth] = useState<any>(null);
   const [installingMlx, setInstallingMlx] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -144,14 +145,11 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   };
 
   const fetchVisionInfo = async () => {
-    setLoadingVision(true);
     try {
       const data = await authFetch("/api/runtimes/vision/status");
       setVisionStatus(data);
     } catch (error) {
       console.error("Failed to fetch vision info:", error);
-    } finally {
-      setLoadingVision(false);
     }
   };
 
@@ -299,25 +297,56 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     return vram > 0 ? Math.max(0, vram / (modelFactor + kvFactor)) : 0;
   };
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-    return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+  const formatFileSize = (bytes: number | string) => {
+    const n = Number(bytes);
+    if (!Number.isFinite(n)) return String(bytes); // already a formatted string or NaN-safe
+    if (n < 1024) return n + " B";
+    if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+    if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+    return (n / (1024 * 1024 * 1024)).toFixed(2) + " GB";
   };
 
+  const deleteModel = async (name: string) => {
+    if (!confirm(`Delete ${name}?`)) return;
+    try {
+      await authFetch(`/api/models/${encodeURIComponent(name)}`, { method: "DELETE" });
+      toast.success(`Deleted ${name}`);
+      fetchModels();
+      fetchVisionInfo();
+    } catch (error: any) {
+      toast.error(error.message || "Delete failed");
+    }
+  };
+
+  // Minimalist capability/runtime status icon: green check (ready) or yellow ! (needs action).
+  const StatusIcon = ({ ready, tip }: { ready: boolean; tip: string }) => (
+    <TooltipProvider delayDuration={100}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {ready ? (
+            <CheckCircle className="h-4 w-4 text-green-600 cursor-help" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-amber-500 cursor-help" />
+          )}
+        </TooltipTrigger>
+        <TooltipContent>{tip}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+
   const ggufRuntime = runtimes.find(r => r.type === "gguf");
-  const ggufReady = ggufRuntime?.installed;
+  const ggufReady = !!ggufRuntime?.installed;
   // Capability/engine status (prompt10: one GGUF runtime, granular readiness).
   const llamaServerPresent = !!ggufHealth?.executables?.llama_server;
   const ggufBackend = gpuInfo?.has_gpu ? (gpuInfo.gpu?.backend || "gpu").toUpperCase() : "CPU";
-  const chatReady = ggufReady;
-  const visionReady = !!visionStatus?.available;
 
   // Combined model rows: GGUF (models/gguf) + vision bundles (models/vision/<m>/).
   const q = ggufQuery.toLowerCase();
   const ggufRows = models.filter(m => m.name.toLowerCase().includes(q));
   const visionRows = (visionStatus?.bundles || []).filter((b: any) => b.name.toLowerCase().includes(q));
+  // Capability readiness = a usable model exists (search-independent).
+  const chatHasModel = models.length > 0;
+  const visionHasModel = (visionStatus?.bundles || []).length > 0;
 
   const body = (
     <>
@@ -360,103 +389,38 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-base">GGUF</CardTitle>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" className="h-7 gap-1 rounded-xl"
-                    onClick={() => setDownloadModal("gguf")}>
-                    <CloudDownload className="h-3 w-3" /> Download Model
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Badge className={chatReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  {chatReady ? "Ready" : "Loading..."}
-                </Badge>
-                <span className="text-muted-foreground">llama.cpp</span>
-                <span className="text-muted-foreground">·</span>
+              <CardTitle className="text-base">
+                GGUF <span className="font-normal text-muted-foreground">llama.cpp</span>
+                <span className="text-muted-foreground"> · </span>
                 <span className="font-mono text-xs">{ggufBackend}</span>
-                {!llamaServerPresent && (
-                  <Badge variant="outline" className="text-amber-600 border-amber-300 text-[0.5rem] h-4">
-                    needs llama-server
-                  </Badge>
-                )}
-              </div>
+              </CardTitle>
+              <Badge className={ggufReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
+                <CheckCircle className="h-3 w-3 mr-1" />
+                {ggufReady ? "Ready" : "Not installed"}
+              </Badge>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search GGUF models..." value={ggufQuery}
-                onChange={(e) => setGgufQuery(e.target.value)} className="pl-9" />
-            </div>
-            {loadingModels ? (
-              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-            ) : ggufRows.length === 0 && visionRows.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">No GGUF models loaded</p>
-                <p className="text-xs mt-1">Download a model from HuggingFace or place .gguf files in .lmwebui/models/</p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
-                {ggufRows.map((model) => (
-                  <div key={model.path} className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <HardDrive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm truncate">{model.name}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span>{formatFileSize(model.size)}</span>
-                          {model.quantization && <Badge variant="outline" className="text-[0.5rem] h-4">{model.quantization}</Badge>}
-                        </div>
-                      </div>
-                    </div>
-                    <Button size="sm" onClick={() => { onModelLoad?.(model.name); onOpenChange(false); toast.success("Switched to " + model.name); }}>
-                      Load
-                    </Button>
-                  </div>
-                ))}
-                {visionRows.map((b: any) => (
-                  <div key={b.path} className="flex items-center justify-between p-3 rounded-lg border border-purple-200 dark:border-purple-800/50 hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <Eye className="h-4 w-4 text-purple-600 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm truncate">{b.name}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2">
-                          <span>{b.size}</span>
-                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[0.5rem] h-4">VISION</Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
-                      Load
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ── Capabilities (prompt10: runtime + model + mmproj → ready) ── */}
-            <div className="mt-4 rounded-xl border p-3">
+            {/* ── Capabilities ── */}
+            <div className="rounded-xl border p-3">
               <Label className="text-xs font-medium mb-2 block">Capabilities</Label>
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-green-600" /> Chat</span>
-                  <Badge className={chatReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
-                    {chatReady ? "Ready" : "Not ready"}
-                  </Badge>
+                  <span className="flex items-center gap-2"><Cpu className="h-3.5 w-3.5 text-muted-foreground" /> Chat</span>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" className="h-6 gap-1" onClick={() => setDownloadModal("gguf")}>
+                      <CloudDownload className="h-3 w-3" /> Download text model
+                    </Button>
+                    <StatusIcon ready={chatHasModel} tip={chatHasModel ? "Ready to use, select a model" : "Download a model to activate. If this persists, refresh or reinstall."} />
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2"><Eye className="h-3.5 w-3.5 text-purple-600" /> Vision</span>
+                  <span className="flex items-center gap-2"><Eye className="h-3.5 w-3.5 text-muted-foreground" /> Vision</span>
                   <div className="flex items-center gap-2">
-                    <Badge className={visionReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
-                      {visionReady ? "Ready" : "Not ready"}
-                    </Badge>
-                    <Button size="sm" variant="ghost" className="h-6 gap-1" onClick={fetchVisionInfo} disabled={loadingVision}>
-                      <RefreshCw className="h-3 w-3" />
+                    <Button size="sm" variant="outline" className="h-6 gap-1" onClick={() => setDownloadModal("vision")}>
+                      <CloudDownload className="h-3 w-3" /> Download vision model
                     </Button>
+                    <StatusIcon ready={visionHasModel} tip={visionHasModel ? "Ready to use, select a model" : "Download a model to activate. If this persists, refresh or reinstall."} />
                   </div>
                 </div>
               </div>
@@ -469,6 +433,56 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                 Performance
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 pt-3">
+                {/* GPU Acceleration */}
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs">GPU acceleration</Label>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={ggufConfig.n_gpu_layers < 0}
+                    onClick={() => setGgufConfig(prev => ({
+                      ...prev,
+                      n_gpu_layers: prev.n_gpu_layers < 0 ? 0 : -1
+                    }))}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                      ggufConfig.n_gpu_layers < 0 ? "bg-blue-600" : "bg-neutral-300 dark:bg-neutral-600"
+                    }`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                      ggufConfig.n_gpu_layers < 0 ? "translate-x-[18px]" : "translate-x-[3px]"
+                    }`} />
+                  </button>
+                </div>
+
+                {/* Detected GPU + install */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs">Detected GPU</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {gpuInfo?.has_gpu
+                        ? `🎮 ${gpuInfo.gpu?.device || "GPU"} (${gpuInfo.gpu?.backend?.toUpperCase()})`
+                        : "🖥️ No discrete GPU detected — using CPU"}
+                    </p>
+                  </div>
+                  {gpuInfo?.has_gpu && !gpuInfo?.gpu_accelerated && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1"
+                      onClick={installGpuAcceleration}
+                      disabled={installingGpu}
+                    >
+                      {installingGpu ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
+                      {installingGpu ? "Installing..." : "Install GPU Acceleration"}
+                    </Button>
+                  )}
+                  {gpuInfo?.gpu_accelerated && (
+                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                      <CheckCircle className="h-3 w-3 mr-1" /> GPU Accelerated
+                    </Badge>
+                  )}
+                </div>
+
                 {/* Context Window */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
@@ -497,56 +511,6 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                         <span className="font-mono">{estimateMaxModel(4).toFixed(1)}B (Q4)</span>
                       </span>
                     </div>
-                  )}
-                </div>
-
-                {/* GPU Acceleration */}
-                <div className="flex items-center justify-between">
-                  <Label className="text-xs">GPU acceleration</Label>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={ggufConfig.n_gpu_layers < 0}
-                    onClick={() => setGgufConfig(prev => ({
-                      ...prev,
-                      n_gpu_layers: prev.n_gpu_layers < 0 ? 0 : -1
-                    }))}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                      ggufConfig.n_gpu_layers < 0 ? "bg-blue-600" : "bg-neutral-300 dark:bg-neutral-600"
-                    }`}
-                  >
-                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                      ggufConfig.n_gpu_layers < 0 ? "translate-x-[18px]" : "translate-x-[3px]"
-                    }`} />
-                  </button>
-                </div>
-
-                {/* GPU Acceleration Install */}
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-xs">Detected GPU</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {gpuInfo?.has_gpu
-                        ? `🎮 ${gpuInfo.gpu?.device || "GPU"} (${gpuInfo.gpu?.backend?.toUpperCase()})`
-                        : "🖥️ No discrete GPU detected — using CPU"}
-                    </p>
-                  </div>
-                  {gpuInfo?.has_gpu && !gpuInfo?.gpu_accelerated && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-7 gap-1"
-                      onClick={installGpuAcceleration}
-                      disabled={installingGpu}
-                    >
-                      {installingGpu ? <Loader2 className="h-3 w-3 animate-spin" /> : <Zap className="h-3 w-3" />}
-                      {installingGpu ? "Installing..." : "Install GPU Acceleration"}
-                    </Button>
-                  )}
-                  {gpuInfo?.gpu_accelerated && (
-                    <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                      <CheckCircle className="h-3 w-3 mr-1" /> GPU Accelerated
-                    </Badge>
                   )}
                 </div>
 
@@ -609,6 +573,65 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                 )}
               </CollapsibleContent>
             </Collapsible>
+
+            {/* ── Models ── */}
+            <div className="relative mt-4 mb-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Search GGUF models..." value={ggufQuery}
+                onChange={(e) => setGgufQuery(e.target.value)} className="pl-9" />
+            </div>
+            {loadingModels ? (
+              <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : ggufRows.length === 0 && visionRows.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No GGUF models loaded</p>
+                <p className="text-xs mt-1">Download a model from HuggingFace or place .gguf files in .lmwebui/models/</p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
+                {ggufRows.map((model) => (
+                  <div key={model.path} className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <HardDrive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{model.name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{formatFileSize(model.size_bytes ?? model.size)}</span>
+                          <Badge variant="outline" className="text-[0.5rem] h-4">text</Badge>
+                          {model.quantization && <Badge variant="outline" className="text-[0.5rem] h-4">{model.quantization}</Badge>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteModel(model.name)}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                      <Button size="sm" onClick={() => { onModelLoad?.(model.name); onOpenChange(false); toast.success("Switched to " + model.name); }}>
+                        Load
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {visionRows.map((b: any) => (
+                  <div key={b.path} className="flex items-center justify-between p-3 rounded-lg border border-purple-200 dark:border-purple-800/50 hover:bg-accent/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Eye className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{b.name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{b.size}</span>
+                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[0.5rem] h-4">vision</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
+                      Load
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
         </TabsContent>
@@ -792,7 +815,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         <ModelDownloadModal
           open={downloadModal !== null}
           onOpenChange={(o) => !o && setDownloadModal(null)}
-          modelType={downloadModal || "gguf"}
+          modelType="gguf"
+          variant={downloadModal === "vision" ? "vision" : "text"}
           onComplete={() => { fetchModels(); fetchRuntimes(); }}
         />
       </div>
@@ -807,7 +831,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       <ModelDownloadModal
         open={downloadModal !== null}
         onOpenChange={(o) => !o && setDownloadModal(null)}
-        modelType={downloadModal || "gguf"}
+        modelType="gguf"
+        variant={downloadModal === "vision" ? "vision" : "text"}
         onComplete={() => { fetchModels(); fetchRuntimes(); }}
       />
     </Dialog>

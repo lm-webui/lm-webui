@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Download, Search, X, Check, HardDrive, Cpu } from "lucide-react";
+import { Loader2, Download, Search, Check, HardDrive, Cpu } from "lucide-react";
 import { toast } from "sonner";
 import { notifyModelsChanged } from "@/features/models/modelEvents";
 
@@ -14,9 +14,11 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   modelType: "gguf" | "mlx";
   onComplete: () => void;
+  /** Which model the user is downloading — drives the HuggingFace reference link. */
+  variant?: "text" | "vision";
 }
 
-export default function ModelDownloadModal({ open, onOpenChange, modelType, onComplete }: Props) {
+export default function ModelDownloadModal({ open, onOpenChange, modelType, onComplete, variant = "text" }: Props) {
   const [repoInput, setRepoInput] = useState("");
   const [resolving, setResolving] = useState(false);
   const [repoInfo, setRepoInfo] = useState<any>(null);
@@ -124,6 +126,24 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
         <DialogDescription>
           Enter a HuggingFace repo ID{isGGUF ? " or direct .gguf URL" : ""}
         </DialogDescription>
+
+        {isGGUF && (
+          <div className="-mt-1 text-xs text-muted-foreground">
+            model reference:{" "}
+            <a
+              href={variant === "vision"
+                ? "https://huggingface.co/models?pipeline_tag=image-text-to-text&library=gguf&sort=downloads"
+                : "https://huggingface.co/models?pipeline_tag=text-generation&library=gguf&sort=downloads"}
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-500 hover:underline"
+            >
+              {variant === "vision"
+                ? "huggingface.co/models (image-text-to-text · gguf)"
+                : "huggingface.co/models (text-generation · gguf)"}
+            </a>
+          </div>
+        )}
 
         <div className="flex gap-2">
           <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)}
