@@ -89,26 +89,30 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
           }
         }, 800);
       } else {
-        setProgress("Downloading model files...");
-        setProgressPct(30);
         const res = await fetch(`${BASE}/api/mlx/download`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           credentials: "include",
           body: JSON.stringify({ repo_id: repoInput.trim() }),
         });
         if (!res.ok) throw new Error("Download failed");
-        setProgressPct(80);
-        setProgress("Processing...");
-        const result = await res.json();
-        setProgressPct(100);
-        setProgress("✅ Complete");
-        if (result.status === "exists") toast.info("Already downloaded");
-        else toast.success("Model downloaded");
-        await new Promise(r => setTimeout(r, 500));
-        setDownloading(false);
-        onComplete();
-        notifyModelsChanged();
-        onOpenChange(false);
+        const { task_id } = await res.json();
+        const poll = setInterval(async () => {
+          const s = await fetch(`${BASE}/api/mlx/download/status/${task_id}`, { credentials: "include" });
+          const st = await s.json();
+          const pct = st.progress || 0;
+          setProgressPct(pct);
+          setProgress(st.status === "completed" ? "✅ Complete" : st.status === "exists" ? "Already exists" : `Downloading ${pct.toFixed(0)}%`);
+          if (st.status === "completed" || st.status === "failed" || st.status === "exists") {
+            clearInterval(poll);
+            if (st.status === "completed") toast.success("Model downloaded");
+            else if (st.status === "exists") toast.info("Model already exists");
+            else toast.error(st.error || "Download failed");
+            setDownloading(false);
+            onComplete();
+            notifyModelsChanged();
+            onOpenChange(false);
+          }
+        }, 800);
       }
     } catch (e: any) {
       toast.error(e.message || "Download failed");
@@ -127,23 +131,25 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
           Enter a HuggingFace repo ID{isGGUF ? " or direct .gguf URL" : ""}
         </DialogDescription>
 
-        {isGGUF && (
-          <div className="-mt-1 text-xs text-muted-foreground">
-            model reference:{" "}
-            <a
-              href={variant === "vision"
+        <div className="-mt-1 text-xs text-muted-foreground">
+          model reference:{" "}
+          <a
+            href={isGGUF
+              ? (variant === "vision"
                 ? "https://huggingface.co/models?pipeline_tag=image-text-to-text&library=gguf&sort=downloads"
-                : "https://huggingface.co/models?pipeline_tag=text-generation&library=gguf&sort=downloads"}
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-500 hover:underline"
-            >
-              {variant === "vision"
+                : "https://huggingface.co/models?pipeline_tag=text-generation&library=gguf&sort=downloads")
+              : "https://huggingface.co/models?pipeline_tag=text-generation&apps=mlx-lm&sort=trending&search=mlx"}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-500 hover:underline"
+          >
+            {isGGUF
+              ? (variant === "vision"
                 ? "huggingface.co/models (image-text-to-text · gguf)"
-                : "huggingface.co/models (text-generation · gguf)"}
-            </a>
-          </div>
-        )}
+                : "huggingface.co/models (text-generation · gguf)")
+              : "huggingface.co/models (MLX · text-generation)"}
+          </a>
+        </div>
 
         <div className="flex gap-2">
           <input value={repoInput} onChange={(e) => setRepoInput(e.target.value)}

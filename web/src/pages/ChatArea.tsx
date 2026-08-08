@@ -267,7 +267,7 @@ export default function ChatArea({
           <RuntimeManager
             open={true}
             onOpenChange={() => {}}
-            onModelLoad={setSelectedModel}
+            onModelLoad={(model, provider) => { if (provider) setSelectedLLM(provider); setSelectedModel(model); }}
             inline
           />
         )}

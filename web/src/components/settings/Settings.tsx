@@ -360,6 +360,7 @@ export function Settings({
       {user?.role === "admin" && <RuntimeManager
         open={runtimeManagerOpen}
         onOpenChange={setRuntimeManagerOpen}
+        onModelLoad={(model, provider) => { if (provider) onLLMChange(provider); onModelChange(model); }}
       />}
     </>
   );

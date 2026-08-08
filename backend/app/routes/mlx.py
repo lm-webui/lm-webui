@@ -35,12 +35,20 @@ async def resolve_mlx_repo(req: DownloadRequest, _: dict = Depends(require_permi
 
 @router.post("/download")
 async def download_mlx_model(req: DownloadRequest, _: dict = Depends(require_permission("models.install"))):
-    """Download MLX model from HuggingFace to ~/.lmwebui/models/mlx/<name>/."""
-    from app.services.mlx_downloader import download_mlx_model
-    result = await download_mlx_model(req.repo_id)
-    if result["status"] == "error":
-        raise HTTPException(500, result.get("error", "Download failed"))
-    return result
+    """Start an MLX model download in the background; returns a task_id for progress polling."""
+    from app.services.mlx_downloader import start_mlx_download
+    task_id = start_mlx_download(req.repo_id)
+    return {"task_id": task_id, "status": "downloading"}
+
+
+@router.get("/download/status/{task_id}")
+async def mlx_download_status(task_id: str, _: dict = Depends(require_permission("models.install"))):
+    """Return MLX download progress for a task_id."""
+    from app.services.mlx_downloader import get_mlx_progress
+    status = get_mlx_progress(task_id)
+    if not status:
+        raise HTTPException(404, "Download task not found")
+    return status
 
 
 @router.delete("/models/{model_name}")
