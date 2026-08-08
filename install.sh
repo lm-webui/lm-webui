@@ -201,7 +201,12 @@ ensure_llama_server() {
     # llama.cpp tarballs unpack to a versioned top-level folder; find the real binary.
     local src="$(find "$bin_dir" -type f -name llama-server | head -1)"
     if [ -n "$src" ]; then
-      cp "$src" "$bin_dir/llama-server" && chmod +x "$bin_dir/llama-server"
+      # Shared-library build: copy the binary AND its sibling lib*.so so the
+      # loader can resolve libllama-server-impl.so etc. from $bin_dir.
+      local src_dir="$(dirname "$src")"
+      cp "$src_dir/"* "$bin_dir/" 2>/dev/null
+      rm -rf "$src_dir"
+      chmod +x "$bin_dir/llama-server"
       export PATH="$bin_dir:$PATH"
       # Persist for future shells/services.
       { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
@@ -248,6 +253,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
+Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7070
 Restart=on-failure
 [Install]
@@ -276,7 +282,7 @@ SERVICEEOF
 <key>Label</key><string>com.lmwebui.server</string>
 <key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
-<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string></dict>
+<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LMWEBUI_HOME/logs/stdout.log</string>
 <key>StandardErrorPath</key><string>$LMWEBUI_HOME/logs/stderr.log</string>
