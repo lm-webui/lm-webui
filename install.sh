@@ -178,6 +178,36 @@ install_llamacpp() {
   fi
 }
 
+ensure_llama_server() {
+  # llama-server is the multimodal engine (Vision); install it as part of the
+  # GGUF runtime so Vision isn't left depending on an unmanaged binary.
+  if command -v llama-server &>/dev/null; then
+    log_success "  llama-server already available"
+    return
+  fi
+  log_info "Installing llama-server..."
+  local bin_dir="$HOME/.lmwebui/bin"
+  mkdir -p "$bin_dir"
+  # macOS: brew formula if present
+  if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
+    brew install llama.cpp 2>/dev/null && { log_success "  llama-server installed via brew"; export PATH="$bin_dir:$PATH"; return; }
+  fi
+  # Fallback: llama.cpp release binary for this platform
+  local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
+  local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
+  local url="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"\([^"]*\)".*/\1/')-bin-$os-$arch.zip"
+  if curl -fsSL -o /tmp/llama-bin.zip "$url" 2>/dev/null && unzip -oq /tmp/llama-bin.zip -d "$bin_dir" 2>/dev/null; then
+    chmod +x "$bin_dir/llama-server" 2>/dev/null
+    export PATH="$bin_dir:$PATH"
+    # Persist for future shells/services.
+    { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
+    [ -f "$HOME/.zshrc" ] && { echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.zshrc"
+    command -v llama-server &>/dev/null && log_success "  llama-server installed to $bin_dir" && return
+  fi
+  log_warning "  Could not install llama-server automatically — Vision needs it."
+  log_warning "  Install llama.cpp manually: https://github.com/ggml-org/llama.cpp/releases"
+}
+
 check_gguf_runtime() {
   log_info "Checking llama.cpp runtime..."
   missing=0
@@ -337,6 +367,7 @@ main() {
   build_frontend
   install_dependencies
   install_llamacpp
+  ensure_llama_server
   check_gguf_runtime
   install_service
   install_cli

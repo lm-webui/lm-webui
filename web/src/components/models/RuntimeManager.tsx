@@ -306,12 +306,18 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + " GB";
   };
 
-  const filteredModels = models.filter(m =>
-    m.name.toLowerCase().includes(ggufQuery.toLowerCase())
-  );
-
   const ggufRuntime = runtimes.find(r => r.type === "gguf");
   const ggufReady = ggufRuntime?.installed;
+  // Capability/engine status (prompt10: one GGUF runtime, granular readiness).
+  const llamaServerPresent = !!ggufHealth?.executables?.llama_server;
+  const ggufBackend = gpuInfo?.has_gpu ? (gpuInfo.gpu?.backend || "gpu").toUpperCase() : "CPU";
+  const chatReady = ggufReady;
+  const visionReady = !!visionStatus?.available;
+
+  // Combined model rows: GGUF (models/gguf) + vision bundles (models/vision/<m>/).
+  const q = ggufQuery.toLowerCase();
+  const ggufRows = models.filter(m => m.name.toLowerCase().includes(q));
+  const visionRows = (visionStatus?.bundles || []).filter((b: any) => b.name.toLowerCase().includes(q));
 
   const body = (
     <>
@@ -354,25 +360,30 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <HardDrive className="h-5 w-5 text-green-600" />
-                <CardTitle className="text-base">GGUF (llama.cpp)</CardTitle>
-                <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  {ggufReady ? "Ready" : "Loading..."}
-                </Badge>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">GGUF</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="h-7 gap-1 rounded-xl"
+                    onClick={() => setDownloadModal("gguf")}>
+                    <CloudDownload className="h-3 w-3" /> Download Model
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" className="h-7 gap-1 rounded-xl"
-                  onClick={() => setDownloadModal("gguf")}>
-                  <CloudDownload className="h-3 w-3" /> Download Model
-                </Button>
+              <div className="flex items-center gap-2 text-sm">
+                <Badge className={chatReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
+                  <CheckCircle className="h-3 w-3 mr-1" />
+                  {chatReady ? "Ready" : "Loading..."}
+                </Badge>
+                <span className="text-muted-foreground">llama.cpp</span>
+                <span className="text-muted-foreground">·</span>
+                <span className="font-mono text-xs">{ggufBackend}</span>
+                {!llamaServerPresent && (
+                  <Badge variant="outline" className="text-amber-600 border-amber-300 text-[0.5rem] h-4">
+                    needs llama-server
+                  </Badge>
+                )}
               </div>
             </div>
-            <CardDescription>
-              Local inference engine — bundled in-container. Always available.
-              {ggufRuntime?.version && <> v{ggufRuntime.version}</>}
-            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="relative mb-4">
@@ -382,7 +393,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             </div>
             {loadingModels ? (
               <div className="flex items-center justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-            ) : filteredModels.length === 0 ? (
+            ) : ggufRows.length === 0 && visionRows.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <FolderOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p className="text-sm">No GGUF models loaded</p>
@@ -390,7 +401,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
               </div>
             ) : (
               <div className="space-y-2 max-h-60 overflow-y-auto scrollbar-hide">
-                {filteredModels.map((model) => (
+                {ggufRows.map((model) => (
                   <div key={model.path} className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors">
                     <div className="flex items-center gap-3 min-w-0">
                       <HardDrive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -407,78 +418,55 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                     </Button>
                   </div>
                 ))}
-              </div>
-            )}
-
-            {/* ── Runtime Executables ── */}
-            <div className="mt-4 rounded-xl border p-3">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-xs font-medium">llama.cpp runtime</Label>
-                {ggufHealth?.version?.length > 0 && (
-                  <span className="text-xs font-mono text-muted-foreground">v{ggufHealth.version[0]}</span>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground">
-                {["llama_server", "llama_cli", "llama_bench", "llama_quantize"].map((bin) => (
-                  <div key={bin} className="flex items-center gap-2">
-                    {ggufHealth?.executables?.[bin] ? (
-                      <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                    ) : (
-                      <XCircle className="h-3.5 w-3.5 text-zinc-400" />
-                    )}
-                    <span className="font-mono">{bin}</span>
+                {visionRows.map((b: any) => (
+                  <div key={b.path} className="flex items-center justify-between p-3 rounded-lg border border-purple-200 dark:border-purple-800/50 hover:bg-accent/50 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Eye className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="font-medium text-sm truncate">{b.name}</div>
+                        <div className="text-xs text-muted-foreground flex items-center gap-2">
+                          <span>{b.size}</span>
+                          <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300 text-[0.5rem] h-4">VISION</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
+                      Load
+                    </Button>
                   </div>
                 ))}
               </div>
-            </div>
+            )}
 
-            {/* ── Vision (VL) health ── */}
-            <Card className="mt-4">
-              <CardHeader className="pb-2">
-                <div className="flex items-center gap-2">
-                  <Eye className="h-4 w-4 text-purple-600" />
-                  <CardTitle className="text-sm">Vision (VL models)</CardTitle>
-                  <Badge className={visionStatus?.available ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
-                    <CheckCircle className="h-3 w-3 mr-1" />
-                    {visionStatus?.available ? "Ready" : "Not configured"}
+            {/* ── Capabilities (prompt10: runtime + model + mmproj → ready) ── */}
+            <div className="mt-4 rounded-xl border p-3">
+              <Label className="text-xs font-medium mb-2 block">Capabilities</Label>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2"><CheckCircle className="h-3.5 w-3.5 text-green-600" /> Chat</span>
+                  <Badge className={chatReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
+                    {chatReady ? "Ready" : "Not ready"}
                   </Badge>
-                  <Button size="sm" variant="ghost" className="h-6 gap-1" onClick={fetchVisionInfo} disabled={loadingVision}>
-                    <RefreshCw className="h-3 w-3" />
-                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="space-y-2 pb-3">
-                <div className="text-xs text-muted-foreground">
-                  llama-server: {visionStatus?.llama_server_available ? "available" : "not found on PATH"}
-                  {visionStatus?.running ? ` · running (port ${visionStatus.port})` : ""}
-                </div>
-                {(visionStatus?.bundles?.length || 0) > 0 ? (
-                  <div className="space-y-1">
-                    {visionStatus.bundles.map((b: any) => (
-                      <div key={b.path} className="flex items-center justify-between rounded-lg border px-2 py-1 text-xs">
-                        <span className="font-medium truncate">{b.name}</span>
-                        <span className="text-muted-foreground">{b.size}</span>
-                      </div>
-                    ))}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2"><Eye className="h-3.5 w-3.5 text-purple-600" /> Vision</span>
+                  <div className="flex items-center gap-2">
+                    <Badge className={visionReady ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"}>
+                      {visionReady ? "Ready" : "Not ready"}
+                    </Badge>
+                    <Button size="sm" variant="ghost" className="h-6 gap-1" onClick={fetchVisionInfo} disabled={loadingVision}>
+                      <RefreshCw className="h-3 w-3" />
+                    </Button>
                   </div>
-                ) : (
-                  <div className="text-xs text-zinc-400">No vision bundles installed yet.</div>
-                )}
-                <button
-                  type="button"
-                  className="text-xs text-blue-500 hover:text-blue-600 underline"
-                  onClick={() => setDownloadModal("gguf")}
-                >
-                  Open model downloader
-                </button>
-              </CardContent>
-            </Card>
+                </div>
+              </div>
+            </div>
 
             {/* ── Engine Configuration ── */}
             <Collapsible className="mt-4">
               <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
                 <ChevronDown className="h-4 w-4" />
-                Engine Configuration
+                Performance
               </CollapsibleTrigger>
               <CollapsibleContent className="space-y-4 pt-3">
                 {/* Context Window */}
@@ -589,6 +577,36 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                   {applyingConfig ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                   {applyingConfig ? "Applying..." : "Apply & Reload"}
                 </Button>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* ── Runtime Details ── */}
+            <Collapsible className="mt-2">
+              <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
+                <ChevronDown className="h-4 w-4" />
+                Runtime Details
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-2 pt-1 text-xs text-muted-foreground">
+                <div className="flex items-center justify-between">
+                  <span>llama-cpp-python</span>
+                  <span className="font-mono">{ggufRuntime?.version ? `v${ggufRuntime.version}` : "—"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>llama-server</span>
+                  <span className={llamaServerPresent ? "text-green-600" : "text-amber-600"}>
+                    {llamaServerPresent ? "available" : "not on PATH"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Build backend</span>
+                  <span className="font-mono">{ggufBackend}</span>
+                </div>
+                {llamaServerPresent && ggufHealth?.version?.length > 0 && (
+                  <div className="flex items-center justify-between">
+                    <span>llama-server version</span>
+                    <span className="font-mono truncate max-w-[60%]">{ggufHealth.version[0]}</span>
+                  </div>
+                )}
               </CollapsibleContent>
             </Collapsible>
           </CardContent>
