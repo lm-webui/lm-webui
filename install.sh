@@ -192,17 +192,22 @@ ensure_llama_server() {
   if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
     brew install llama.cpp 2>/dev/null && { log_success "  llama-server installed via brew"; export PATH="$bin_dir:$PATH"; return; }
   fi
-  # Fallback: llama.cpp release binary for this platform
+  # Fallback: llama.cpp release binary for this platform (non-Windows assets are .tar.gz)
   local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
   local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
-  local url="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"\([^"]*\)".*/\1/')-bin-$os-$arch.zip"
-  if curl -fsSL -o /tmp/llama-bin.zip "$url" 2>/dev/null && unzip -oq /tmp/llama-bin.zip -d "$bin_dir" 2>/dev/null; then
-    chmod +x "$bin_dir/llama-server" 2>/dev/null
-    export PATH="$bin_dir:$PATH"
-    # Persist for future shells/services.
-    { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
-    [ -f "$HOME/.zshrc" ] && { echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.zshrc"
-    command -v llama-server &>/dev/null && log_success "  llama-server installed to $bin_dir" && return
+  local tag="$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"\([^"]*\)".*/\1/')"
+  local url="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-$tag-bin-$os-$arch.tar.gz"
+  if [ -n "$tag" ] && curl -fsSL -o /tmp/llama-bin.tar.gz "$url" 2>/dev/null && tar -xzf /tmp/llama-bin.tar.gz -C "$bin_dir" 2>/dev/null; then
+    # llama.cpp tarballs unpack to a versioned top-level folder; find the real binary.
+    local src="$(find "$bin_dir" -type f -name llama-server | head -1)"
+    if [ -n "$src" ]; then
+      cp "$src" "$bin_dir/llama-server" && chmod +x "$bin_dir/llama-server"
+      export PATH="$bin_dir:$PATH"
+      # Persist for future shells/services.
+      { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
+      [ -f "$HOME/.zshrc" ] && echo "export PATH=\"$bin_dir:\$PATH\"" >> "$HOME/.zshrc"
+      command -v llama-server &>/dev/null && log_success "  llama-server installed to $bin_dir" && return
+    fi
   fi
   log_warning "  Could not install llama-server automatically — Vision needs it."
   log_warning "  Install llama.cpp manually: https://github.com/ggml-org/llama.cpp/releases"
