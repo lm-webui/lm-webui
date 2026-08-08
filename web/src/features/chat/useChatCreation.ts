@@ -151,6 +151,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
     abortControllerRef.current = new AbortController();
 
     let sent = true;
+    let receivedContent = false;
     try {
     // Check if image mode is enabled and route to image generation
     if (hookOptions.isImageMode) {
@@ -244,6 +245,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         setMessages: () => {},
         setIsLoading: () => {},
         onChunk: (chunk: string) => {
+          if (chunk) receivedContent = true;
           if (targetIdRef.current) {
             streamMessageChunk(targetConversationId || result.sessionId, targetIdRef.current, chunk);
           }
@@ -278,13 +280,17 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         }
       }
     } catch (error: any) {
-      sent = false;
-      if (error.name === "AbortError") {
-        toast.info("Chat stopped by user.");
-      } else {
-        const errorMessage = error?.message || "Failed to send message";
-        toast.error(`Chat Error: ${errorMessage}`);
-        console.error("API Error:", error);
+      // Only treat as a failed send (keep prompt) if no assistant content was streamed —
+      // a mid-stream/late error after content counts as sent so the prompt clears.
+      if (!receivedContent) {
+        sent = false;
+        if (error.name === "AbortError") {
+          toast.info("Chat stopped by user.");
+        } else {
+          const errorMessage = error?.message || "Failed to send message";
+          toast.error(`Chat Error: ${errorMessage}`);
+          console.error("API Error:", error);
+        }
       }
     } finally {
       // Ensure loading states are cleared
