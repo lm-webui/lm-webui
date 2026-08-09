@@ -33,52 +33,58 @@ def collect_image_data_uris(file_references: list) -> list:
     import base64
     import os as _os
     from app.database import get_db
+    db = None
     try:
         db = get_db()
         cur = db.cursor()
     except Exception:
+        if db is not None:
+            db.close()
         return []
-    uris = []
-    for ref in file_references or []:
-        ftype = (ref.get("type") or "").lower()
-        mime = (ref.get("mime") or ref.get("content_type") or "")
-        if ftype != "image" and not mime.startswith("image/"):
-            continue
-        # 1. Direct local path on the ref.
-        url = ref.get("url")
-        path = ref.get("file_path") or (url if isinstance(url, str) and not url.startswith(("http://", "https://", "data:")) else None)
-        # 2. DB lookup by media id.
-        if not path:
-            fid = ref.get("media_id") or ref.get("id")
-            if fid:
-                try:
-                    cur.execute("SELECT file_path FROM media_library WHERE id = ?", (fid,))
-                    r = cur.fetchone()
-                    if r and r[0]:
-                        path = r[0]
-                except Exception:
-                    path = None
-        # 3. DB lookup by filename.
-        if not path:
-            fname = ref.get("filename") or ref.get("name")
-            if fname:
-                try:
-                    cur.execute("SELECT file_path FROM media_library WHERE filename = ?", (fname,))
-                    r = cur.fetchone()
-                    if r and r[0]:
-                        path = r[0]
-                except Exception:
-                    path = None
-        if not path or not _os.path.exists(str(path)):
-            continue
-        try:
-            with open(str(path), "rb") as fh:
-                b64 = base64.b64encode(fh.read()).decode()
-            mt = mime or "image/png"
-            uris.append(f"data:{mt};base64,{b64}")
-        except Exception:
-            continue
-    return uris
+    try:
+        uris = []
+        for ref in file_references or []:
+            ftype = (ref.get("type") or "").lower()
+            mime = (ref.get("mime") or ref.get("content_type") or "")
+            if ftype != "image" and not mime.startswith("image/"):
+                continue
+            # 1. Direct local path on the ref.
+            url = ref.get("url")
+            path = ref.get("file_path") or (url if isinstance(url, str) and not url.startswith(("http://", "https://", "data:")) else None)
+            # 2. DB lookup by media id.
+            if not path:
+                fid = ref.get("media_id") or ref.get("id")
+                if fid:
+                    try:
+                        cur.execute("SELECT file_path FROM media_library WHERE id = ?", (fid,))
+                        r = cur.fetchone()
+                        if r and r[0]:
+                            path = r[0]
+                    except Exception:
+                        path = None
+            # 3. DB lookup by filename.
+            if not path:
+                fname = ref.get("filename") or ref.get("name")
+                if fname:
+                    try:
+                        cur.execute("SELECT file_path FROM media_library WHERE filename = ?", (fname,))
+                        r = cur.fetchone()
+                        if r and r[0]:
+                            path = r[0]
+                    except Exception:
+                        path = None
+            if not path or not _os.path.exists(str(path)):
+                continue
+            try:
+                with open(str(path), "rb") as fh:
+                    b64 = base64.b64encode(fh.read()).decode()
+                mt = mime or "image/png"
+                uris.append(f"data:{mt};base64,{b64}")
+            except Exception:
+                continue
+        return uris
+    finally:
+        db.close()
 
 
 async def execute(ctx: CapabilityContext) -> VisionResult:

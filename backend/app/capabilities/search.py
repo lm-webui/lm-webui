@@ -15,12 +15,15 @@ def _get_search_engine(user_id: int) -> str:
         from app.database import get_db
         import json as _json
         db = get_db()
-        row = db.execute(
-            "SELECT settings_json FROM user_settings WHERE user_id = ?", (user_id,)
-        ).fetchone()
-        if row and row[0]:
-            prefs = _json.loads(row[0])
-            return prefs.get("selectedSearchEngine", "duckduckgo") or "duckduckgo"
+        try:
+            row = db.execute(
+                "SELECT settings_json FROM user_settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if row and row[0]:
+                prefs = _json.loads(row[0])
+                return prefs.get("selectedSearchEngine", "duckduckgo") or "duckduckgo"
+        finally:
+            db.close()
     except Exception:
         pass
     return "duckduckgo"

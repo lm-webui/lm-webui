@@ -102,26 +102,29 @@ def get_api_or_session_user(
         token = authorization.split(" ")[1]
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         db = get_db()
-        row = db.execute(
-            """SELECT u.id, u.role, u.permissions
-               FROM api_tokens t JOIN users u ON u.id = t.user_id
-               WHERE t.token_hash = ? AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))""",
-            (token_hash,),
-        ).fetchone()
-        if row:
-            # Update last_used_at asynchronously
-            try:
-                db.execute("UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?", (token_hash,))
-                db.commit()
-            except Exception:
-                pass
-            permissions = __import__("json").loads(row[2]) if isinstance(row[2], str) else row[2]
-            return {
-                "id": row[0],
-                "user_id": row[0],
-                "role": row[1],
-                "permissions": permissions,
-                "authenticated": True,
-                "api_key": True,
-            }
+        try:
+            row = db.execute(
+                """SELECT u.id, u.role, u.permissions
+                   FROM api_tokens t JOIN users u ON u.id = t.user_id
+                   WHERE t.token_hash = ? AND (t.expires_at IS NULL OR t.expires_at > datetime('now'))""",
+                (token_hash,),
+            ).fetchone()
+            if row:
+                # Update last_used_at asynchronously
+                try:
+                    db.execute("UPDATE api_tokens SET last_used_at = datetime('now') WHERE token_hash = ?", (token_hash,))
+                    db.commit()
+                except Exception:
+                    pass
+                permissions = __import__("json").loads(row[2]) if isinstance(row[2], str) else row[2]
+                return {
+                    "id": row[0],
+                    "user_id": row[0],
+                    "role": row[1],
+                    "permissions": permissions,
+                    "authenticated": True,
+                    "api_key": True,
+                }
+        finally:
+            db.close()
     return get_current_user(access_token)
