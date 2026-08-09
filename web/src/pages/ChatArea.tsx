@@ -16,6 +16,7 @@ import ChatPane from "../components/chat/ChatPane";
 import ImageWorkspace from "@/features/images/ImageWorkspace";
 import ImageGallery from "@/features/images/ImageGallery";
 import ProjectsWorkspace from "@/features/projects/ProjectsWorkspace";
+import AgentWorkspace from "@/features/agents/AgentWorkspace";
 import RuntimeManager from "../components/models/RuntimeManager";
 import { Settings } from "../components/settings/Settings";
 import ArtifactDrawer from "@/features/artifacts/ArtifactDrawer";
@@ -76,7 +77,7 @@ export default function ChatArea({
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeView, setActiveView] = useState<"chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
+  const [activeView, setActiveView] = useState<"chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
 
   // "Open in Image Studio" from a chat message -> switch to the Studio view.
   useEffect(() => {
@@ -220,7 +221,7 @@ export default function ChatArea({
         createNewChat={() => { handleNewChat(); setActiveView("chat"); }}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
-        onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
+        onViewChange={(v) => setActiveView(v as "chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-300/50 dark:bg-neutral-900/30">
@@ -236,7 +237,7 @@ export default function ChatArea({
           availableModels={allModels}
           selectedSearchEngine={selectedSearchEngine}
           onSearchEngineChange={onSearchEngineChange}
-          onViewChange={(v) => setActiveView(v as "chat" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
+          onViewChange={(v) => setActiveView(v as "chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
         />
         {activeView === "chat" && (
           <ChatPane
@@ -263,6 +264,7 @@ export default function ChatArea({
         {activeView === "workspace" && <ImageWorkspace />}
         {activeView === "gallery" && <ImageGallery />}
         {activeView === "projects" && <ProjectsWorkspace />}
+        {activeView === "agent" && <AgentWorkspace />}
         {activeView === "runtime" && (
           <RuntimeManager
             open={true}

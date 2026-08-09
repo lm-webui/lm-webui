@@ -121,6 +121,10 @@ async def start_gguf_download(download_request: dict, _: dict = Depends(require_
         if not filename.endswith('.gguf'):
             raise HTTPException(status_code=400, detail="Filename must end with .gguf")
 
+        # Normalize vision mmproj filename so detectors find it (mmproj.gguf).
+        if subdir and "mmproj" in filename.lower() and filename.lower() != "mmproj.gguf":
+            filename = "mmproj.gguf"
+
         # Compute target dir: vision bundles go under models/vision/<name>/, text GGUF stay in models/gguf/.
         target_dir = None
         if subdir:
@@ -212,6 +216,16 @@ async def get_download_status(task_id: str, _: dict = Depends(require_permission
         raise HTTPException(status_code=404, detail="Download task not found")
     
     return status
+
+@router.delete("/vision/{model_name}")
+async def delete_vision_model(model_name: str, _: dict = Depends(require_permission("models.install"))):
+    """Delete a vision bundle directory (models/vision/<name>/)."""
+    from app.services.gguf_manager import delete_vision_model as _del_vision
+    result = _del_vision(model_name)
+    if result.get("status") == "error":
+        raise HTTPException(status_code=400, detail=result.get("message", "Delete failed"))
+    return result
+
 
 @router.delete("/{model_name}")
 async def delete_gguf_model(model_name: str, _: dict = Depends(require_permission("models.install"))):

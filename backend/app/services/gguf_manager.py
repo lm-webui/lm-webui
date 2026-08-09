@@ -68,7 +68,9 @@ def scan_vision_models() -> List[Dict[str, str]]:
             if not gguvs:
                 continue
             main = gguvs[0]
-            mmproj = bundle_dir / "mmproj.gguf"
+            # mmproj may be named mmproj.gguf or mmproj-model-f16.gguf etc — match by pattern.
+            mmprojs = [f for f in bundle_dir.iterdir() if f.suffix.lower() == ".gguf" and "mmproj" in f.name.lower()]
+            mmproj = mmprojs[0] if mmprojs else (bundle_dir / "mmproj.gguf")
             has_mmproj = mmproj.exists()
             file_size = main.stat().st_size
             models.append({
@@ -284,6 +286,17 @@ def validate_gguf_file(file_path: str) -> Dict:
             "valid": False,
             "error": f"Validation failed: {str(e)}"
         }
+
+
+def delete_vision_model(model_name: str) -> Dict:
+    """Delete a vision bundle directory (models/vision/<name>/) with its main GGUF + mmproj."""
+    target = get_models_base() / "vision" / model_name
+    if not target.exists() or not target.is_dir():
+        return {"status": "error", "message": f"Vision model {model_name} not found"}
+    import shutil
+    shutil.rmtree(target)
+    logger.info(f"Deleted vision model: {model_name}")
+    return {"status": "success", "message": f"Vision model {model_name} deleted successfully"}
 
 
 def delete_local_model(model_name: str) -> Dict:

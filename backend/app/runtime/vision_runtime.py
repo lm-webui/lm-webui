@@ -47,7 +47,9 @@ class VisionRuntime:
             return None
         mains = [f for f in folder.iterdir()
                  if f.suffix.lower() == ".gguf" and "mmproj" not in f.name.lower()]
-        mmproj = folder / "mmproj.gguf"
+        mmprojs = [f for f in folder.iterdir()
+                   if f.suffix.lower() == ".gguf" and "mmproj" in f.name.lower()]
+        mmproj = mmprojs[0] if mmprojs else (folder / "mmproj.gguf")
         if not mains or not mmproj.exists():
             return None
         return {"main": mains[0], "mmproj": mmproj}

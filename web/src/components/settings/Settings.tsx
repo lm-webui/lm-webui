@@ -194,8 +194,7 @@ export function Settings({
           </DialogDescription>
         </div>
       )}
-
-                    <Tabs
+        <Tabs
             defaultValue="inference"
             className="w-full flex flex-col overflow-hidden min-h-0 flex-1"
           >

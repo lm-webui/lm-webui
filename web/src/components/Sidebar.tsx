@@ -9,9 +9,9 @@ import {
   Trash2,
   Check,
   LayoutGrid,
-  Briefcase,
   Palette,
   FolderKanban,
+  Bot,
   Loader2,
   MoreHorizontal,
   FileText,
@@ -354,6 +354,14 @@ export default function Sidebar({
           <Button
             variant="ghost"
             size="icon"
+            title="Agent"
+            onClick={() => onViewChange?.("agent")}
+          >
+            <Bot className="h-5 w-5 text-zinc-500" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
             title="Gallery"
             onClick={() => onViewChange?.("gallery")}
           >
@@ -445,35 +453,37 @@ export default function Sidebar({
           </div>
         </div>
 
-        <div className="px-4 mb-2 md:mb-3">
-          <div className="relative group">
-            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400 group-focus-within:text-zinc-600 dark:group-focus-within:text-zinc-300 transition-colors" />
+        <div className="px-4 mb-2 md:mb-3 flex items-center gap-1.5">
+          <div className="relative flex-1 group">
+            <SearchIcon className="absolute left-3 top-2.5 h-4 w-4 text-zinc-800 dark:text-zinc-200 group-focus-within:text-zinc-600 dark:group-focus-within:text-zinc-300 transition-colors" />
             <Input
               placeholder="Search for chats"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 text-xs rounded-full bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner focus-visible:outline-none focus-visible:ring-neutral-200/5 dark:focus-visible:ring-neutral-500/5 transition-all outline-none"
+              className="pl-9 h-9 text-xs rounded-full opacity-75 bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner focus-visible:outline-none focus-visible:ring-neutral-200/5 dark:focus-visible:ring-neutral-500/5 transition-all outline-none"
             />
           </div>
-        </div>
-
-        <div className="px-4 mb-1 hidden md:block">
           <Button
-            onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             variant="ghost"
-            className="w-full flex items-center justify-start gap-3 rounded-full h-10 px-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+            size="icon"
+            title="New chat"
+            className="h-9 w-9 shrink-0 rounded-full shadow-inner bg-stone-100/50 dark:bg-zinc-800/50"
+            onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
           >
-            <div className="flex h-6 w-6 items-center justify-center rounded-full shadow-inner hover:shadow-inner bg-stone-100/60 dark:bg-zinc-800">
-              <Plus className="h-3.5 w-3.5" />
-            </div>
-            <span className="font-small text-zinc-600 dark:text-zinc-400">
-              New chat
-            </span>
+            <Plus className="h-4 w-4" />
           </Button>
         </div>
 
         <div className="px-3 mb-1.5 md:mb-2.5">
           <div className="space-y-0.5">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-3 px-4 h-10 rounded-full font-normal text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              onClick={() => onViewChange?.("agent")}
+            >
+              <Bot className="h-4 w-4" />
+              <span>Agent</span>
+            </Button>
             <Button
               variant="ghost"
               className="w-full justify-start gap-3 px-4 h-10 rounded-full font-normal text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"

@@ -319,6 +319,17 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     }
   };
 
+  const deleteVisionModel = async (name: string) => {
+    if (!confirm(`Delete vision model ${name} (bundle)?`)) return;
+    try {
+      await authFetch(`/api/models/vision/${encodeURIComponent(name)}`, { method: "DELETE" });
+      toast.success(`Deleted ${name}`);
+      fetchVisionInfo();
+    } catch (error: any) {
+      toast.error(error.message || "Delete failed");
+    }
+  };
+
   const deleteMlxModel = async (name: string) => {
     if (!confirm(`Delete ${name}?`)) return;
     try {
@@ -639,9 +650,14 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                         </div>
                       </div>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
-                      Load
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteVisionModel(b.name)}>
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
+                        Load
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -894,7 +910,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           onOpenChange={(o) => !o && setDownloadModal(null)}
           modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
           variant={downloadModal === "vision" ? "vision" : "text"}
-          onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); }}
+          onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}
         />
       </div>
     );
@@ -910,7 +926,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         onOpenChange={(o) => !o && setDownloadModal(null)}
         modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
         variant={downloadModal === "vision" ? "vision" : "text"}
-        onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); }}
+        onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}
       />
     </Dialog>
   );
