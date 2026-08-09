@@ -11,8 +11,8 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
   const userName = user?.email?.split("@")[0] || "User";
 
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent">
-      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-8 min-h-0">
+    <div className="flex flex-col items-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent overflow-y-auto">
+      <div className="min-h-full flex flex-col items-center justify-center w-full space-y-8">
         <div className="w-full max-w-2xl flex flex-col items-start space-y-2 animate-in fade-in zoom-in duration-500 px-2">
            <div className="flex items-center gap-3">
               <img src="/logo1.png" alt="Logo" className="h-10 w-10 object-contain" />

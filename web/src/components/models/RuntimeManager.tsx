@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import ModelDownloadModal from "@/components/models/ModelDownloadModal";
+import { DownloadsProvider } from "@/features/downloads/useDownloads";
 import {
   HardDrive, Trash2, Cpu, CloudDownload, RefreshCw,
   Loader2, CheckCircle, XCircle, Server, Search, FolderOpen,
@@ -905,13 +906,14 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     return (
       <div className="h-full overflow-y-auto p-6 space-y-4">
         {body}
-        <ModelDownloadModal
-          open={downloadModal !== null}
-          onOpenChange={(o) => !o && setDownloadModal(null)}
-          modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
-          variant={downloadModal === "vision" ? "vision" : "text"}
-          onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}
-        />
+        <DownloadsProvider onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}>
+          <ModelDownloadModal
+            open={downloadModal !== null}
+            onOpenChange={(o) => !o && setDownloadModal(null)}
+            modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
+            variant={downloadModal === "vision" ? "vision" : "text"}
+          />
+        </DownloadsProvider>
       </div>
     );
   }
@@ -921,13 +923,14 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       <DialogContent className="max-w-3xl min-h-[85vh] max-h-[85vh] overflow-hidden flex flex-col">
         {body}
       </DialogContent>
-      <ModelDownloadModal
-        open={downloadModal !== null}
-        onOpenChange={(o) => !o && setDownloadModal(null)}
-        modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
-        variant={downloadModal === "vision" ? "vision" : "text"}
-        onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}
-      />
+      <DownloadsProvider onComplete={() => { fetchModels(); fetchRuntimes(); fetchMlxInfo(); fetchVisionInfo(); }}>
+        <ModelDownloadModal
+          open={downloadModal !== null}
+          onOpenChange={(o) => !o && setDownloadModal(null)}
+          modelType={downloadModal === "mlx" ? "mlx" : "gguf"}
+          variant={downloadModal === "vision" ? "vision" : "text"}
+        />
+      </DownloadsProvider>
     </Dialog>
   );
 }

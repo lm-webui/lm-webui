@@ -24,6 +24,7 @@ class GGUFDownloadManager:
     def __init__(self):
         self.download_tasks = {}
         self.websocket_connections = {}
+        self._semaphore = asyncio.Semaphore(1)  # single-flight: one download at a time
         self.models_dir = Path(__file__).parent.parent.parent / "models" / "gguf"
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.allowed_domains = ['huggingface.co', 'hf.co', 'github.com', 'raw.githubusercontent.com']
@@ -92,17 +93,23 @@ class GGUFDownloadManager:
             "task_id": task_id,
             "url": url,
             "filename": filename,
-            "status": "starting",
+            "status": "queued",
             "progress": 0,
             "downloaded_bytes": 0,
             "total_bytes": 0,
             "error": None
         }
 
-        # Start background download
-        asyncio.create_task(self._download_with_progress(task_id, url, filename, target_dir))
+        # Start background download (queued behind any in-progress download).
+        asyncio.create_task(self._queued_download(task_id, url, filename, target_dir))
 
         return task_id
+
+    async def _queued_download(self, task_id: str, url: str, filename: str, target_dir: Optional[Path] = None):
+        """Run one download at a time; tasks waiting on the semaphore stay 'queued'."""
+        async with self._semaphore:
+            self.download_tasks[task_id].update({"status": "downloading"})
+            await self._download_with_progress(task_id, url, filename, target_dir)
 
     async def _download_with_progress(self, task_id: str, url: str, filename: str, target_dir: Optional[Path] = None):
         """
@@ -327,7 +334,7 @@ class GGUFDownloadManager:
         """
         active_tasks = {}
         for task_id, task_info in self.download_tasks.items():
-            if task_info.get('status') in ['starting', 'downloading']:
+            if task_info.get('status') in ['queued', 'downloading']:
                 active_tasks[task_id] = task_info
         
         return active_tasks

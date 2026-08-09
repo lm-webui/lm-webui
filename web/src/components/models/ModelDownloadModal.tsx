@@ -1,32 +1,32 @@
 /**
  * ModelDownloadModal — resolve a HuggingFace repo and download GGUF or MLX models.
- * Shared by GGUF and MLX tabs in RuntimeManager.
+ * GGUF (text + vision) downloads run through the global DownloadsProvider so they
+ * survive modal/runtime close and resync on reopen. MLX stays a simple inline download.
  */
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Download, Search, Check, HardDrive, Cpu } from "lucide-react";
+import { Loader2, Download, Search, Check, HardDrive, Cpu, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { notifyModelsChanged } from "@/features/models/modelEvents";
+import { useDownloads } from "@/features/downloads/useDownloads";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   modelType: "gguf" | "mlx";
-  onComplete: () => void;
   /** Which model the user is downloading — drives the HuggingFace reference link. */
   variant?: "text" | "vision";
 }
 
-export default function ModelDownloadModal({ open, onOpenChange, modelType, onComplete, variant = "text" }: Props) {
+export default function ModelDownloadModal({ open, onOpenChange, modelType, variant = "text" }: Props) {
   const [repoInput, setRepoInput] = useState("");
   const [resolving, setResolving] = useState(false);
   const [repoInfo, setRepoInfo] = useState<any>(null);
-  const [downloading, setDownloading] = useState(false);
-  const [progress, setProgress] = useState("");
-  const [progressPct, setProgressPct] = useState(0);
   const [selectedFiles, setSelectedFiles] = useState<Record<string, boolean>>({});
-  const [fileProgress, setFileProgress] = useState<Record<string, { pct: number; status: string }>>({});
+  const [mlxDownloading, setMlxDownloading] = useState(false);
+  const [mlxProgress, setMlxProgress] = useState(0);
+  const { downloads, startDownload } = useDownloads();
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
   const isGGUF = modelType === "gguf";
   const isVision = isGGUF && variant === "vision";
@@ -36,6 +36,18 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
   const selectedMmproj = isVision ? repoFiles.filter((f: any) => selectedFiles[f.filename] && isMmproj(f.filename)) : [];
   const canDownload = selectedMain.length > 0 && selectedMmproj.length > 0;
   const toggleFile = (filename: string) => setSelectedFiles(prev => ({ ...prev, [filename]: !prev[filename] }));
+  const activeDownloads = Object.values(downloads).filter(d => d.status === "queued" || d.status === "downloading");
+
+  // Reset on each open — the modal is a single shared instance for text/vision/mlx,
+  // so a leftover repoInput would otherwise leak across variants.
+  useEffect(() => {
+    if (open) {
+      setRepoInput("");
+      setRepoInfo(null);
+      setSelectedFiles({});
+      setMlxProgress(0);
+    }
+  }, [open]);
 
   const handleResolve = async () => {
     if (!repoInput.trim()) return;
@@ -49,8 +61,7 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
           body: JSON.stringify({ input: repoInput.trim() }),
         });
         if (!res.ok) throw new Error(await res.text());
-        const data = await res.json();
-        setRepoInfo(data);
+        setRepoInfo(await res.json());
       } else {
         const res = await fetch(`${BASE}/api/mlx/resolve`, {
           method: "POST", headers: { "Content-Type": "application/json" },
@@ -67,120 +78,56 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
     }
   };
 
+  // GGUF text: start a background download (tracked globally).
   const handleDownload = async (url?: string, filename?: string) => {
-    setDownloading(true);
-    setProgress("Starting download...");
     try {
-      if (isGGUF) {
-        // Vision downloads route into models/vision/<model>/ so the runtime can find the bundle.
-        const visionSubdir = variant === "vision" && repoInput.trim()
-          ? `vision/${repoInput.trim().split("/").pop()}`
-          : undefined;
-        const res = await fetch(`${BASE}/api/models/download`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ file_url: url, filename, ...(visionSubdir ? { subdir: visionSubdir } : {}) }),
-        });
-        if (!res.ok) throw new Error("Download failed");
-        const { task_id } = await res.json();
-        const poll = setInterval(async () => {
-          const s = await fetch(`${BASE}/api/models/download/status/${task_id}`, { credentials: "include" });
-          const st = await s.json();
-          const pct = st.progress || 0;
-          setProgressPct(pct);
-          setProgress(st.status === "completed" ? "✅ Complete" : `Downloading ${pct.toFixed(0)}%`);
-          if (st.status === "completed" || st.status === "failed" || st.status === "exists") {
-            clearInterval(poll);
-            setProgressPct(st.status === "completed" ? 100 : 0);
-            if (st.status === "completed") toast.success("Model downloaded");
-            else if (st.status === "exists") toast.info("Model already exists");
-            else toast.error(st.error || "Download failed");
-            setDownloading(false);
-            onComplete();
-            notifyModelsChanged();
-            onOpenChange(false);
-          }
-        }, 800);
-      } else {
-        const res = await fetch(`${BASE}/api/mlx/download`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ repo_id: repoInput.trim() }),
-        });
-        if (!res.ok) throw new Error("Download failed");
-        const { task_id } = await res.json();
-        const poll = setInterval(async () => {
-          const s = await fetch(`${BASE}/api/mlx/download/status/${task_id}`, { credentials: "include" });
-          const st = await s.json();
-          const pct = st.progress || 0;
-          setProgressPct(pct);
-          setProgress(st.status === "completed" ? "✅ Complete" : st.status === "exists" ? "Already exists" : `Downloading ${pct.toFixed(0)}%`);
-          if (st.status === "completed" || st.status === "failed" || st.status === "exists") {
-            clearInterval(poll);
-            if (st.status === "completed") toast.success("Model downloaded");
-            else if (st.status === "exists") toast.info("Model already exists");
-            else toast.error(st.error || "Download failed");
-            setDownloading(false);
-            onComplete();
-            notifyModelsChanged();
-            onOpenChange(false);
-          }
-        }, 800);
-      }
+      await startDownload(url || "", filename || "");
     } catch (e: any) {
       toast.error(e.message || "Download failed");
-      setDownloading(false);
     }
   };
 
-  // Download one file, tracking per-file progress; resolves to the terminal status.
-  const startOneDownload = async (url: string, filename: string, subdir?: string): Promise<string> => {
-    setFileProgress(prev => ({ ...prev, [filename]: { pct: 0, status: "starting" } }));
-    const res = await fetch(`${BASE}/api/models/download`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ file_url: url, filename, ...(subdir ? { subdir } : {}) }),
-    });
-    if (!res.ok) throw new Error("Download failed");
-    const { task_id } = await res.json();
-    return new Promise((resolve) => {
-      const poll = setInterval(async () => {
-        try {
-          const s = await fetch(`${BASE}/api/models/download/status/${task_id}`, { credentials: "include" });
-          const st = await s.json();
-          const pct = st.progress || 0;
-          setFileProgress(prev => ({ ...prev, [filename]: { pct, status: st.status } }));
-          if (st.status === "completed" || st.status === "exists" || st.status === "failed") {
-            clearInterval(poll);
-            resolve(st.status);
-          }
-        } catch { /* transient — keep polling */ }
-      }, 800);
-    });
-  };
-
-  // Vision: download the selected main + mmproj concurrently; close only when both complete.
+  // Vision: start the selected main + mmproj as background downloads.
   const handleDownloadSelected = async () => {
-    if (!canDownload || downloading) return;
-    setDownloading(true);
+    if (!canDownload) return;
     const subdir = `vision/${repoInput.trim().split("/").pop()}`;
     try {
-      const statuses = await Promise.all(
-        [...selectedMain, ...selectedMmproj].map((f: any) => startOneDownload(f.url, f.filename, subdir)),
-      );
-      const ok = statuses.every(s => s === "completed" || s === "exists");
-      if (ok) {
-        toast.success("Vision model bundle downloaded");
-        onComplete();
-        notifyModelsChanged();
-        onOpenChange(false);
-      } else {
-        toast.error("Some files failed to download — please retry.");
-      }
+      await Promise.all([...selectedMain, ...selectedMmproj].map((f: any) => startDownload(f.url, f.filename, subdir)));
     } catch {
       toast.error("Download failed. Check your connection.");
-    } finally {
-      setDownloading(false);
+    }
+  };
+
+  // MLX: simple inline download (not background-managed).
+  const handleDownloadMLX = async () => {
+    setMlxDownloading(true);
+    setMlxProgress(30);
+    try {
+      const res = await fetch(`${BASE}/api/mlx/download`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ repo_id: repoInput.trim() }),
+      });
+      if (!res.ok) throw new Error("Download failed");
+      const { task_id } = await res.json();
+      const poll = setInterval(async () => {
+        const s = await fetch(`${BASE}/api/mlx/download/status/${task_id}`, { credentials: "include" });
+        const st = await s.json();
+        const pct = st.progress || 0;
+        setMlxProgress(pct);
+        if (st.status === "completed" || st.status === "failed" || st.status === "exists") {
+          clearInterval(poll);
+          if (st.status === "completed") toast.success("Model downloaded");
+          else if (st.status === "exists") toast.info("Model already exists");
+          else toast.error(st.error || "Download failed");
+          setMlxDownloading(false);
+          notifyModelsChanged();
+          onOpenChange(false);
+        }
+      }, 800);
+    } catch (e: any) {
+      toast.error(e.message || "Download failed");
+      setMlxDownloading(false);
     }
   };
 
@@ -227,7 +174,7 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
         </div>
 
         {/* Vision guidance */}
-        {isGGUF && variant === "vision" && repoInfo?.files?.length > 0 && (
+        {isVision && repoInfo?.files?.length > 0 && (
           <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
             <div className="font-semibold">Vision model</div>
             <p className="mt-1">
@@ -243,13 +190,11 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
             <p className="text-xs text-zinc-500">{repoInfo.files.length} files found</p>
             {repoInfo.files.map((f: any) => {
               const isM = isMmproj(f.filename);
-              const fp = fileProgress[f.filename];
               return (
                 <div key={f.filename} className="p-2 rounded-lg border border-zinc-200 dark:border-zinc-700">
                   <div className="flex items-center justify-between">
                     <button
                       type="button"
-                      disabled={downloading}
                       onClick={() => isVision && toggleFile(f.filename)}
                       className={`flex-1 min-w-0 text-left flex items-center gap-2 ${isVision ? "cursor-pointer" : "cursor-default"}`}
                     >
@@ -265,20 +210,11 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
                     </button>
                     {!isVision && (
                       <Button size="sm" variant="outline" className="rounded-xl shrink-0 ml-2"
-                        onClick={() => handleDownload(f.url, f.filename)} disabled={downloading}>
+                        onClick={() => handleDownload(f.url, f.filename)}>
                         <Download className="h-3 w-3 mr-1" /> Download
                       </Button>
                     )}
                   </div>
-                  {isVision && fp && (
-                    <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-500">
-                      <span className="w-24 shrink-0">{fp.status}</span>
-                      <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-                        <div className="h-full rounded-full bg-zinc-500 transition-all" style={{ width: `${Math.max(fp.pct, 2)}%` }} />
-                      </div>
-                      <span>{fp.pct.toFixed(0)}%</span>
-                    </div>
-                  )}
                 </div>
               );
             })}
@@ -288,11 +224,11 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
         {/* Vision: download selected pair */}
         {isVision && repoInfo?.files?.length > 0 && (
           <>
-            <Button size="sm" className="w-full rounded-xl gap-1" onClick={handleDownloadSelected} disabled={!canDownload || downloading}>
-              {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-              {downloading ? "Downloading..." : `Download selected (${selectedMain.length + selectedMmproj.length})`}
+            <Button size="sm" className="w-full rounded-xl gap-1" onClick={handleDownloadSelected} disabled={!canDownload}>
+              <Download className="h-4 w-4" />
+              {`Download selected (${selectedMain.length + selectedMmproj.length})`}
             </Button>
-            {!canDownload && !downloading && (
+            {!canDownload && (
               <p className="text-xs text-amber-600">Select one main model and one mmproj to download the bundle.</p>
             )}
           </>
@@ -305,26 +241,34 @@ export default function ModelDownloadModal({ open, onOpenChange, modelType, onCo
               <Check className="h-4 w-4 text-green-500" />
               <span className="font-medium">{repoInfo.repo_id}</span>
             </div>
-            <Button size="sm" className="mt-3 rounded-xl" onClick={() => handleDownload()} disabled={downloading}>
-              {downloading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
-              {downloading ? progress || "Downloading..." : "Download Model"}
+            <Button size="sm" className="mt-3 rounded-xl" onClick={handleDownloadMLX} disabled={mlxDownloading}>
+              {mlxDownloading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Download className="h-4 w-4 mr-1" />}
+              {mlxDownloading ? `Downloading ${mlxProgress.toFixed(0)}%` : "Download Model"}
             </Button>
           </div>
         )}
 
-        {downloading && progress && !isGGUF && (
-          <div className="text-xs text-zinc-500 text-center">{progress}</div>
-        )}
-      {downloading && !isVision && (
+        {/* Active GGUF downloads (global, survives modal close) */}
+        {activeDownloads.length > 0 && (
           <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs text-zinc-500">
-              <span>{progress}</span>
-              <span>{progressPct.toFixed(0)}%</span>
-            </div>
-            <div className="w-full h-2 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
-              <div className="h-full rounded-full bg-zinc-500 transition-all duration-300"
-                style={{ width: `${Math.max(progressPct, 5)}%` }} />
-            </div>
+            <p className="text-xs font-medium text-zinc-500">Downloads</p>
+            {activeDownloads.map((d) => (
+              <div key={d.task_id} className="flex items-center gap-2 text-xs text-zinc-500">
+                <span className="w-36 truncate shrink-0">{d.filename}</span>
+                {d.status === "queued" ? (
+                  <span className="flex items-center gap-1 text-amber-600">
+                    <Clock className="h-3 w-3" /> In queue — another model is downloading
+                  </span>
+                ) : (
+                  <>
+                    <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                      <div className="h-full rounded-full bg-zinc-500 transition-all" style={{ width: `${Math.max(d.progress || 0, 2)}%` }} />
+                    </div>
+                    <span>{Math.round(d.progress || 0)}%</span>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </DialogContent>

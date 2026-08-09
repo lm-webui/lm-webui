@@ -195,6 +195,12 @@ async def download_progress_websocket(websocket: WebSocket, task_id: str, _: dic
         # Unregister WebSocket
         gguf_downloader.unregister_websocket(task_id, websocket)
 
+@router.get("/downloads")
+async def list_downloads(_: dict = Depends(require_permission("models.install"))):
+    """List all active/queued download tasks (for progress resync)."""
+    return {"downloads": list(gguf_downloader.get_active_downloads().values())}
+
+
 @router.get("/download/status/{task_id}")
 async def get_download_status(task_id: str, _: dict = Depends(require_permission("models.install"))):
     """

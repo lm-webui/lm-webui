@@ -29,7 +29,13 @@ export function UserManagementModal({ open, onOpenChange }: { open: boolean; onO
   };
 
   useEffect(() => {
-    if (open) loadUsers();
+    if (open) {
+      loadUsers();
+      // Reset the create-user form so it doesn't leak the previous entry.
+      setEmail("");
+      setPassword("");
+      setRole("user");
+    }
   }, [open]);
 
   const createUser = async () => {
