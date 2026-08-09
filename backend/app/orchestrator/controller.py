@@ -117,6 +117,13 @@ class OrchestratorController:
             )
             await run_capabilities(exec_plan, ctx)
 
+            # Vision not ready → surface a clear notice; text chat still answers.
+            if exec_plan.vision and not getattr(ctx, "vision_ready", False) and getattr(ctx, "images", None):
+                yield ModelEvent.error(
+                    "⚠️ Vision isn't ready — install a vision model (main GGUF + mmproj) and ensure "
+                    "llama-server is available. Your message was answered without image analysis."
+                )
+
             # Load user inference preferences from DB
             try:
                 db = get_db()

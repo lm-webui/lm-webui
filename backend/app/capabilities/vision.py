@@ -25,7 +25,11 @@ def _health(model: str) -> bool:
 
 
 def collect_image_data_uris(file_references: list) -> list:
-    """Return base64 data-URIs of image attachments (for the vision path)."""
+    """Return base64 data-URIs of image attachments (for the vision path).
+
+    Resolves each image ref by priority: a direct local `file_path`/`url` on the ref, then
+    `media_library` by `media_id`/`id`, then by `filename`.
+    """
     import base64
     import os as _os
     from app.database import get_db
@@ -40,20 +44,37 @@ def collect_image_data_uris(file_references: list) -> list:
         mime = (ref.get("mime") or ref.get("content_type") or "")
         if ftype != "image" and not mime.startswith("image/"):
             continue
-        fid = ref.get("media_id") or ref.get("id")
-        if not fid:
+        # 1. Direct local path on the ref.
+        url = ref.get("url")
+        path = ref.get("file_path") or (url if isinstance(url, str) and not url.startswith(("http://", "https://", "data:")) else None)
+        # 2. DB lookup by media id.
+        if not path:
+            fid = ref.get("media_id") or ref.get("id")
+            if fid:
+                try:
+                    cur.execute("SELECT file_path FROM media_library WHERE id = ?", (fid,))
+                    r = cur.fetchone()
+                    if r and r[0]:
+                        path = r[0]
+                except Exception:
+                    path = None
+        # 3. DB lookup by filename.
+        if not path:
+            fname = ref.get("filename") or ref.get("name")
+            if fname:
+                try:
+                    cur.execute("SELECT file_path FROM media_library WHERE filename = ?", (fname,))
+                    r = cur.fetchone()
+                    if r and r[0]:
+                        path = r[0]
+                except Exception:
+                    path = None
+        if not path or not _os.path.exists(str(path)):
             continue
         try:
-            cur.execute("SELECT file_path, file_type FROM media_library WHERE id = ?", (fid,))
-            row = cur.fetchone()
-        except Exception:
-            row = None
-        if not row or not row[0] or not _os.path.exists(row[0]):
-            continue
-        try:
-            with open(row[0], "rb") as fh:
+            with open(str(path), "rb") as fh:
                 b64 = base64.b64encode(fh.read()).decode()
-            mt = row[1] or "image/png"
+            mt = mime or "image/png"
             uris.append(f"data:{mt};base64,{b64}")
         except Exception:
             continue

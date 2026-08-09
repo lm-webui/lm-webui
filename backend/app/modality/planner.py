@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List
 
-from .intent_classifier import IntentRequest, IntentResult, ProcessingClass, classify
+from .intent_classifier import IntentRequest, IntentResult, ProcessingClass, classify, _is_image
 
 
 @dataclass
@@ -48,28 +48,25 @@ def plan(
     ))
 
     p = ExecutionPlan(processing_class=intent.processing_class.value)
+    has_images = any(_is_image(r) for r in (file_references or []))
     has_docs = _has_docs(file_references)
-
-    if intent.processing_class == ProcessingClass.DIRECT:
-        return p  # chat only
 
     if intent.processing_class == ProcessingClass.GENERATE:
         p.diffusion = True
-        return p
+        return p  # image generation takes over
 
-    if intent.processing_class == ProcessingClass.VISION:
+    # Vision runs for any image attachment — even when mixed with documents.
+    if has_images:
         p.vision = True
-        return p
 
     if intent.processing_class == ProcessingClass.LIVE:
         p.search = True
         return p
 
-    if intent.processing_class == ProcessingClass.KNOWLEDGE:
+    # Documents (or knowledge scope) → direct file context + retrieval (RAG).
+    if intent.processing_class == ProcessingClass.KNOWLEDGE or has_docs:
         if has_docs:
             p.file_context = True
-        p.retrieve = True  # RAG AUTO for knowledge scope
-        return p
+        p.retrieve = True
 
-    # Fallback (AUDIO/INGEST not wired to chat): chat only.
     return p
