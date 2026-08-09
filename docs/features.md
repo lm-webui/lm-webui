@@ -13,12 +13,13 @@ LM-WebUI is a self-hosted AI workspace for working with local and cloud models f
 
 After signing in, LM-WebUI opens a single workspace with:
 
-- A sidebar for conversations, search, pinned items, projects, and navigation
+- A sidebar for conversations, search, pinned items, projects, and navigation (with an Agent section)
 - A model and provider selector in the header
 - A central Chat view
 - An Image Studio for prompt-based generation
 - A Gallery for generated images
 - A Projects workspace for custom instructions and grouped conversations
+- An Agent workspace (coming soon)
 - Settings for API keys, models, runtimes, preferences, and account controls
 
 The application is responsive and adapts the sidebar and workspace controls for smaller screens.
@@ -42,6 +43,18 @@ Current chat capabilities include:
 - Stop/cancel controls while a response is being generated
 
 Available behavior depends on the selected provider, model, configured credentials, and installed local runtimes.
+
+## Vision
+
+Vision (multimodal image understanding) is served by local image-text-to-text (VL) GGUF models through `llama-server`. When you attach an image and the Smart-Modality pipeline detects a vision request, it routes to the vision capability.
+
+To use Vision:
+
+1. Download a vision model (a main GGUF **and** its `mmproj` projector) via the model downloader — they are stored together in `models/vision/<model>/`.
+2. Ensure `llama-server` is available (installed as part of the GGUF runtime).
+3. When the vision bundle is complete, the **Vision** capability in the Runtime Manager shows **Ready** and the chat can analyze images.
+
+The vision-capable model must be paired with its `mmproj`; without it the bundle is reported as not ready.
 
 ## Projects
 
@@ -135,16 +148,19 @@ Gallery stores generated images for the authenticated user. It supports browsing
 
 ## Runtime and hardware management
 
-The Runtime Manager detects and reports local runtime availability with a clean 3-section UI.
+The Runtime Manager reports local runtime availability across three tabs: **GGUF**, **MLX**, and **ComfyUI**.
 
-**GGUF (llama.cpp)** — bundled in-container. Universal local inference engine with hardware-accelerated defaults. Configurable from the Runtime Manager UI:
-- Context window slider (1K–32K)
-- GPU acceleration toggle
+**GGUF (llama.cpp)** — bundled in-container, plus a `llama-server` binary installed as part of the GGUF runtime (needed for Vision). The GGUF tab shows a **Capabilities** section (Chat and Vision ready status), a searchable model list (text models tagged `text`, vision bundles tagged `vision`), and a **Performance** section:
+- Context window slider (1K–128K)
+- GPU acceleration toggle + detected GPU / install acceleration
 - KV cache quality (balanced q8_0 / full f16)
+- Apply & Reload
 
-**MLX** — external server on Apple Silicon macOS hosts. Install `mlx_lm.server` on the host, the Runtime Manager detects it and connects via HTTP API. Setup scripts (install/uninstall/start/stop) available directly in the UI.
+Vision models pair a main GGUF with an `mmproj` stored in `models/vision/<model>/`; the download flow requires selecting a main model and one mmproj, and downloads run in a single-flight queue in the background.
 
-**ComfyUI** — external server for image generation. Detected on `localhost:8188` (native) or `host.docker.internal:8188` (Docker), one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
+**MLX** — external server on Apple Silicon macOS hosts. Install `mlx_lm.server` on the host, the Runtime Manager detects it and connects via HTTP API. The MLX tab mirrors the GGUF layout (capability status, searchable model list, runtime details). Setup scripts (install/uninstall/start/stop) available directly in the UI.
+
+**ComfyUI** — external server for image generation, shown as a connection manager. Detected on `localhost:8188` (native) or `host.docker.internal:8188` (Docker), one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
 
 Ollama and vLLM are configured as standard API providers in Settings → API Providers, not managed runtimes.
 

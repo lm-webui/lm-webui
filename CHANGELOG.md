@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-08-08
+
+### Added
+- **Smart-Modality chat pipeline** — a deterministic intent classifier routes each request to capability execution (plain chat, RAG/retrieval, web search, image generation, and vision).
+- **Vision capability** — multimodal (image-text-to-text) GGUF models served through `llama-server`. Vision bundles store a main GGUF + `mmproj` in `models/vision/<model>/`, with pattern-based mmproj detection.
+- **OCR and RAG enhancements** — improved vector store and retrieval for file context.
+- **Background model downloads** — single-flight download queue (one at a time; the rest are queued) that survive closing the UI; a global download manager resyncs progress on reopen.
+- **`llama-server` installation** in `install.sh` as part of the GGUF runtime (platform-aware), plus `PATH` in the service unit.
+- **New API endpoints** — `GET /api/runtimes/gguf/health`, `GET /api/runtimes/vision/status`, `GET /api/models/downloads`, `DELETE /api/models/vision/{model_name}`, `GET /api/mlx/download/status/{task_id}`.
+- **Agent workspace** — new sidebar section (coming soon) with a reworked sidebar (new chat moved to a `+` button).
+- **CORS_ORIGINS** environment variable for explicit allowed origins.
+
+### Changed
+- **Runtime Manager rework** — the GGUF tab shows capabilities (Chat/Vision ready), tagged vision models, Performance config (context up to 128K, GPU, KV cache) and Runtime Details; the MLX tab mirrors the GGUF layout; ComfyUI is a connection manager.
+- **Model download UX** — vision bundles require selecting a main model + one mmproj; downloads run as a concurrent pair with per-file progress bars.
+- **Loading a model now also sets the serving provider** (GGUF/MLX) so it routes correctly.
+- **Composer keep-prompt fix** — a prompt that was already answered is cleared instead of being kept for retry.
+
+### Fixed
+- Vision model not detected after download (mmproj filename matching).
+- Download modal input leaking between text/vision variants.
+- `ensure_llama_server()` failed on Linux (release asset extension, extraction, shared-lib copy).
+
 ## [0.6.0] — 2026-07-28
 
 ### Changed

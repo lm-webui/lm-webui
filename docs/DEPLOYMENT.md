@@ -92,6 +92,16 @@ GGUF (llama.cpp) is bundled with hardware-aware defaults. Override via environme
 
 Context window, GPU toggle, and KV cache quality are also adjustable from the Runtime Manager UI (Settings → Runtime Manager). Env vars serve as system defaults; UI changes apply per-session.
 
+### Vision (llama-server)
+
+Vision models are served by `llama-server`. The installer (`install.sh`) installs it as part of the GGUF
+runtime and adds it to the service `PATH`. If you deploy manually (e.g. Docker), ensure `llama-server` is on
+the backend service `PATH` or Vision will report not-ready. Vision bundles live in `models/vision/<model>/`
+and consist of a main GGUF plus its `mmproj`.
+
+`CORS_ORIGINS` is a comma-separated allowlist of browser origins (defaults to `http://localhost:5177,
+http://localhost:7070`). Browsers reject `*` together with credentials, so add your deployed origin here.
+
 ## External runtimes
 
 Install host runtimes for hardware-accelerated local inference. The app connects to them via `localhost` (native) or `host.docker.internal` (Docker):

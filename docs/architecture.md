@@ -25,10 +25,12 @@ The backend is a modular monolith. Key modules:
 
 - **routes** — REST + WebSocket endpoints
 - **providers** — AI provider implementations (`remote/` for cloud APIs, `local/` for local runtimes)
-- **orchestrator** — chat flow controller
+- **orchestrator** — chat flow controller (Smart-Modality entry point)
+- **modality** — intent classifier + execution planner (decides whether a request is plain chat, RAG, search, image, or vision)
+- **capabilities** — capability executor (chat, vision, retrieve/search, image generation)
 - **chat / memory** — session and message persistence, context assembly + summarization
 - **database** — SQLite schema + connection pool
-- **hardware / runtime** — GPU/CPU detection and external runtime metadata
+- **hardware / runtime** — GPU/CPU detection and external runtime metadata; `vision_runtime` manages the `llama-server` subprocess for Vision
 - **security** — JWT auth + encryption
 - **services / files** — image generation, file storage, model management
 
@@ -36,7 +38,15 @@ The backend is a modular monolith. Key modules:
 
 ### Chat
 ```
-User → WebSocket/REST → Orchestrator → Provider → LLM → Stream → UI
+User → WebSocket/REST → Orchestrator → Intent Classifier → Execution Plan
+     → Capability Executor → Chat/Vision Capability → Provider → LLM → Stream → UI
+```
+
+### Vision
+```
+User attaches image → Smart-Modality (VISION) → Vision Capability
+     → ensure llama-server → launch llama-server --model <main> --mmproj <mmproj>
+     → OpenAI-compatible provider → analyze → Stream → UI
 ```
 
 ### Image Generation (Studio)
@@ -60,9 +70,9 @@ Model Selector → GET /api/models/* → Model Registry → Provider.list_models
 | xAI | Cloud (OpenAI-compatible) | ✅ | ❌ |
 | vLLM | Self-hosted (OpenAI-compatible) | ✅ | ❌ |
 | Ollama | Local | ✅ | ❌ |
-| GGUF (llama.cpp) | In-container | ✅ | ❌ |
+| GGUF (llama.cpp) | In-container | ✅ | Vision ✅ (via llama-server) · Gen ❌ |
 | MLX | External (host server) | ✅ | ❌ |
-| ComfyUI | External (host server) | ❌ | ✅ |
+| ComfyUI | External (host server) | ❌ | ✅ (image generation) |
 
 ## Key Design Decisions
 

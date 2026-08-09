@@ -16,6 +16,24 @@ Common issues when running LM-WebUI and how to resolve them. If the steps below 
 
 No provider/model is selected in the composer's model selector. Open the selector and choose a provider and a model before sending. Your typed prompt is preserved after this message, so you can pick a provider and resend without retyping.
 
+## Vision shows "Not ready" after downloading a vision model
+
+Vision needs three things, all reported by Runtime Manager → GGUF → Capabilities:
+
+- **`llama-server` available.** It is installed by `install.sh` as part of the GGUF runtime. If missing, re-run
+  `install.sh` or put a `llama-server` binary on the backend service `PATH`.
+- **A complete vision bundle.** The model must be downloaded as a main GGUF **and** its `mmproj`, stored in
+  `models/vision/<model>/`. If you downloaded only the model (no `mmproj`), Vision stays not-ready — re-open the
+  vision download and download the pair.
+- **Refresh.** After a download, Vision status refreshes automatically. If it still shows not-ready, use
+  **Refresh** or reload the app.
+
+## A model download seems stuck or stopped
+
+GGUF downloads run in a single-flight queue in the background — only one runs at a time. If a download appears
+"queued" it will start after the current one finishes. Closing the dialog does **not** stop the download; reopen
+the downloader to resync live progress.
+
 ## Model selector is empty after adding a provider or a GGUF model
 
 The model list can be stale if it was fetched before the change. Use the **refresh button** in the model selector's dropdown to re-fetch, or reload the app. Saving an API key or finishing a GGUF/MLX download should refresh the list automatically.

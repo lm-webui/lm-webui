@@ -6,6 +6,9 @@ labels: ["enhancement", "triage"]
 assignees: ""
 ---
 
+> 🔒 **Security**: If your request relates to a **security vulnerability**, do **not** file a public issue —
+> report it privately via [SECURITY.md](../SECURITY.md).
+
 ## Problem Statement
 
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]

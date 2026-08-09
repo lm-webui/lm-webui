@@ -1,5 +1,10 @@
 # Pull Request
 
+Thanks for contributing! Please read [CONTRIBUTING.md](../CONTRIBUTING.md) first.
+
+> 🔒 **Security**: If this PR fixes or is related to a **security vulnerability**, do **not** open it publicly —
+> report via [SECURITY.md](../SECURITY.md) first and reference the advisory here.
+
 ## Description
 
 Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context.
@@ -29,6 +34,7 @@ Please delete options that are not relevant.
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] Any dependent changes have been merged and published in downstream modules
+- [ ] I have considered the **security impact** of this change (auth, SSRF, injection, secrets, permissions)
 
 ## Testing
 

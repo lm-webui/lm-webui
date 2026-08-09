@@ -6,6 +6,10 @@ labels: ["bug", "triage"]
 assignees: ""
 ---
 
+> 🔒 **Security**: If you believe this is a **security vulnerability** (auth bypass, injection, SSRF, data
+> exposure, privilege escalation, secrets), do **not** file a public issue. Report it privately via
+> [SECURITY.md](../SECURITY.md) (GitHub "Report a vulnerability" or security@lmwebui.com).
+
 ## Bug Description
 
 A clear and concise description of what the bug is.

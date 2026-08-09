@@ -88,12 +88,15 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/models/resolve` | Resolve a HuggingFace GGUF repo |
-| POST | `/api/models/download` | Start a GGUF download |
+| POST | `/api/models/download` | Start a GGUF download (single-flight queue; returns `task_id`) |
 | GET | `/api/models/download/status/{task_id}` | Download task progress |
+| WS | `/api/models/download-ws/{task_id}` | Download progress over WebSocket |
+| GET | `/api/models/downloads` | List active/queued download tasks (background resync) |
 | GET | `/api/models/local` | Installed local models |
 | POST | `/api/models/upload` | Upload a local model file |
 | GET | `/api/models/compatibility/{model_name}` | Compatibility check |
-| DELETE | `/api/models/{model_name}` | Remove a model |
+| DELETE | `/api/models/{model_name}` | Remove a text GGUF model |
+| DELETE | `/api/models/vision/{model_name}` | Remove a vision bundle (`models/vision/<name>/`) |
 | GET/POST | `/api/models/gguf/config` | Read/update GGUF engine config |
 | GET | `/api/models/gguf/gpu` | GPU detection + acceleration status |
 | POST | `/api/models/gguf/gpu-install` | Rebuild llama-cpp with GPU |
@@ -104,7 +107,8 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 |---|---|---|
 | GET | `/api/mlx/models` | Installed MLX models |
 | POST | `/api/mlx/resolve` | Resolve an MLX repo |
-| POST | `/api/mlx/download` | Download an MLX model |
+| POST | `/api/mlx/download` | Start an MLX download (returns `task_id`) |
+| GET | `/api/mlx/download/status/{task_id}` | MLX download progress |
 | DELETE | `/api/mlx/models/{model_name}` | Remove an MLX model |
 
 ## Runtimes
@@ -119,6 +123,8 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 | POST | `/api/runtimes/{type}/install` | Install a runtime |
 | POST | `/api/runtimes/{type}/uninstall` | Uninstall a runtime |
 | GET | `/api/runtimes/mlx/status` | MLX runtime status |
+| GET | `/api/runtimes/gguf/health` | GGUF runtime executables + version (llama-server, llama-cli, …) |
+| GET | `/api/runtimes/vision/status` | Vision status — installed bundles, llama-server, running state |
 
 ## Image Generation
 

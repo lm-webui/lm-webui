@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/development-active-green" />
   </a>
   <a href="https://github.com/lm-webui/lm-webui/releases">
-    <img src="https://img.shields.io/badge/release-v0.5.0-blue" />
+    <img src="https://img.shields.io/badge/release-v0.7.0-blue" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-black" />
@@ -74,12 +74,13 @@ The web client runs on the configured Vite port and proxies API requests to the 
 | Feature | Capabilities |
 |---|---|
 | **Authentication** | Secure JWT-based authentication with httpOnly cookies, refresh tokens, session persistence, and role-based permissions. Remember-me toggle for session control. |
-| **Chat** | Multi-provider chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF (llama.cpp), and MLX. Streaming responses, code rendering, Mermaid diagrams, conversation management, and search. |
+| **Chat** | Multi-provider chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF (llama.cpp), and MLX. Streaming responses, code rendering, Mermaid diagrams, conversation management, and search. Smart-Modality routes each request to the right capability (plain chat, RAG, search, image, vision). |
+| **Vision** | Multimodal image understanding with image-text-to-text (VL) GGUF models served through `llama-server`. Vision bundles pair a main GGUF with an `mmproj` in `models/vision/<model>/`. |
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
-| **File Context** | Upload files for conversation context. Image and document processing, upload status, file references with conversations, and citation display in chat. |
-| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Hardware-compatibility checking and local model registry. |
-| **MLX Runtime** | In-process inference on Apple Silicon via mlx-lm. Model download from HuggingFace with one click. Seamless chat integration. |
+| **File Context** | Upload files for conversation context. Image and document processing (incl. OCR), upload status, file references with conversations, and citation display in chat. |
+| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Vision via `llama-server`. Background, single-flight download queue that survives closing the UI. |
+| **MLX Runtime** | Inference on Apple Silicon via mlx-lm. Model download from HuggingFace with one click. Seamless chat integration. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
 | **Runtime Manager** | Manage GGUF (in-container with hardware-accelerated defaults), MLX (Apple Silicon in-process), and ComfyUI (image generation). Ollama and vLLM are configured as API providers in Settings. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
@@ -91,6 +92,8 @@ The web client runs on the configured Vite port and proxies API requests to the 
 ## 🤗 GGUF Runtime Highlights
 
 - **Model Management**: Upload and download GGUF models with progress tracking
+- **Vision Models**: Image-text-to-text (VL) GGUF models served via `llama-server`, paired with their `mmproj` in `models/vision/<model>/`
+- **Background Downloads**: Single-flight queue (one at a time) that continues even if you close the UI; progress resyncs on reopen
 - **HuggingFace Integration**: Direct download from HuggingFace repositories
 - **Hardware Compatibility**: Automatic model validation for your system
 - **Local Registry**: Manage and organize local GGUF models
@@ -123,12 +126,14 @@ lm-webui/
 │   │   ├── routes/        # REST + WebSocket API endpoints
 │   │   ├── providers/     # AI provider implementations (remote + local)
 │   │   ├── orchestrator/  # Chat flow controller and streaming
+│   │   ├── modality/      # Intent classifier + execution planner (Smart-Modality)
+│   │   ├── capabilities/  # Capability executor (chat, vision, RAG, search, image)
 │   │   ├── services/      # Models, images, files, audit, usage tracking
 │   │   ├── chat/          # Session and message persistence
 │   │   ├── database/      # SQLite schema, migrations, connection pool
 │   │   ├── hardware/      # GPU/CPU detection and quantization
 │   │   ├── memory/        # Context assembly and conversation summarization
-│   │   ├── runtime/       # Runtime detection and metadata
+│   │   ├── runtime/       # Runtime detection + vision_runtime (llama-server)
 │   │   └── security/      # JWT authentication, encryption, RBAC
 │   └── tests/             # Backend tests
 ├── web/                   # React 19 + TypeScript frontend

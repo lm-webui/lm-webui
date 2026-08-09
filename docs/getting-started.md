@@ -110,7 +110,11 @@ BACKEND_HOST=0.0.0.0
 BACKEND_PORT=7070
 DATABASE_URL=sqlite:///./data/app.db
 SECRET_KEY=your-secret-key-here
+CORS_ORIGINS=http://localhost:5177,http://localhost:7070
 ```
+
+`CORS_ORIGINS` is a comma-separated list of allowed origins (browsers reject `*` together with credentials).
+It defaults to `http://localhost:5177,http://localhost:7070`; add your deployed origin there.
 
 **GGUF engine tuning** — set these on the `lm-webui` service in `docker-compose.yml` to override hardware-auto-detected defaults:
 
@@ -155,11 +159,18 @@ llm:
 
 ### Download a GGUF Model
 
-1. Go to Settings → Models
-2. Click "Download Model"
-3. Enter HuggingFace URL or search for a model
-4. Monitor download progress in real-time
-5. Once downloaded, the model will appear in chat model selection
+1. Go to Runtime Manager → GGUF, then click "Download text model" (or "Download vision model").
+2. Enter a HuggingFace repo ID (or a direct `.gguf` URL) and Resolve.
+3. For a **vision model**, select a main model **and** one `mmproj`, then download the pair.
+4. Downloads run in a **single-flight queue in the background** — they continue even if you close the dialog, and progress resyncs when you reopen it. Only one download runs at a time; others wait in the queue.
+5. Once downloaded, the model appears in the Runtime Manager model list and chat model selection.
+
+### Use Vision (image understanding)
+
+1. Download a vision (VL) model and its `mmproj` (they are stored together in `models/vision/<model>/`).
+2. Confirm `llama-server` is available — it is installed as part of the GGUF runtime.
+3. In Runtime Manager → GGUF, the **Vision** capability shows **Ready** once a complete bundle is present.
+4. Attach an image in the composer; the Smart-Modality pipeline routes it to the vision capability.
 
 ### Upload Files for Context
 

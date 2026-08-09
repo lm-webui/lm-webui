@@ -2,6 +2,23 @@
 
 Thank you for your interest in contributing to LM WebUI! This document provides guidelines and instructions for contributing to the project.
 
+> 🔒 **Security**: If you believe you've found a security vulnerability, **do not** open a public issue or PR.
+> Follow the [Security Policy](./SECURITY.md) and report it privately (GitHub private vulnerability reporting or
+> security@lmwebui.com). Read it before submitting any auth, SSRF, injection, or secret-handling changes.
+
+## Your First Contribution
+
+New here? Here's the fastest path to a useful contribution:
+
+1. **Find a good first task** — look for issues labeled `good first issue` or `help wanted`, or pick a
+   documentation/typo fix to get familiar with the flow.
+2. **Understand the architecture** — skim [`docs/architecture.md`](./docs/architecture.md) and the repo
+   structure below so your change fits the existing patterns (providers, capabilities, routes).
+3. **Set up the environment** (see [Development Setup](#development-setup)).
+4. **Make a small change** on a `feature/` or `bugfix/` branch, run the checks below, and open a PR.
+
+If you get stuck, see [Getting Help](#getting-help).
+
 ## Code of Conduct
 
 By participating in this project, you agree to abide by our Code of Conduct. Please be respectful and considerate of others.
@@ -90,23 +107,43 @@ docs: update installation instructions
 
 ```
 lm-webui/
-├── web/                # React + TypeScript frontend
+├── web/                  # React 19 + TypeScript frontend (Vite)
 │   ├── src/
-│   │   ├── components/ # Reusable UI components
-│   │   ├── features/   # Feature-based modules
-│   │   ├── store/      # State management
-│   │   └── services/   # API services
-├── backend/            # FastAPI backend
+│   │   ├── components/   # UI components (shadcn/ui + custom)
+│   │   ├── features/     # Domain logic (chat, images, models, sessions)
+│   │   ├── store/        # Zustand state
+│   │   └── utils/        # API client, providers
+├── backend/              # FastAPI backend
 │   ├── app/
-│   │   ├── routes/     # API endpoints
-│   │   ├── services/   # Business logic
-│   │   ├── providers/  # AI providers (remote + local)
-│   │   ├── orchestrator/ # Chat flow and streaming
-│   │   └── hardware/   # Hardware abstraction
-└── docs/              # Documentation
-├── docs/              # Documentation
-└── tests/             # Test files
+│   │   ├── routes/       # REST + WebSocket endpoints
+│   │   ├── services/     # Business logic
+│   │   ├── providers/    # AI providers (remote + local)
+│   │   ├── orchestrator/ # Chat flow controller
+│   │   ├── modality/     # Intent classifier + planner (Smart-Modality)
+│   │   ├── capabilities/ # Capability executor (chat, vision, RAG, search, image)
+│   │   ├── runtime/      # Runtime detection + vision_runtime (llama-server)
+│   │   └── hardware/     # Hardware abstraction
+├── docs/                 # Documentation
+└── install.sh            # One-line installer
 ```
+
+## Running Checks
+
+```bash
+# Frontend (from repo root or web/)
+cd web
+npm run typecheck   # TypeScript checks
+npm run lint        # ESLint
+npm run test        # Vitest unit tests
+
+# Backend
+cd backend
+source .venv/bin/activate
+pytest              # Backend tests
+python -m compileall app   # Syntax check
+```
+
+Run these before opening a PR — CI runs them too.
 
 ## Coding Standards
 
@@ -179,9 +216,11 @@ When requesting features, include:
 
 ## Getting Help
 
-- Check the [documentation](README.md)
-- Search existing issues
-- Join our community discussions
+- Check the [documentation](./docs/) (getting-started, architecture, features, troubleshooting)
+- Search existing issues before opening a new one
+- If the dev server won't start, check `docs/troubleshooting.md` ("Backend not responding", "Frontend not
+  loading")
+- For security matters, follow [SECURITY.md](./SECURITY.md) — never file these publicly
 - Contact maintainers for critical issues
 
 ## Recognition
@@ -191,5 +230,6 @@ Contributors will be recognized in:
 - GitHub contributors list
 - Release notes
 - Project documentation
+- [CHANGELOG](./CHANGELOG.md)
 
 Thank you for contributing to LM WebUI! 🚀
