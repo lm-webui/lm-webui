@@ -22,6 +22,12 @@ import aiohttp
 logger = logging.getLogger(__name__)
 
 VISION_PORT = int(os.getenv("VISION_PORT", "8081"))
+# Speed/perf flags for the vision llama-server subprocess (independent of the GGUF text backend).
+VISION_CTX = int(os.getenv("VISION_CTX", "8192"))            # context for image tokens (not a speed lever)
+VISION_NGL = int(os.getenv("VISION_NGL", "-1"))              # GPU layers (-1 = all) — big speed win
+VISION_FLASH_ATTN = os.getenv("VISION_FLASH_ATTN", "on")     # FlashAttention on/off/auto
+VISION_CACHE_K = os.getenv("VISION_CACHE_K", "q8_0")         # quantized KV cache → speed + memory
+VISION_CACHE_V = os.getenv("VISION_CACHE_V", "q8_0")
 
 
 class VisionRuntime:
@@ -115,6 +121,11 @@ class VisionRuntime:
                     "--mmproj", str(bundle["mmproj"]),
                     "--host", "127.0.0.1",
                     "--port", str(self._port),
+                    "--ctx-size", str(VISION_CTX),
+                    "--ngl", str(VISION_NGL),
+                    "--flash-attn", VISION_FLASH_ATTN,
+                    "--cache-type-k", VISION_CACHE_K,
+                    "--cache-type-v", VISION_CACHE_V,
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=self._stderr,

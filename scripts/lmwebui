@@ -6,6 +6,114 @@ set -e
 
 LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
 
+# ── Runtime ensure helpers (mirror install.sh; idempotent) ───────────────
+ensure_llama_server() {
+  # llama-server is the multimodal (Vision) engine; ensure it's available.
+  if command -v llama-server &>/dev/null; then
+    echo "   llama-server: available"
+    return
+  fi
+  echo "   Installing llama-server..."
+  local bin_dir="$LMWEBUI_HOME/bin"
+  mkdir -p "$bin_dir"
+  if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
+    brew install llama.cpp 2>/dev/null && { echo "   llama-server installed via brew"; export PATH="$bin_dir:$PATH"; return; }
+  fi
+  local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
+  local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
+  local tag="$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"\([^"]*\)".*/\1/')"
+  local url="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-$tag-bin-$os-$arch.tar.gz"
+  if [ -n "$tag" ] && curl -fsSL -o /tmp/llama-bin.tar.gz "$url" 2>/dev/null && tar -xzf /tmp/llama-bin.tar.gz -C "$bin_dir" 2>/dev/null; then
+    local src="$(find "$bin_dir" -type f -name llama-server | head -1)"
+    if [ -n "$src" ]; then
+      local src_dir="$(dirname "$src")"
+      cp "$src_dir/"* "$bin_dir/" 2>/dev/null
+      rm -rf "$src_dir"
+      chmod +x "$bin_dir/llama-server"
+      export PATH="$bin_dir:$PATH"
+      { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
+      [ -f "$HOME/.zshrc" ] && echo "export PATH=\"$bin_dir:\$PATH\"" >> "$HOME/.zshrc"
+      command -v llama-server &>/dev/null && echo "   llama-server installed to $bin_dir" && return
+    fi
+  fi
+  echo "   ⚠️ Could not install llama-server automatically — Vision needs it. Install llama.cpp from releases."
+}
+
+check_gguf_runtime() {
+  echo "   Checking llama.cpp runtime..."
+  local missing=0
+  for bin in llama-server llama-cli llama-bench llama-quantize; do
+    if command -v "$bin" &>/dev/null; then
+      echo "     ✓ $bin"
+    else
+      echo "     ✗ $bin"
+      missing=1
+    fi
+  done
+  if command -v llama-server &>/dev/null; then
+    echo "   llama-server version: $(llama-server --version 2>&1 | head -1)"
+  fi
+  [ "$missing" -eq 0 ] && echo "   llama.cpp runtime OK — vision ready."
+}
+
+ensure_mlx() {
+  # Apple-only: ensure MLX packages are present (no-op on Linux).
+  if [ "$(uname)" = "Darwin" ]; then
+    if [ -f "$LMWEBUI_HOME/.venv/bin/python" ] && ! "$LMWEBUI_HOME/.venv/bin/python" -c "import mlx" 2>/dev/null; then
+      echo "   Installing MLX (Apple Silicon)..."
+      "$LMWEBUI_HOME/.venv/bin/python" -m pip install mlx mlx-lm mlx-optiq --quiet 2>&1 || echo "   ⚠️ MLX install failed (Apple Silicon only)."
+    else
+      echo "   MLX: present"
+    fi
+  fi
+}
+
+reinstall_service() {
+  # Recreate the service unit so PATH/ExecStart changes take effect (idempotent).
+  case "$(uname)" in
+    Linux)
+      cat > /tmp/lmwebui.service << SERVICEEOF
+[Unit]
+Description=LM-WebUI
+After=network.target
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=$LMWEBUI_HOME
+Environment=LMWEBUI_HOME=$LMWEBUI_HOME
+Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7070
+Restart=on-failure
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+      if command -v systemctl &>/dev/null; then
+        sudo mv /tmp/lmwebui.service /etc/systemd/system/lmwebui.service
+        sudo systemctl daemon-reload
+        sudo systemctl enable lmwebui 2>/dev/null || true
+        echo "   systemd unit refreshed."
+      fi ;;
+    Darwin)
+      PLIST_PATH="$HOME/Library/LaunchAgents/com.lmwebui.server.plist"
+      mkdir -p "$HOME/Library/LaunchAgents"
+      cat > "$PLIST_PATH" << PLISTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+<key>Label</key><string>com.lmwebui.server</string>
+<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
+<key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
+<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+<key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
+<key>StandardOutPath</key><string>$LMWEBUI_HOME/logs/stdout.log</string>
+<key>StandardErrorPath</key><string>$LMWEBUI_HOME/logs/stderr.log</string>
+</dict></plist>
+PLISTEOF
+      echo "   launchd plist refreshed."
+      ;;
+  esac
+}
+
 case "${1:-status}" in
   start)
     case "$(uname)" in
@@ -115,6 +223,14 @@ except Exception:
         pip install llama-cpp-python --quiet 2>&1 || true
       fi
     fi
+
+    # Runtime ensure — Vision (llama-server), GGUF binaries, MLX (Apple), service unit.
+    echo "   Ensuring GGUF runtime (llama-server)..."
+    ensure_llama_server || true
+    check_gguf_runtime || true
+    ensure_mlx || true
+    echo "   Refreshing service unit..."
+    reinstall_service || true
 
     # Rebuild frontend (build to pick up new deps) — fail loudly, never silent skip
     if command -v npm >/dev/null 2>&1 && [ -f "$LMWEBUI_HOME/web/package.json" ]; then
