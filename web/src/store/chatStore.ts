@@ -632,11 +632,13 @@ export const useChatStore = create<ChatStore>()(
       },
       
       // Loading state actions
-      startImageGeneration: (_conversationId: string) => {
+      startImageGeneration: (conversationId: string) => {
+        console.debug('image generation started for conversation', conversationId);
         set({ imageGenerationLoading: true });
       },
 
-      completeImageGeneration: (_conversationId: string) => {
+      completeImageGeneration: (conversationId: string) => {
+        console.debug('image generation completed for conversation', conversationId);
         set({ imageGenerationLoading: false });
       },
 

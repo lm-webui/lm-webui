@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
 import ChatArea from "@/pages/ChatArea";
 import { fetchSettings } from "@/utils/api";
 import { useChatCreation } from "@/features/chat/useChatCreation";
@@ -44,7 +43,6 @@ export default function IndexEnhanced() {
   // Cross-provider model aggregation
   const {
     allModels: allAvailableModels,
-    providerGroups,
   } = useAllModels({
     isAuthenticated,
     storedApiKeys
@@ -74,10 +72,7 @@ export default function IndexEnhanced() {
   });
 
   // Domain hooks
-  const {
-    handleSendMessage: chatHandleSendMessage,
-    handleStopMessage: chatHandleStopMessage,
-  } = useChatCreation({
+  useChatCreation({
     isAuthenticated,
     currentSessionId: activeChatId || "",
     currentConversationId: activeChatId || "",
@@ -215,28 +210,6 @@ export default function IndexEnhanced() {
     }
   }, [isAuthenticated]);
 
-  // Enhanced send message handler using domain hook
-  const handleSendMessage = async (message: string, fileReferences?: any[]) => {
-    if (!message.trim()) return;
-
-    if (!selectedLLM || !selectedLLM.trim()) {
-      toast.error("Please select an AI provider before sending a message");
-      return;
-    }
-
-    if (!selectedModel || !selectedModel.trim()) {
-      toast.error("Please select a model before sending a message");
-      return;
-    }
-
-    await chatHandleSendMessage(message, fileReferences || []);
-  };
-
-
-  // Stop message handler using domain hook
-  const handleStopMessage = () => {
-    chatHandleStopMessage();
-  };
 
 
   return (
@@ -252,7 +225,6 @@ export default function IndexEnhanced() {
       selectedModel={selectedModel}
       setSelectedModel={setSelectedModel}
       allModels={allAvailableModels}
-      providerGroups={providerGroups}
       isSearchEnabled={isSearchEnabled}
       setIsSearchEnabled={setIsSearchEnabled}
       isImageMode={isImageMode}
@@ -263,8 +235,6 @@ export default function IndexEnhanced() {
       setShowRawResponse={setShowRawResponse}
       isLoading={isLoading}
       setIsLoading={uiSetIsLoading}
-      chatHandleSendMessage={handleSendMessage}
-      chatHandleStopMessage={handleStopMessage}
       selectedSearchEngine={selectedSearchEngine}
       onSearchEngineChange={setSelectedSearchEngine}
     />

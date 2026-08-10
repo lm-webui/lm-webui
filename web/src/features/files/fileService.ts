@@ -46,7 +46,7 @@ export class FileService {
     return `I've uploaded ${filesCount} file(s): ${fileNames}. Please analyze and process these files.`;
   }
 
-  static generateFileProcessedContext(fileInfo: any, _processingResult: any): string {
+  static generateFileProcessedContext(fileInfo: any): string {
     return `I've processed the file "${fileInfo.filename}". Please analyze the content and provide insights.`;
   }
 

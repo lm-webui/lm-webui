@@ -9,12 +9,7 @@ import { addApiKey, deleteApiKey, listApiKeys, testApiKey } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
-interface SettingsSearchProps {
-  selectedSearchEngine: string;
-  onSearchEngineChange: (value: string) => void;
-}
-
-export function SettingsSearch(_props: SettingsSearchProps) {
+export function SettingsSearch() {
   const searchEngines = [
     { id: "duckduckgo", name: "DuckDuckGo", icon: Globe, needsKey: false },
     { id: "searxng", name: "SearXNG", icon: Globe, needsKey: false },

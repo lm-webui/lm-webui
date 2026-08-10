@@ -134,20 +134,19 @@ function validateChatRequest(req: ChatRequest): void {
 
 export async function chatWithModel(req: ChatRequest): Promise<any> {
   validateChatRequest(req);
-  return await _chatWithModel(req, false);
+  return await _chatWithModel(req);
 }
 
 export async function chatWithModelStream(req: ChatRequest, onChunk?: (chunk: string) => void, onStatus?: (status: string) => void): Promise<string> {
+  // Kept for API contract: streaming currently returns the full response
+  // (token streaming is handled over WebSocket, not this REST endpoint).
+  void onChunk;
+  void onStatus;
   validateChatRequest(req);
-  return await _chatWithModel(req, true, onChunk, onStatus);
+  return await _chatWithModel(req);
 }
 
-async function _chatWithModel(
-  req: ChatRequest,
-  _stream: boolean = false,
-  _onChunk?: (chunk: string) => void,
-  _onStatus?: (status: string) => void
-): Promise<string> {
+async function _chatWithModel(req: ChatRequest): Promise<string> {
   // Create request - API keys will be retrieved from backend database
   const requestWithKey = {
     ...req,
@@ -761,6 +760,6 @@ export async function generateConversationTitleInBackend(conversationId: string)
  * Listen for real-time title updates via SSE
  * Returns a cleanup function to close the connection
  */
-export function listenForTitleUpdates(_conversationId: string, _options?: any): () => void {
+export function listenForTitleUpdates(): () => void {
   console.warn("SSE title updates removed"); return () => {};
 }

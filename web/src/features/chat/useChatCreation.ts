@@ -6,7 +6,7 @@ import { useChatStore, useAddMessage, useActiveChatId, useSetActiveChat, useCrea
 import { useShallow } from 'zustand/react/shallow';
 
 // Simple image message formatter - creates text-only content (image will be rendered separately)
-const formatImageMessage = (imageUrl: string, _userPrompt: string): string => {
+const formatImageMessage = (imageUrl: string): string => {
   console.log("🔄 formatImageMessage called with URL:", imageUrl?.substring(0, 50) + "...");
 
   // Return only text content - image will be rendered via generatedImageUrl field
@@ -184,7 +184,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       const assistantMessage = {
         id: assistantMessageId,
         role: "assistant" as const,
-        content: formatImageMessage(imageResult.imageUrl, currentInput),
+        content: formatImageMessage(imageResult.imageUrl),
         timestamp: new Date(),
         generatedImageUrl: imageResult.imageUrl,
         created_at: new Date().toISOString()

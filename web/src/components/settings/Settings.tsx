@@ -285,8 +285,6 @@ export function Settings({
               <TabsContent value="provider" className="space-y-4 m-0">
                 <ApiKeysTab />
                 <SettingsSearch
-                  selectedSearchEngine={localSearchEngine}
-                  onSearchEngineChange={handleSearchEngineChange}
                 />
               </TabsContent>
 
