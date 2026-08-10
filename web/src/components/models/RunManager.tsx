@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { startRun, stopRun } from "../../api/run";
 
 type Props = { sessionId: string };

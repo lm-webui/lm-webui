@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, FileText, Image, Globe, Database, Search, Settings, Webhook } from 'lucide-react';
+import { Upload, Globe, Database, Settings, Webhook } from 'lucide-react';
 
 interface FileProcessingManagerProps {
   onFileProcessed?: (result: any) => void;

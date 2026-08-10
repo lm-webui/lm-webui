@@ -1,15 +1,13 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useEffect } from "react";
 import {
   Send,
   Loader2,
   Settings2,
-  Mic,
   Globe,
   Image,
   Code,
   Paperclip,
   X,
-  ChevronDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -17,7 +15,6 @@ import { FileService } from "../features/files/fileService";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "./ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ModelSelector } from "./models/ModelSelector";
-import { generateImage } from "@/utils/api";
 
 interface ComposerProps {
   onSend: (text: string, files: any[]) => Promise<boolean>;

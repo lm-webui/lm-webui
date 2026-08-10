@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import "./global.css";
 
 import { Toaster } from "./components/ui/toaster";
@@ -18,7 +18,7 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Wrapper component to handle WebSocket initialization
 const AppContent = () => {
-  const { isAuthenticated, requiresRegistration } = useAuth();
+  const { requiresRegistration } = useAuth();
 
   // Initialize storage migration on app startup
   useEffect(() => {

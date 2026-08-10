@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { fetchModels, listApiKeys } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,8 +34,8 @@ export function ModelsTab() {
 
   // Single source of truth for "connected": a provider is connected if it has a
   // stored API key/endpoint, OR it's a keyless local runtime (gguf, mlx).
-  const isProviderConnected = (id: string, connected: Set<string> = connectedProviders): boolean =>
-    KEYLESS_RUNTIMES.includes(id) || connected.has(id);
+  const isProviderConnected = (id: string): boolean =>
+    KEYLESS_RUNTIMES.includes(id) || connectedProviders.has(id);
 
   // Only providers that are connected appear in the dropdown.
   const visibleProviderIds = Object.keys(providerConfig).filter(isProviderConnected);
@@ -191,7 +191,7 @@ export function ModelsTab() {
                 </SelectTrigger>
                 <SelectContent>
                   {visibleProviderIds.map((providerId) => {
-                    const config = providerConfig[providerId];
+                    const config = providerConfig[providerId]!;
                     return (
                       <SelectItem key={providerId} value={providerId}>
                         <div className="flex items-center gap-2 w-full">

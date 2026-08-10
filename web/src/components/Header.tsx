@@ -20,15 +20,7 @@ interface HeaderProps {
 
 export default function Header({
   createNewChat,
-  sidebarCollapsed,
   setSidebarOpen,
-  selectedLLM,
-  onLLMChange,
-  selectedModel,
-  onModelChange,
-  availableModels,
-  selectedSearchEngine,
-  onSearchEngineChange,
   onViewChange,
 }: HeaderProps) {
   const { user } = useAuth();

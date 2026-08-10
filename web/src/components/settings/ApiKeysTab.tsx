@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { fetchModelsByProvider, addApiKey, deleteApiKey, listApiKeys, testApiKey } from "@/utils/api";
+import { useState, useEffect } from "react";
+import { addApiKey, deleteApiKey, listApiKeys, testApiKey } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

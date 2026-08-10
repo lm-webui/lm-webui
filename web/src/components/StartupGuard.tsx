@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { Loader2, ServerCrash, CheckCircle2, Cpu } from 'lucide-react';
+import { Loader2, ServerCrash } from 'lucide-react';
 
 interface HealthStatus {
   status: string;

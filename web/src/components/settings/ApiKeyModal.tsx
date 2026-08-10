@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { fetchModelsByProvider, addApiKey, deleteApiKey, listApiKeys } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Zap, Database, Brain, Code, Cpu, Wifi, WifiOff, RefreshCw, Sparkles, Gem, Key, Save, Trash2 } from "lucide-react";
+import { Brain, Code, Cpu, Wifi, WifiOff, RefreshCw, Sparkles, Gem, Key, Save, Trash2 } from "lucide-react";
 import { RiOpenaiFill } from "react-icons/ri";
 import { SiOllama } from "react-icons/si";
 
@@ -153,26 +153,6 @@ export function ModelsApiKeysContent({
       }
     } finally {
       setIsConnecting(false);
-    }
-  };
-
-  // Function to validate API key pattern
-  const validateApiKey = (key: string, provider: string): boolean => {
-    if (!key) return false;
-
-    switch (provider) {
-      case "openai":
-        return key.startsWith("sk-") || key.startsWith("sk-proj");
-      case "grok":
-        return key.startsWith("xai-");
-      case "claude":
-        return key.startsWith("sk-ant-");
-      case "deepseek":
-        return key.startsWith("sk-");
-      case "google":
-        return key.startsWith("AIza");
-      default:
-        return true; // For providers that don't need API keys
     }
   };
 

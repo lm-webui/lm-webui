@@ -1,4 +1,3 @@
-import React from 'react';
 import { CitationHoverCard } from './CitationHoverCard';
 import { useContextStore } from '@/store/contextStore';
 
@@ -57,14 +56,14 @@ export function CitationParser({ content, className }: CitationParserProps) {
 
     // Add summaries
     if (activeContext.summaries) {
-      activeContext.summaries.forEach((summary, index) => {
+      activeContext.summaries.forEach((summary: Record<string, unknown>, index: number) => {
         allSources.push({ ...summary, citationNumber: index + 1 });
       });
     }
 
     // Add file chunks
     if (activeContext.file_chunks) {
-      activeContext.file_chunks.forEach((chunk, index) => {
+      activeContext.file_chunks.forEach((chunk: Record<string, unknown>, index: number) => {
         const offset = activeContext.summaries?.length || 0;
         allSources.push({ ...chunk, citationNumber: offset + index + 1 });
       });
@@ -72,7 +71,7 @@ export function CitationParser({ content, className }: CitationParserProps) {
 
     // Add recent messages
     if (activeContext.recent_messages) {
-      activeContext.recent_messages.forEach((message, index) => {
+      activeContext.recent_messages.forEach((message: Record<string, unknown>, index: number) => {
         const offset = (activeContext.summaries?.length || 0) + (activeContext.file_chunks?.length || 0);
         allSources.push({ ...message, citationNumber: offset + index + 1 });
       });

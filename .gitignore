@@ -1,4 +1,4 @@
-# --- Python ---
+# Python
 __pycache__/
 backend/venv/
 backend/.venv/
@@ -6,8 +6,7 @@ backend/.coverage
 backend/.coveragerc
 backend/coverage.xml
 backend/.pytest_cache/
-
-# --- Node ---
+# Node
 node_modules/
 backend/node_modules/
 web/node_modules/
@@ -17,16 +16,14 @@ yarn-error.log*
 pnpm-debug.log*
 web/dist/
 web/coverage/
-
-# --- Environment Var ---
+# Environment Var
 web/.env.local
 web/.env.production
 backend/.env
 secrets/
 .secrets/
 .dev
-
-# --- App Data & Models (Do Not Commit!) ---
+# App Data & Models
 backend/data/*
 !backend/data/.keep
 backend/models/*
@@ -37,8 +34,7 @@ backend/media/uploads/*
 *.db
 *.sqlite
 *.sqlite3
-
-# --- IDEs & OS ---
+# IDEs
 .vscode/
 !.vscode/extensions.json
 .idea/
@@ -46,16 +42,13 @@ backend/media/uploads/*
 Thumbs.db
 *.swp
 *.swo
-
-# --- Logs ---
+# Logs
 logs/
 *.log
-
 # Agents
 .claude/
 .agents/
 AGENTS.md
-
 # Root data
 data/
 .lmwebui/

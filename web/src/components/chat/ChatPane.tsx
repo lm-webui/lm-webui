@@ -36,7 +36,6 @@ export default function ChatPane({
   isLoading,
   searchStatus,
   isThinking,
-  onPauseThinking,
   isSearchEnabled,
   setIsSearchEnabled,
   isImageMode,

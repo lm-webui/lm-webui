@@ -58,9 +58,7 @@ export function ModelSelector({
   onModelChange,
   onLLMChange,
   connectionStatus = "connected",
-  providerGroups = [],
   external = false,
-  open,
   onOpenChange,
   side = "top",
 }: ModelSelectorProps) {

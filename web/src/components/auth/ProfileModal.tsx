@@ -22,14 +22,6 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose }) => {
     }
   };
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
   const getInitials = (email: string | undefined) => {
     if (!email) return 'U';
     const username = email.split('@')[0]; // Get the part before @

@@ -1,23 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Copy,
   Download,
-  Code,
   Eye,
   EyeOff,
-  Check,
-  RefreshCw,
   Image,
   File,
-  Wifi,
-  WifiOff,
-  Clock,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Collapsible,
   CollapsibleContent,
@@ -394,7 +386,7 @@ export function Message({
                     );
                   },
                   img({ src, alt, ...props }) {
-                    const [currentSrc, setCurrentSrc] = useState(src || "");
+                    const currentSrc = src || "";
                     const [hasError, setHasError] = useState(false);
 
                     // Don't render anything if src is empty string (fixes React warning)

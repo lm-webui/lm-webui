@@ -1,4 +1,3 @@
-import React from 'react';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';

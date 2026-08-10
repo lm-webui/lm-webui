@@ -346,7 +346,7 @@ const GGUFModelLoader: React.FC<GGUFModelLoaderProps> = ({ open, onOpenChange, o
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await axios.post(`${API_BASE_URL}/api/models/upload`, formData, {
+      await axios.post(`${API_BASE_URL}/api/models/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

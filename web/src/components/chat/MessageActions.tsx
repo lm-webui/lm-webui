@@ -1,8 +1,6 @@
-import React from "react";
 import { Copy, RefreshCw, Edit, Share, Check, ThumbsUp, ThumbsDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MessageActionsProps {
   message: {

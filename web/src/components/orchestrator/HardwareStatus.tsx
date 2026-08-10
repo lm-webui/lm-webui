@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Cpu, CpuIcon, MonitorIcon, Sparkles, AlertCircle } from "lucide-react";
+import { Cpu, AlertCircle } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
