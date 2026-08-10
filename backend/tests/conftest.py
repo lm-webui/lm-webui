@@ -25,6 +25,7 @@ def mock_env_vars(monkeypatch):
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-anthropic-key")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("APP_AUTH_ALLOW_REGISTRATION", "true")
 
 @pytest.fixture
 def mock_db_session(mocker):

@@ -81,24 +81,20 @@ class TestAuthentication:
         assert "detail" in response.json()
     
     def test_protected_endpoint_with_token(self, client):
-        """Test accessing protected endpoint with valid token"""
-        # Register and login to get token
+        """Test accessing protected endpoint with valid token cookie"""
+        # Register and login; TestClient persists the auth cookie automatically
         user_data = {
             "email": "protecteduser@test.com",
             "password": "testpass123"
         }
         client.post("/api/auth/register", json=user_data)
-        
-        login_data = {
-            "email": "protecteduser@test.com",
-            "password": "testpass123"
-        }
-        login_response = client.post("/api/auth/login", json=login_data)
-        token = login_response.cookies["access_token"]
-        
-        # Access protected endpoint
-        headers = {"Authorization": f"Bearer {token}"}
-        response = client.get("/api/auth/me", headers=headers)
+
+        login_response = client.post("/api/auth/login", json=user_data)
+        assert login_response.status_code == 200
+        assert "access_token" in login_response.cookies
+
+        # Auth reads the access_token cookie (get_current_user), not a Bearer header
+        response = client.get("/api/auth/me")
         assert response.status_code == 200
         assert "email" in response.json()
         assert response.json()["email"] == "protecteduser@test.com"

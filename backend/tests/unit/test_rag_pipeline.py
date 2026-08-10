@@ -4,7 +4,10 @@ Hermetic RAG unit tests: query-parser and chunking (no model download).
 The model-dependent ingest->retrieve pipeline lives in
 tests/integration/test_rag_pipeline.py (run via `-m integration`).
 """
+import os
 import pytest
+
+os.environ["TZ"] = "UTC"  # tzlocal/dateparser needs a zoneinfo TZ, not a bare offset like WIB
 
 
 class TestQueryParser:
