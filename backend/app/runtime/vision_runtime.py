@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 VISION_PORT = int(os.getenv("VISION_PORT", "8081"))
 # Speed/perf flags for the vision llama-server subprocess (independent of the GGUF text backend).
 VISION_CTX = int(os.getenv("VISION_CTX", "8192"))            # context for image tokens (not a speed lever)
-VISION_NGL = int(os.getenv("VISION_NGL", "-1"))              # GPU layers (-1 = all) — big speed win
+VISION_NGL = os.getenv("VISION_NGL", "auto")                 # GPU layers: number | 'auto' | 'all' (llama-server >= v10330 rejects -1)
 VISION_FLASH_ATTN = os.getenv("VISION_FLASH_ATTN", "on")     # FlashAttention on/off/auto
 VISION_CACHE_K = os.getenv("VISION_CACHE_K", "q8_0")         # quantized KV cache → speed + memory
 VISION_CACHE_V = os.getenv("VISION_CACHE_V", "q8_0")
