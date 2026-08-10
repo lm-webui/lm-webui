@@ -133,12 +133,13 @@ class OrchestratorController:
             )
             await run_capabilities(exec_plan, ctx)
 
-            # Vision not ready → surface a clear notice; text chat still answers.
+            # Vision not ready → surface a clear notice as streamed text (not a fatal error),
+            # and continue so the text question is still answered.
             if exec_plan.vision and not getattr(ctx, "vision_ready", False) and getattr(ctx, "images", None):
-                yield ModelEvent.error(
+                yield ModelEvent.token(
                     "⚠️ Vision isn't ready — install a vision model (main GGUF + mmproj) and set it as your "
                     "default vision model in Settings → Inference, then ensure llama-server is available. "
-                    "Your message was answered without image analysis."
+                    "Your message was answered without image analysis.\n\n"
                 )
 
             # Load user inference preferences from DB

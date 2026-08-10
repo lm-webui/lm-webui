@@ -68,6 +68,10 @@ async def chat_completion(
 
         actual_conversation_id = conversation_id
 
+        # Collect the stream; raise a 500 only AFTER the generator closes so the
+        # orchestrator's async generator isn't aborted mid-iteration (avoiding
+        # "async generator ignored GeneratorExit" + unhandled task exceptions).
+        error_msg = None
         async for event in orchestrator.process_request(chat_req, user_id_int, conversation_id or "new"):
             if event.type == "token" and event.content:
                 full_response += event.content
@@ -79,7 +83,11 @@ async def chat_completion(
                     if cid:
                         actual_conversation_id = cid
             elif event.type == "error":
-                raise HTTPException(500, f"Orchestrator error: {event.content}")
+                error_msg = event.content
+                break
+
+        if error_msg:
+            raise HTTPException(500, f"Orchestrator error: {error_msg}")
 
         # Post-processing (Formatting)
         if not request.get("show_raw_response", False):
