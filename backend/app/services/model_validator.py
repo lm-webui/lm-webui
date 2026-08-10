@@ -22,12 +22,13 @@ class ModelValidator:
             min_disk_space_gb: Minimum required disk space in GB for model operations
         """
         self.min_disk_space_gb = min_disk_space_gb
+        from app.core.config_manager import get_models_dir
         self.model_dirs = [
             Path(__file__).parent.parent / "rag" / "embed",
             Path(__file__).parent.parent / "rag" / "rerank",
             Path(__file__).parent.parent / "rag" / "vision",
             Path(__file__).parent.parent / "rag" / "ocr",
-            Path(__file__).parent.parent / "models",
+            get_models_dir(),
         ]
     
     def check_disk_space(self, path: Optional[str] = None) -> Dict[str, Any]:

@@ -136,6 +136,8 @@ export const useChatStore = create<ChatStore>()(
                 role: (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'user',
                 content: msg.content || '',
                 created_at: msg.created_at || msg.timestamp || new Date().toISOString(),
+                // Restore persisted attachments so the bubble shows them after reload.
+                fileAttachments: msg.metadata?.attachments || undefined,
               }));
 
               set(state => ({

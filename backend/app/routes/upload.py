@@ -252,6 +252,7 @@ async def _handle_general_upload(
             "media_id": media_id,
             "file_path": str(file_path),
             "file_size": file_size,
+            "content_type": file.content_type or "application/octet-stream",
             "processing_queued": processing_queued,
             "upload_type": "general"
         })

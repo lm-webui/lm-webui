@@ -17,7 +17,7 @@ class SettingsUpdate(BaseModel):
     language: str = "en"
     auto_refresh: bool = True
     max_tokens: int = 8000
-    
+
     # API Keys and endpoints
     openAIKey: str = ""
     ollamaEndpoint: str = "http://localhost:11434"
@@ -26,20 +26,21 @@ class SettingsUpdate(BaseModel):
     anthropicKey: str = ""
     geminiKey: str = ""
     deepSeekKey: str = ""
-    
+
     # Model settings
     selectedLLM: str = "openai"
     streamingEnabled: bool = True
     temperature: float = 0.7
     topP: float = 0.9
     systemPrompt: str = "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions."
-    
+
     # Defaults
     selectedSearchEngine: str = "duckduckgo"
     defaultImageProvider: str = "openai"
-    defaultImageModel: str = "dall-e-3"
+    defaultImageModel: str = ""
+    defaultVisionModel: str = ""
     selectedModel: str = ""
-    
+
     # UI settings
     showRawResponse: bool = False
     autoTitleGeneration: bool = True
@@ -50,19 +51,19 @@ class SettingsUpdate(BaseModel):
 async def get_settings(user_id: dict = Depends(get_current_user)):
     """Get user settings"""
     db = get_db()
-    
+
     # Get basic settings from users table
     user_settings = db.execute(
         "SELECT theme, language, auto_refresh, max_tokens FROM users WHERE id = ?",
         (user_id["id"],)
     ).fetchone()
-    
+
     # Get extended settings from user_settings table
     extended_settings = db.execute(
         "SELECT settings_json FROM user_settings WHERE user_id = ?",
         (user_id["id"],)
     ).fetchone()
-    
+
     # Default settings
     default_settings = {
         "theme": "dark",
@@ -83,12 +84,13 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
         "systemPrompt": "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions.",
         "selectedSearchEngine": "duckduckgo",
         "selectedModel": "",
+        "defaultVisionModel": "",
         "showRawResponse": False,
         "autoTitleGeneration": True,
         "codeFormatting": True,
         "markdownRendering": True
     }
-    
+
     # Merge user settings with defaults
     if user_settings:
         default_settings.update({
@@ -97,7 +99,7 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
             "auto_refresh": bool(user_settings[2]) if user_settings[2] is not None else True,
             "max_tokens": user_settings[3] or 8000
         })
-    
+
     # Merge extended settings
     if extended_settings and extended_settings[0]:
         import json
@@ -106,7 +108,7 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
             default_settings.update(extended)
         except:
             pass
-    
+
     return default_settings
 
 @router.put("")
@@ -114,18 +116,18 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
 async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_current_user)):
     """Update user settings"""
     db = get_db()
-    
+
     # Check if user exists
     user = db.execute("SELECT id FROM users WHERE id = ?", (user_id["id"],)).fetchone()
     if not user:
         raise HTTPException(404, "User not found")
-    
+
     # Update basic settings in users table
     db.execute(
         "UPDATE users SET theme = ?, language = ?, auto_refresh = ?, max_tokens = ? WHERE id = ?",
         (settings.theme, settings.language, settings.auto_refresh, settings.max_tokens, user_id["id"])
     )
-    
+
     # Update extended settings in user_settings table
     import json
     extended_settings = {
@@ -145,21 +147,44 @@ async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_
         "selectedModel": settings.selectedModel,
         "defaultImageProvider": settings.defaultImageProvider,
         "defaultImageModel": settings.defaultImageModel,
+        "defaultVisionModel": settings.defaultVisionModel,
         "showRawResponse": settings.showRawResponse,
         "autoTitleGeneration": settings.autoTitleGeneration,
         "codeFormatting": settings.codeFormatting,
         "markdownRendering": settings.markdownRendering
     }
-    
+
     # Insert or update extended settings
     db.execute(
         "INSERT OR REPLACE INTO user_settings (user_id, settings_json) VALUES (?, ?)",
         (user_id["id"], json.dumps(extended_settings))
     )
-    
+
     db.commit()
-    
+
     return {"message": "Settings updated", "settings": settings.dict()}
+
+class VisionModelUpdate(BaseModel):
+    model: str = ""
+
+
+@router.post("/vision")
+async def set_default_vision_model(req: VisionModelUpdate, user_id: dict = Depends(get_current_user)):
+    """Set just the user's default vision model (used by GGUF vision 'load')."""
+    import json
+    db = get_db()
+    row = db.execute(
+        "SELECT settings_json FROM user_settings WHERE user_id = ?", (user_id["id"],)
+    ).fetchone()
+    settings = json.loads(row[0]) if row and row[0] else {}
+    settings["defaultVisionModel"] = req.model.strip()
+    db.execute(
+        "INSERT OR REPLACE INTO user_settings (user_id, settings_json) VALUES (?, ?)",
+        (user_id["id"], json.dumps(settings)),
+    )
+    db.commit()
+    return {"message": "Default vision model updated", "defaultVisionModel": settings["defaultVisionModel"]}
+
 
 @router.get("/themes")
 async def get_available_themes():

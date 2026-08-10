@@ -10,8 +10,10 @@ from urllib.parse import urlparse
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Models directory path
-MODELS_DIR = Path(__file__).parent.parent.parent / "models" / "gguf"
+# Models directory — unified with install.sh under ~/.lmwebui/models (via config_manager.get_models_dir()).
+from app.core.config_manager import get_models_dir  # noqa: E402
+
+MODELS_DIR = get_models_dir() / "gguf"
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 def list_local_models() -> List[Dict[str, str]]:

@@ -31,6 +31,25 @@ async def _describe(provider, images: list) -> str:
         return ""
 
 
+def _user_vision_model(user_id: int) -> str:
+    """Return the user's default vision model (Settings → Inference), or ''."""
+    try:
+        import json as _json
+        from app.database import get_db
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT settings_json FROM user_settings WHERE user_id = ?", (user_id,)
+            ).fetchone()
+            if row and row[0]:
+                return (_json.loads(row[0]).get("defaultVisionModel") or "").strip()
+        finally:
+            db.close()
+    except Exception:
+        pass
+    return ""
+
+
 def _health(model: str) -> bool:
     """Capability health: runtime (llama-server) + model bundle + mmproj."""
     import shutil
@@ -133,7 +152,8 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
         from app.core.config_manager import get_config as _vc
         from app.providers.factory import ProviderFactory
         vc = _vc().vision
-        ctx.vision_model = getattr(vc, "model", "") or ctx.model_id
+        # The user's default vision model (Settings → Inference) wins; fall back to the global config.
+        ctx.vision_model = _user_vision_model(ctx.user_id) or getattr(vc, "model", "") or ctx.model_id
         if getattr(vc, "provider", ""):
             ctx.vision_provider_id = vc.provider
             ctx.vision_provider = ProviderFactory.get_provider(ctx.vision_provider_id)
@@ -142,7 +162,7 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
 
         # Local vision bundle — check capability health first.
         if not _health(ctx.vision_model):
-            logger.warning("Vision not ready (need llama-server + vision bundle + mmproj). Open the model downloader.")
+            logger.warning("Vision not ready (need llama-server + vision bundle + mmproj). Set a default vision model in Settings → Inference or open the model downloader.")
             ctx.vision_ready = False
             return VisionResult(images=images, provider=None, ready=False)
 

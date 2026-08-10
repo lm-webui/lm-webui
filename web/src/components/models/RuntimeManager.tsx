@@ -320,6 +320,19 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     }
   };
 
+  const setDefaultVision = async (name: string) => {
+    try {
+      await authFetch("/api/settings/vision", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: name }),
+      });
+      toast.success(`Default vision model set to ${name}`);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to set default vision model");
+    }
+  };
+
   const deleteVisionModel = async (name: string) => {
     if (!confirm(`Delete vision model ${name} (bundle)?`)) return;
     try {
@@ -655,8 +668,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                       <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => deleteVisionModel(b.name)}>
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => { onModelLoad?.(b.name); onOpenChange(false); toast.success("Selected vision model " + b.name); }}>
-                        Load
+                      <Button size="sm" variant="outline" onClick={() => setDefaultVision(b.name)}>
+                        Set default vision
                       </Button>
                     </div>
                   </div>

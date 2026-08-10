@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import re
 from typing import Any, List, Optional
 
 
@@ -69,6 +70,17 @@ VISION_SIMPLE_HINTS = (
     "describe this", "describe the image", "describe the picture",
     "what's this", "what is this", "what can you see", "what's in this image",
 )
+# "what/which <thing> in the picture" — simple factual image questions → VL answers directly.
+_VISION_SIMPLE_RE = re.compile(
+    r"\b(what|which)\b.*\b(in|of|on)\b.*\b(picture|image|photo|screenshot|diagram|chart)\b",
+    re.IGNORECASE,
+)
+
+
+def _is_simple_vision_query(message: str) -> bool:
+    """A bare description / "what X in the picture" query → one-stage VL."""
+    m = message.lower()
+    return _has_hint(m, VISION_SIMPLE_HINTS) or bool(_VISION_SIMPLE_RE.search(message))
 
 
 def _is_image(ref: Any) -> bool:
@@ -105,7 +117,7 @@ def classify(req: IntentRequest) -> IntentResult:
     if req.image_mode or (has_image and not has_doc):
         return IntentResult(
             ProcessingClass.VISION, KnowledgeScope.MODEL, matched_hint="image",
-            vision_mode="direct" if _has_hint(message, VISION_SIMPLE_HINTS) else "describe",
+            vision_mode="direct" if _is_simple_vision_query(message) else "describe",
         )
 
     # 2. GENERATE — image-generation intent.

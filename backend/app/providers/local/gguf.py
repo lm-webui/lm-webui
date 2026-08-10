@@ -27,9 +27,14 @@ except Exception:
     _HW_SETTINGS = {}
 
 
+def _get_models_base() -> str:
+    from app.core.config_manager import get_models_dir
+    return str(get_models_dir())
+
+
 def _resolve_model_path(name: str) -> Optional[str]:
     """Resolve a model name to an absolute path by searching models directories."""
-    models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models"))
+    models_dir = _get_models_base()
     gguf_dir = os.path.join(models_dir, "gguf")
     for base in [models_dir, gguf_dir]:
         candidate = os.path.join(base, name)
@@ -47,7 +52,7 @@ class GGUFProvider(BaseProvider):
 
     def __init__(self):
         super().__init__("gguf", "Local GGUF")
-        self._models_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../models"))
+        self._models_dir = _get_models_base()
         self._active_model = None
         self._active_model_path = None
         self._active_config = {}

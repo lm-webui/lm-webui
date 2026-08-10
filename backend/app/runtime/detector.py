@@ -167,11 +167,8 @@ class RuntimeDetector:
 
         # Count GGUF models in models directory
         if result["installed"] and config.get("models_dir"):
-            models_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "..",
-                config["models_dir"]
-            )
+            from app.core.config_manager import get_models_dir
+            models_dir = str(get_models_dir() / "gguf")
             if os.path.exists(models_dir):
                 gguf_files = [
                     f for f in os.listdir(models_dir)

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { fetchSettings, updateSettings, addApiKey, fetchModels, fetchImageModels } from "@/utils/api";
+import { fetchSettings, updateSettings, addApiKey, fetchModels, fetchImageModels, authFetch } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -85,6 +85,8 @@ export function Settings({
   const [loadingModels, setLoadingModels] = useState(false);
   const [imageProvider, setImageProvider] = useState("openai");
   const [imageModel, setImageModel] = useState("dall-e-3");
+  const [visionModel, setVisionModel] = useState("");
+  const [visionModels, setVisionModels] = useState<string[]>([]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -102,6 +104,7 @@ export function Settings({
         setAutoTitleGeneration(settings.autoTitleGeneration !== false);
         setImageProvider(settings.defaultImageProvider || "openai");
         setImageModel(settings.defaultImageModel || "dall-e-3");
+        setVisionModel(settings.defaultVisionModel || "");
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
@@ -127,6 +130,9 @@ export function Settings({
           });
           setImageModels(all);
         }).catch(() => {}),
+        authFetch("/api/runtimes/vision/status").then((res: any) => {
+          setVisionModels((res?.bundles || []).map((b: any) => b.name));
+        }).catch(() => {}),
       ]).finally(() => setLoadingModels(false));
     }
   }, [isOpen, inline]);
@@ -146,6 +152,7 @@ export function Settings({
       selectedModel,
       defaultImageProvider: imageProvider,
       defaultImageModel: imageModel,
+      defaultVisionModel: visionModel,
       autoTitleGeneration,
     };
 
@@ -260,6 +267,21 @@ export function Settings({
                             <div className="px-2 py-4 text-xs text-muted-foreground text-center">No default saved</div>
                           ) : (
                             imageModels.map((m) => (
+                              <SelectItem key={m} value={m}>{m}</SelectItem>
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-sm">Default Vision Model</Label>
+                      <Select value={visionModel} onValueChange={setVisionModel}>
+                        <SelectTrigger><SelectValue placeholder={loadingModels ? "Loading..." : visionModels.length === 0 ? "No vision model installed" : "Select vision model"} /></SelectTrigger>
+                        <SelectContent>
+                          {visionModels.length === 0 && !loadingModels ? (
+                            <div className="px-2 py-4 text-xs text-muted-foreground text-center">No vision model installed — download one from Runtime Manager → GGUF</div>
+                          ) : (
+                            visionModels.map((m) => (
                               <SelectItem key={m} value={m}>{m}</SelectItem>
                             ))
                           )}

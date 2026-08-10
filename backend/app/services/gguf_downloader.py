@@ -25,7 +25,8 @@ class GGUFDownloadManager:
         self.download_tasks = {}
         self.websocket_connections = {}
         self._semaphore = asyncio.Semaphore(1)  # single-flight: one download at a time
-        self.models_dir = Path(__file__).parent.parent.parent / "models" / "gguf"
+        from app.core.config_manager import get_models_dir
+        self.models_dir = get_models_dir() / "gguf"
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.allowed_domains = ['huggingface.co', 'hf.co', 'github.com', 'raw.githubusercontent.com']
     

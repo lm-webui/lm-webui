@@ -96,6 +96,22 @@ class OrchestratorController:
             api_base = getattr(provider, '_api_base', 'unknown')
             logger.info(f"Provider {provider_id} api_base: {api_base[:80] if api_base else 'None'}")
 
+            # Follow-up: if this request carries no file refs, fall back to the conversation's
+            # persisted attachments (metadata.attachments) so a later vision/RAG question about a
+            # previously attached file works without re-attaching.
+            if not chat_request.file_references and actual_conversation_id:
+                try:
+                    from app.chat.service import get_conversation_messages
+                    persisted = []
+                    for m in get_conversation_messages(actual_conversation_id) or []:
+                        att = (m.get("metadata") or {}).get("attachments")
+                        if isinstance(att, list):
+                            persisted.extend(att)
+                    if persisted:
+                        chat_request.file_references = persisted
+                except Exception:
+                    pass  # fall back to no file refs
+
             # 3. Smart-Modality — plan which capabilities this request needs, then
             # execute the context-building capabilities (file-context/retrieve/search/vision).
             from app.modality import plan as modality_plan
@@ -120,8 +136,9 @@ class OrchestratorController:
             # Vision not ready → surface a clear notice; text chat still answers.
             if exec_plan.vision and not getattr(ctx, "vision_ready", False) and getattr(ctx, "images", None):
                 yield ModelEvent.error(
-                    "⚠️ Vision isn't ready — install a vision model (main GGUF + mmproj) and ensure "
-                    "llama-server is available. Your message was answered without image analysis."
+                    "⚠️ Vision isn't ready — install a vision model (main GGUF + mmproj) and set it as your "
+                    "default vision model in Settings → Inference, then ensure llama-server is available. "
+                    "Your message was answered without image analysis."
                 )
 
             # Load user inference preferences from DB

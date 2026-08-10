@@ -27,6 +27,7 @@ const isActive = (t?: DownloadTask) => !!t && !TERMINAL.has(t.status);
  */
 export function DownloadsProvider({ children, onComplete }: { children: ReactNode; onComplete?: () => void }) {
   const [downloads, setDownloads] = useState<Record<string, DownloadTask>>({});
+  const [active, setActive] = useState(false); // any active download → poll
   const ref = useRef<Record<string, DownloadTask>>({});
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
@@ -36,16 +37,18 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
       const res = await fetch(`${BASE}/api/models/downloads`, { credentials: "include" });
       if (!res.ok) return;
       const data = await res.json();
-      const active = (data.downloads || []) as DownloadTask[];
+      const activeList = (data.downloads || []) as DownloadTask[];
+      const map: Record<string, DownloadTask> = {};
+      activeList.forEach((d) => { map[d.task_id] = d; });
       const prev = ref.current;
       const prevActive = Object.keys(prev).filter((id) => isActive(prev[id]));
-      const map: Record<string, DownloadTask> = {};
-      active.forEach((d) => { map[d.task_id] = d; });
-      const next = { ...prev, ...map };
-      ref.current = next;
-      setDownloads(next);
+      // Backend is the source of truth — replace (drops stale optimistic entries,
+      // so a finished/exists download no longer lingers as "In queue").
+      ref.current = map;
+      setDownloads(map);
+      setActive(activeList.length > 0);
 
-      const stillActive = new Set(active.map((d) => d.task_id));
+      const stillActive = new Set(activeList.map((d) => d.task_id));
       const completed = prevActive.filter((id) => !stillActive.has(id));
       if (completed.length) {
         onCompleteRef.current?.();
@@ -54,11 +57,15 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
     } catch { /* backend unreachable — ignore */ }
   }, []);
 
+  // Resync on mount (survives modal close / runtime remount).
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Poll only while there is an active download.
   useEffect(() => {
-    refresh();
+    if (!active) return;
     const t = setInterval(refresh, 1000);
     return () => clearInterval(t);
-  }, [refresh]);
+  }, [active, refresh]);
 
   const startDownload = useCallback(async (url: string, filename: string, subdir?: string): Promise<string> => {
     const res = await fetch(`${BASE}/api/models/download`, {
@@ -68,10 +75,11 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
     });
     if (!res.ok) throw new Error("Download failed");
     const { task_id } = await res.json();
-    // Optimistically show as queued; the poll will reconcile with the backend.
+    // Optimistically show as queued; the first poll reconciles with the backend.
     const task: DownloadTask = { task_id, filename, status: "queued", progress: 0 };
     ref.current = { ...ref.current, [task_id]: task };
     setDownloads(ref.current);
+    setActive(true); // start polling
     return task_id;
   }, []);
 
