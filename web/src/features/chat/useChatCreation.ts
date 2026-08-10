@@ -1,13 +1,12 @@
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
-import { ChatService, ChatRequest, Message, Conversation } from "./chatService";
+import { ChatService, ChatRequest } from "./chatService";
 import { ImageService, ImageRequest } from "@/features/images/imageService";
-import { detectMessageIntent } from "@/utils/chatUtils";
 import { useChatStore, useAddMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartImageGeneration, useCompleteImageGeneration, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
 
 // Simple image message formatter - creates text-only content (image will be rendered separately)
-const formatImageMessage = (imageUrl: string, userPrompt: string): string => {
+const formatImageMessage = (imageUrl: string, _userPrompt: string): string => {
   console.log("🔄 formatImageMessage called with URL:", imageUrl?.substring(0, 50) + "...");
 
   // Return only text content - image will be rendered via generatedImageUrl field
@@ -98,8 +97,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       toast.error("Please select a model before sending a message");
       return false;
     }
-
-    const intent = detectMessageIntent(message);
 
     // Generate unique IDs to prevent conflicts
     const userMessageId = generateMessageId('user');

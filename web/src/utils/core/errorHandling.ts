@@ -209,7 +209,7 @@ export const ErrorRecovery = {
   fallback: <T>(value: T): T => value,
   
   // Clear problematic state
-  clearState: (store: any, stateKey: string) => {
+  clearState: (_store: any, stateKey: string) => {
     console.warn(`Clearing state for recovery: ${stateKey}`);
     // Implementation depends on store structure
   },

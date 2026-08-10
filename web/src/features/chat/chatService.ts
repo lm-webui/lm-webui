@@ -1,7 +1,6 @@
 import { 
-  chatWithModel, 
-  chatWithModelStream, 
-  updateConversationTitle, 
+  chatWithModel,
+  chatWithModelStream,
   createConversation,
   generateConversationTitle,
   generateImage
@@ -77,7 +76,6 @@ export class ChatService {
     const {
       isAuthenticated,
       currentSessionId,
-      currentConversationId,
       messages,
       selectedModel,
       modelMapping,
@@ -87,10 +85,7 @@ export class ChatService {
       autoTitleGeneration,
       setCurrentSessionId,
       setCurrentConversationId,
-      setConversations,
-      updateConversation,
-      setMessages,
-      setIsLoading
+      setConversations
     } = options;
 
     // Create session only when first message is sent (not on app load)
@@ -178,7 +173,7 @@ export class ChatService {
        selectedModel.toLowerCase().includes("nano banana") ||
        selectedModel.toLowerCase().includes("imagen"));
 
-    let response: string;
+    let response: string | Record<string, any>;
 
     if (isImageGenerationRequest) {
       console.log("🎨 Image generation intent detected in ChatService");
@@ -239,14 +234,15 @@ export class ChatService {
       });
     }
 
-    let processedResponse = response;
+    let processedResponse: string = typeof response === "string" ? response : "";
     let generatedImageUrl: string | undefined;
     // Non-streaming /api/chat now returns { response, image_url?, conversation_id }.
     if (typeof response === "object" && response !== null) {
       generatedImageUrl = response.image_url;
-      processedResponse = response.response || response.content || "";
+      const content = response.response || response.content || "";
+      processedResponse = typeof content === "string" ? content : JSON.stringify(content);
     }
-    if (showRawResponse) {
+    if (showRawResponse && typeof response === "string") {
       try {
         // Try to parse as JSON and extract content
         const parsedResponse = JSON.parse(response);

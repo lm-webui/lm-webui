@@ -37,10 +37,7 @@ export class ImageService {
     const {
       isAuthenticated,
       currentConversationId,
-      currentSessionId,
       conversations,
-      selectedModel,
-      modelMapping,
       setCurrentSessionId,
       setCurrentConversationId,
       setConversations,

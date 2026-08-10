@@ -144,9 +144,9 @@ export async function chatWithModelStream(req: ChatRequest, onChunk?: (chunk: st
 
 async function _chatWithModel(
   req: ChatRequest,
-  stream: boolean = false,
-  onChunk?: (chunk: string) => void,
-  onStatus?: (status: string) => void
+  _stream: boolean = false,
+  _onChunk?: (chunk: string) => void,
+  _onStatus?: (status: string) => void
 ): Promise<string> {
   // Create request - API keys will be retrieved from backend database
   const requestWithKey = {
@@ -757,82 +757,10 @@ export async function generateConversationTitleInBackend(conversationId: string)
   return response;
 }
 
-// SSE (Server-Sent Events) for real-time title updates
-export interface TitleUpdateEvent {
-  title: string;
-  type: 'title_update' | 'timeout' | 'error';
-  message?: string;
-  timestamp?: string;
-}
-
-export interface TitleUpdateOptions {
-  onTitleUpdate: (title: string) => void;
-  onTimeout?: () => void;
-  onError?: (error: Error) => void;
-  timeoutMs?: number;
-}
-
 /**
  * Listen for real-time title updates via SSE
  * Returns a cleanup function to close the connection
  */
-export function listenForTitleUpdates(conversationId: string, _options?: any): () => void {
+export function listenForTitleUpdates(_conversationId: string, _options?: any): () => void {
   console.warn("SSE title updates removed"); return () => {};
-}
-
-// Stub kept for compatibility — remove when callers are updated
-function _removed_listenForTitleUpdates(
-  conversationId: string,
-  options: TitleUpdateOptions
-): () => void {
-  const { onTitleUpdate, onTimeout, onError, timeoutMs = 30000 } = options;
-  
-  const url = `${API_BASE_URL}/api/conversations/${conversationId}/title-updates`;
-  const eventSource = new EventSource(url, { withCredentials: true });
-  
-  let timeoutId: NodeJS.Timeout | null = null;
-  
-  // Set timeout
-  if (timeoutMs > 0) {
-    timeoutId = setTimeout(() => {
-      eventSource.close();
-      if (onTimeout) onTimeout();
-    }, timeoutMs);
-  }
-  
-  eventSource.onmessage = (event) => {
-    try {
-      const data: TitleUpdateEvent = JSON.parse(event.data);
-      
-      if (data.type === 'title_update' && data.title) {
-        onTitleUpdate(data.title);
-        eventSource.close();
-        if (timeoutId) clearTimeout(timeoutId);
-      } else if (data.type === 'timeout') {
-        if (onTimeout) onTimeout();
-        eventSource.close();
-        if (timeoutId) clearTimeout(timeoutId);
-      } else if (data.type === 'error') {
-        throw new Error(data.message || 'SSE error');
-      }
-    } catch (error) {
-      console.error('Error parsing SSE event:', error);
-      if (onError) onError(error as Error);
-      eventSource.close();
-      if (timeoutId) clearTimeout(timeoutId);
-    }
-  };
-  
-  eventSource.onerror = (error) => {
-    console.error('SSE connection error:', error);
-    if (onError) onError(new Error('SSE connection failed'));
-    eventSource.close();
-    if (timeoutId) clearTimeout(timeoutId);
-  };
-  
-  // Return cleanup function
-  return () => {
-    eventSource.close();
-    if (timeoutId) clearTimeout(timeoutId);
-  };
 }

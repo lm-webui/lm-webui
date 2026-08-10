@@ -236,7 +236,6 @@ export const useLogger = () => {
     info: logger.info.bind(logger),
     warn: logger.warn.bind(logger),
     error: logger.error.bind(logger),
-    reasoning: logger.reasoning.bind(logger),
     websocket: logger.websocket.bind(logger),
     ui: logger.ui.bind(logger),
     performance: logger.performance.bind(logger),

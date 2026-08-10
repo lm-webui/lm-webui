@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UseUIStateManagementOptions, SidebarView } from "./types";
+import { UseUIStateManagementOptions } from "./types";
 
 export function useUIStateManagement(options: UseUIStateManagementOptions) {
   // Model selection states - load from localStorage or empty

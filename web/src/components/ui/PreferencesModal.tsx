@@ -1,4 +1,3 @@
-import React from "react";
 import { Sun, Moon, Globe } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { useTheme } from "./theme-provider";

@@ -3,7 +3,6 @@
 import type { ComponentType } from "react";
 import { RiOpenaiFill, RiAnthropicFill, RiGeminiFill, RiGrokAiFill, RiImageAiFill } from "react-icons/ri";
 import { SiOllama, SiDeepseek, SiVllm, SiLmstudio, SiHuggingface, SiApple } from "react-icons/si";
-import { Gem, HardDrive, Cpu, Bot, Zap, Monitor, Image as ImageIcon } from "lucide-react";
 
 export type ProviderType = "cloud" | "local";
 export type ProviderCategory = "model" | "api" | "image";

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { LogOut, Users, BarChart3, Settings2 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { useAuth } from "@/contexts/AuthContext";

@@ -5,8 +5,7 @@ import {
   useCompleteImageGeneration,
   useAddProcessingImage,
   useRemoveProcessingImage,
-  useSetError,
-  useClearError
+  useSetError
 } from "@/store/chatStore";
 
 export function useImageGeneration() {
@@ -15,7 +14,6 @@ export function useImageGeneration() {
   const addProcessingImage = useAddProcessingImage();
   const removeProcessingImage = useRemoveProcessingImage();
   const setError = useSetError();
-  const clearError = useClearError();
 
   const handleAutoAction = async (
     action: string,
@@ -51,7 +49,6 @@ export function useImageGeneration() {
         setCurrentConversationId,
         setConversations,
         setMessages,
-        setIsLoading,
         loadUserSessions
       } = options;
 

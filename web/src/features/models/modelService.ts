@@ -1,11 +1,9 @@
 import { fetchModelsByProvider, fetchImageModels, authFetch } from "@/utils/api";
-import { PROVIDER_MAPPING, PROVIDERS_REQUIRING_API_KEY } from "@/utils/modelProviders";
-import { ConnectionStatus, ModelInfo, ModelFetchResult, ProviderMapping } from "./types";
+import { PROVIDERS_REQUIRING_API_KEY } from "@/utils/modelProviders";
+import { ConnectionStatus, ModelInfo, ModelFetchResult } from "./types";
 
 // Model capabilities interface
 export class ModelService {
-  private static readonly PROVIDER_MAPPING: ProviderMapping = PROVIDER_MAPPING as any;
-
   private static readonly PROVIDERS_REQUIRING_API_KEY = PROVIDERS_REQUIRING_API_KEY as any;
 
   /**

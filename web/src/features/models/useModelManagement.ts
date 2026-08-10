@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ModelService } from "./modelService";
-import { UseModelManagementOptions, ConnectionStatus } from "./types";
+import { UseModelManagementOptions } from "./types";
 
 export function useModelManagement(options: UseModelManagementOptions) {
   const [isLoadingModels, setIsLoadingModels] = useState(false);

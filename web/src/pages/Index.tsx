@@ -1,15 +1,13 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import ChatArea from "@/pages/ChatArea";
 import { fetchSettings } from "@/utils/api";
 import { useChatCreation } from "@/features/chat/useChatCreation";
-import { useFileManagement } from "@/features/files/useFileManagement";
 import { useSessionManagement } from "@/features/sessions/useSessionManagement";
 import { useModelManagement } from "@/features/models/useModelManagement";
 import { useAllModels } from "@/features/models/useAllModels";
 import { useUIStateManagement } from "@/features/ui/useUIStateManagement";
-import { Message, Conversation } from "@/features/sessions/types";
 import { useChatStore, useActiveMessages, useActiveChatId, useSetActiveChat, useCreateNewChat, useImageGenerationLoading, useConversationCreationLoading, selectConversations } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
 
@@ -26,10 +24,8 @@ export default function IndexEnhanced() {
   const conversations = useChatStore(useShallow(selectConversations));
   
   // UI state
-  const [inputValue, setInputValue] = useState("");
   const [selectedLLM, setSelectedLLM] = useState("");
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [sidebarView, setSidebarView] = useState<"conversations" | "search" | "media">("conversations");
+  const [, setIsSidebarOpen] = useState(false);
 
   // Unified loading states from Zustand
   const imageGenerationLoading = useImageGenerationLoading();
@@ -38,20 +34,17 @@ export default function IndexEnhanced() {
 
   // Enhanced features state
   const [selectedSearchEngine, setSelectedSearchEngine] = useState("duckduckgo");
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [, setAvailableModels] = useState<string[]>([]);
   const [modelMapping, setModelMapping] = useState<Record<string, string>>({});
   const [selectedModel, setSelectedModel] = useState("");
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
-  const [supportedImageModels, setSupportedImageModels] = useState<string[]>([]);
+  const [, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
+  const [, setSupportedImageModels] = useState<string[]>([]);
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
 
   // Cross-provider model aggregation
   const {
     allModels: allAvailableModels,
-    allModelMapping: allModelMapping,
     providerGroups,
-    isLoading: allModelsLoading,
-    error: allModelsError
   } = useAllModels({
     isAuthenticated,
     storedApiKeys
@@ -69,37 +62,12 @@ export default function IndexEnhanced() {
     showRawResponse,
     setShowRawResponse,
     autoTitleGeneration,
-    setAutoTitleGeneration,
 
     // UI state
-    isSidebarOpen: uiIsSidebarOpen,
-    setIsSidebarOpen: uiSetIsSidebarOpen,
-    sidebarView: uiSidebarView,
-    setSidebarView: uiSetSidebarView,
-    isGalleryOpen,
-    setIsGalleryOpen,
-    isFileProcessingOpen,
     setIsFileProcessingOpen,
 
     // Loading state
-    isLoading: uiIsLoading,
     setIsLoading: uiSetIsLoading,
-
-    // Feature toggle functions
-    toggleSearch,
-    toggleImageMode,
-    toggleCodingMode,
-    toggleRawResponse,
-    toggleAutoTitleGeneration,
-
-    // UI state functions
-    openSidebar,
-    closeSidebar,
-    toggleSidebar,
-    openGallery,
-    closeGallery,
-    openFileProcessing,
-    closeFileProcessing,
   } = useUIStateManagement({
     onLoadingUpdate: () => {}, // Zustand handles loading state
     onSidebarStateUpdate: setIsSidebarOpen,
@@ -127,18 +95,10 @@ export default function IndexEnhanced() {
   });
 
 
-  const {
-    handleFileUpload: fileHandleFileUpload,
-    handleFileProcessed: fileHandleFileProcessed,
-    handleContextRetrieved: fileHandleContextRetrieved,
-  } = useFileManagement();
-
   // Session management domain hook
   const {
     loadUserSessions: sessionLoadUserSessions,
     loadStoredApiKeys: sessionLoadStoredApiKeys,
-    loadSessionMessages: sessionLoadSessionMessages,
-    handleNewChat: sessionHandleNewChat,
   } = useSessionManagement({
     isAuthenticated,
     onSessionsUpdate: () => {}, // Zustand handles this
@@ -149,12 +109,9 @@ export default function IndexEnhanced() {
 
   // Model management domain hook
   const {
-    isLoadingModels: modelIsLoadingModels,
-    setIsLoadingModels: modelSetIsLoadingModels,
     loadModels: modelLoadModels,
     loadImageModels: modelLoadImageModels,
     refreshModels: modelRefreshModels,
-    validateModelSupport: modelValidateModelSupport,
   } = useModelManagement({
     selectedLLM,
     selectedModel,
@@ -276,40 +233,9 @@ export default function IndexEnhanced() {
   };
 
 
-  // Action button handler - redirects to tool menu
-  const handleActionButton = async (action: string) => {
-    if (action === "image") {
-      setIsImageMode(true);
-      toast.info("Image generation mode activated");
-    } else {
-      toast.info("This feature is now available through the tool menu in the input bar");
-    }
-  };
-
-  // Enhanced file upload handler using domain hook
-  const handleFileUploadEnhanced = async (files: FileList) => {
-    await fileHandleFileUpload(files, activeChatId || "");
-  };
-
-  // Enhanced file processed handler using domain hook
-  const handleFileProcessedEnhanced = (result: any) => {
-    fileHandleFileProcessed(result);
-  };
-
-  // Enhanced context retrieved handler using domain hook
-  const handleContextRetrievedEnhanced = (context: string) => {
-    fileHandleContextRetrieved(context);
-  };
-
   // Stop message handler using domain hook
   const handleStopMessage = () => {
     chatHandleStopMessage();
-  };
-
-  const handleNewChat = async () => {
-    const newChatId = await createNewChat();
-    setActiveChat(newChatId);
-    setIsSidebarOpen(false);
   };
 
 

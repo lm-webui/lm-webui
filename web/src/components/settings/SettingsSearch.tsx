@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Globe, Wifi, WifiOff, RefreshCw, Key, Save, Trash2 } from "lucide-react";
+import { Globe, Wifi, WifiOff, RefreshCw, Save, Trash2 } from "lucide-react";
 import { addApiKey, deleteApiKey, listApiKeys, testApiKey } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,7 @@ interface SettingsSearchProps {
   onSearchEngineChange: (value: string) => void;
 }
 
-export function SettingsSearch({
-  selectedSearchEngine,
-  onSearchEngineChange,
-}: SettingsSearchProps) {
+export function SettingsSearch(_props: SettingsSearchProps) {
   const searchEngines = [
     { id: "duckduckgo", name: "DuckDuckGo", icon: Globe, needsKey: false },
     { id: "searxng", name: "SearXNG", icon: Globe, needsKey: false },
@@ -31,7 +28,7 @@ export function SettingsSearch({
   const [selectedProvider, setSelectedProvider] = useState("duckduckgo");
   const [apiKey, setApiKey] = useState("");
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
-  const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
+  const [, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
   const [isTesting, setIsTesting] = useState(false);
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
 

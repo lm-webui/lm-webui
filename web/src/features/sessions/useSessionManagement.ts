@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { toast } from "sonner";
 import { SessionService } from "./sessionService";
 import { UseSessionManagementOptions } from "./types";

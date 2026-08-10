@@ -1,11 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useChatStore, useActiveMessages, useActiveChatId, useSetActiveChat, useCreateNewChat, useIsLoadingMessages } from "@/store/chatStore";
+import { useChatStore, useIsLoadingMessages } from "@/store/chatStore";
 import { mapToConversation } from "@/utils/chatUtils";
-import { useUIStateManagement } from "@/features/ui/useUIStateManagement";
 import { useChatCreation } from "@/features/chat/useChatCreation";
-import { useAllModels } from "@/features/models/useAllModels";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { generateChatTitle, detectMessageIntent } from "@/utils/chatUtils";
 import { generateImage } from "@/utils/api";
@@ -29,11 +26,11 @@ export default function ChatArea({
   createNewChat,
   conversations,
   allModels,
-  providerGroups,
+  providerGroups: _providerGroups,
   isLoading,
   setIsLoading,
-  chatHandleSendMessage,
-  chatHandleStopMessage,
+  chatHandleSendMessage: _chatHandleSendMessage,
+  chatHandleStopMessage: _chatHandleStopMessage,
   selectedLLM,
   setSelectedLLM,
   selectedModel,
@@ -86,16 +83,8 @@ export default function ChatArea({
     return () => window.removeEventListener("navigate-studio", go);
   }, []);
   const {
-    messages: chatMessages, // unused but returned
-    conversations: chatConversations, // unused but returned
-    currentConversationId,
-    currentSessionId,
-    isLoading: chatIsLoading, // rename to avoid conflict if needed, or just use prop
-    setIsLoading: setChatIsLoading,
     searchStatus,
     handleSendMessage: chatCreationHandleSendMessage,
-    handleStopMessage: chatCreationHandleStopMessage,
-    handleNewChat: chatCreationHandleNewChat
   } = useChatCreation({
     isAuthenticated,
     currentSessionId: activeChatId,
