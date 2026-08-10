@@ -75,7 +75,7 @@ The web client runs on the configured Vite port and proxies API requests to the 
 |---|---|
 | **Authentication** | Secure JWT-based authentication with httpOnly cookies, refresh tokens, session persistence, and role-based permissions. Remember-me toggle for session control. |
 | **Chat** | Multi-provider chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF (llama.cpp), and MLX. Streaming responses, code rendering, Mermaid diagrams, conversation management, and search. Smart-Modality routes each request to the right capability (plain chat, RAG, search, image, vision). |
-| **Vision** | Multimodal image understanding with image-text-to-text (VL) GGUF models served through `llama-server`. Vision bundles pair a main GGUF with an `mmproj` in `models/vision/<model>/`. |
+| **Vision** | Multimodal image understanding with image-text-to-text (VL) GGUF models served through `llama-server`. Simple queries ("what's in this image") use the VL directly; complex ones pair a small VL's visual description with your selected text model for the final answer. Vision bundles pair a main GGUF with an `mmproj` in `models/vision/<model>/`. |
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
 | **File Context** | Upload files for conversation context. Image and document processing (incl. OCR), upload status, file references with conversations, and citation display in chat. |

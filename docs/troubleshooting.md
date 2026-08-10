@@ -28,6 +28,9 @@ Vision needs three things, all reported by Runtime Manager → GGUF → Capabili
 - **Refresh.** After a download, Vision status refreshes automatically. If it still shows not-ready, use
   **Refresh** or reload the app.
 
+When Vision isn't ready and you send an image, the chat shows a clear notice ("⚠️ Vision isn't ready…") and
+answers the text without image analysis rather than failing silently.
+
 ## A model download seems stuck or stopped
 
 GGUF downloads run in a single-flight queue in the background — only one runs at a time. If a download appears

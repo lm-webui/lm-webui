@@ -36,6 +36,8 @@ class IntentResult:
     confidence: float = 0.9
     # hints kept for reference / debugging
     matched_hint: Optional[str] = None
+    # vision response mode: "direct" (VL answers) or "describe" (VL describes → selected LLM composes)
+    vision_mode: str = "direct"
 
 
 @dataclass
@@ -61,6 +63,12 @@ GENERATION_HINTS = ("generate an image", "create an image", "make an image", "dr
                     "draw an", "create a picture", "generate a picture", "image of",
                     "picture of", "logo of", "illustrate", "generate a logo", "design a")
 AUDIO_HINTS = ("transcribe", "voice note", "audio note", "what did they say", "convert audio")
+# Simple "what's in this image" queries → VL answers directly; otherwise describe → selected LLM composes.
+VISION_SIMPLE_HINTS = (
+    "what's in", "what is in", "what do you see", "what do i see",
+    "describe this", "describe the image", "describe the picture",
+    "what's this", "what is this", "what can you see", "what's in this image",
+)
 
 
 def _is_image(ref: Any) -> bool:
@@ -95,7 +103,10 @@ def classify(req: IntentRequest) -> IntentResult:
         # an image AND a doc: prefer knowledge? keep it simple: vision when image only.
         pass
     if req.image_mode or (has_image and not has_doc):
-        return IntentResult(ProcessingClass.VISION, KnowledgeScope.MODEL, matched_hint="image")
+        return IntentResult(
+            ProcessingClass.VISION, KnowledgeScope.MODEL, matched_hint="image",
+            vision_mode="direct" if _has_hint(message, VISION_SIMPLE_HINTS) else "describe",
+        )
 
     # 2. GENERATE — image-generation intent.
     h = _has_hint(message, GENERATION_HINTS)

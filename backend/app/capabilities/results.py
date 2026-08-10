@@ -30,6 +30,7 @@ class VisionResult:
     images: Optional[List[str]] = None
     provider: Any = None
     ready: bool = False
+    text: str = ""  # vision description (two-stage mode: injected into the selected LLM)
 
 
 @dataclass

@@ -3,7 +3,11 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from .results import FileResult, RetrievalResult, SearchResult
+from .results import FileResult, RetrievalResult, SearchResult, VisionResult
+
+
+def _vision_section(r: VisionResult) -> str:
+    return f"Vision description of the attached image:\n{r.text}"
 
 
 def _file_section(r: FileResult) -> str:
@@ -43,6 +47,8 @@ def build_messages(
             sections.append(_retrieval_section(r))
         elif isinstance(r, SearchResult) and r.items:
             sections.append(_search_section(r))
+        elif isinstance(r, VisionResult) and r.text:
+            sections.append(_vision_section(r))
 
     context = "\n\n".join(sections)
 

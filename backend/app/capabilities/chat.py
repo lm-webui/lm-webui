@@ -19,11 +19,19 @@ async def execute(ctx: CapabilityContext) -> Tuple[Any, GenerateRequest]:
         ctx.conversation_id,
         system_prompt=ctx.system_prompt,
     )
-    # Vision provider only when the vision capability reports ready; else the chat provider.
-    provider_to_use = ctx.vision_provider if (ctx.vision_provider and ctx.vision_ready) else ctx.provider
-    images = ctx.images if (ctx.vision_ready and ctx.images) else None
+    # Two-stage vision: a bare "what's in this image" query → VL answers directly (one-stage).
+    # Otherwise the VL describes the image and the selected text LLM composes the final answer.
+    direct = ctx.vision_ready and getattr(ctx, "vision_mode", "direct") == "direct"
+    if direct:
+        provider_to_use = ctx.vision_provider
+        images = ctx.images
+        model = ctx.vision_model or ctx.model_id
+    else:
+        provider_to_use = ctx.provider
+        images = None
+        model = ctx.model_id
     req = GenerateRequest(
-        model=ctx.vision_model or ctx.model_id,
+        model=model,
         messages=ctx.messages,
         stream=True,
         max_tokens=ctx.max_tokens,

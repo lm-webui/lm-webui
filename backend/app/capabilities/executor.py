@@ -19,5 +19,6 @@ async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
     if plan.search:
         ctx.results.append(await search.execute(ctx))
     if plan.vision:
+        ctx.vision_mode = getattr(plan, "vision_mode", "direct")
         ctx.results.append(await vision.execute(ctx))
     return ctx

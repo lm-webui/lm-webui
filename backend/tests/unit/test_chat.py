@@ -1,210 +1,87 @@
-"""Quick tests for chat module - tests pure functions without heavy dependencies."""
+"""Tests for the chat capability prompt builder (app.capabilities.prompt_builder).
+
+The old `extract_file_issues_from_context` / `build_prompt` helpers were removed
+when prompt construction moved into PromptBuilder.build_messages.
+"""
 import pytest
-from app.routes.chat import extract_file_issues_from_context, build_prompt
+from unittest.mock import patch
+
+from app.capabilities.prompt_builder import build_messages
+from app.capabilities.results import FileResult, RetrievalResult, SearchResult, VisionResult
 
 
-class TestExtractFileIssues:
-    """Test file issue extraction from context strings."""
-    
-    def test_extract_file_processing_error(self):
-        """Test detection of file processing error."""
-        context = "Some text [File Processing Error: test.txt] more text"
-        issues = extract_file_issues_from_context(context)
-        assert "FILE_PROCESSING_ERROR" in issues
-    
-    def test_extract_file_processing_note(self):
-        """Test detection of file processing note."""
-        context = "Results [File Processing Note: skipped] done"
-        issues = extract_file_issues_from_context(context)
-        assert "FILE_PROCESSING_NOTE" in issues
-    
-    def test_extract_excel_processing_error(self):
-        """Test detection of Excel processing error."""
-        context = "Data [Excel Processing Error: corrupted] end"
-        issues = extract_file_issues_from_context(context)
-        assert "EXCEL_PROCESSING_ERROR" in issues
-    
-    def test_extract_pdf_processing_error(self):
-        """Test detection of PDF processing error."""
-        context = "Document [Error processing PDF: encrypted] done"
-        issues = extract_file_issues_from_context(context)
-        assert "PDF_PROCESSING_ERROR" in issues
-    
-    def test_extract_multiple_issues(self):
-        """Test detection of multiple issues in one context."""
-        context = """
-        [File Processing Error: test.txt]
-        [Excel Processing Note: empty rows]
-        Files with errors: test.txt, data.xlsx
-        """
-        issues = extract_file_issues_from_context(context)
-        assert "FILE_PROCESSING_ERROR" in issues
-        assert "EXCEL_PROCESSING_NOTE" in issues
-        assert "FILES_WITH_ERRORS" in issues
-    
-    def test_extract_empty_file_issue(self):
-        """Test detection of empty file issue."""
-        context = "Result: EMPTY FILE detected"
-        issues = extract_file_issues_from_context(context)
-        assert "EMPTY_FILE" in issues
-    
-    def test_extract_files_not_found(self):
-        """Test detection of files not found."""
-        context = "Files not found: missing.txt"
-        issues = extract_file_issues_from_context(context)
-        assert "FILES_NOT_FOUND" in issues
-    
-    def test_no_issues_found(self):
-        """Test when no issues are present."""
-        context = "This is normal text without any issues."
-        issues = extract_file_issues_from_context(context)
-        assert issues == []
-    
-    def test_error_reading_file(self):
-        """Test detection of error reading file."""
-        context = "ERROR READING FILE: permission denied"
-        issues = extract_file_issues_from_context(context)
-        assert "ERROR_READING_FILE" in issues
-    
-    def test_pptx_processing_error(self):
-        """Test detection of PPTX processing error."""
-        context = "[Error processing PPTX: corrupted]"
-        issues = extract_file_issues_from_context(context)
-        assert "PPTX_PROCESSING_ERROR" in issues
+@pytest.fixture(autouse=True)
+def _no_history():
+    """Default: no conversation summary and empty history (mocked, no DB)."""
+    with patch("app.chat.service.get_conversation_summary", return_value=None), \
+         patch("app.chat.service.get_last_n_messages", return_value=[]):
+        yield
 
 
-class TestBuildPrompt:
-    """Test prompt building logic."""
-    
-    def test_build_prompt_basic(self):
-        """Test basic prompt building."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="",
-            last_messages=[],
-            current_message="Hello"
-        )
-        
+class TestBuildMessages:
+    def test_basic_user_system_messages(self):
+        messages = build_messages("Hello", [], "conv_1")
         assert len(messages) == 2
         assert messages[0]["role"] == "system"
-        assert messages[0]["content"] == "You are helpful."
         assert messages[1]["role"] == "user"
         assert messages[1]["content"] == "Hello"
-    
-    def test_build_prompt_with_conversation_summary(self):
-        """Test prompt with conversation summary."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary="Previous discussion about AI",
-            user_memory="",
-            last_messages=[],
-            current_message="Continue"
-        )
-        
-        assert len(messages) == 3
-        assert "Conversation summary" in messages[1]["content"]
-        assert "Previous discussion about AI" in messages[1]["content"]
-    
-    def test_build_prompt_with_user_memory(self):
-        """Test prompt with user memory (KG)."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="User likes Python",
-            last_messages=[],
-            current_message="What language?"
-        )
-        
-        assert len(messages) == 3
-        assert "Relevant User Knowledge" in messages[1]["content"]
-        assert "User likes Python" in messages[1]["content"]
-    
-    def test_build_prompt_with_rag_context(self):
-        """Test prompt with RAG context."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="",
-            last_messages=[],
-            current_message="Query",
-            rag_context="Document content here"
-        )
-        
-        # Find the RAG context message
-        rag_msg = next((m for m in messages if "Background Context" in m["content"]), None)
-        assert rag_msg is not None
-        assert "Document content here" in rag_msg["content"]
-    
-    def test_build_prompt_with_attached_files(self):
-        """Test prompt with attached files context."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="",
-            last_messages=[],
-            current_message="Analyze",
-            attached_files_context="File: data.csv\nContent: ..."
-        )
-        
-        # Find the attached files message
-        files_msg = next((m for m in messages if "USER ATTACHED FILES" in m["content"]), None)
-        assert files_msg is not None
-    
-    def test_build_prompt_with_web_search(self):
-        """Test prompt with web search context."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="",
-            last_messages=[],
-            current_message="Search",
-            web_search_context="Web results here"
-        )
-        
-        # Find the web search message
-        web_msg = next((m for m in messages if "CURRENT WEB SEARCH RESULTS" in m["content"]), None)
-        assert web_msg is not None
-    
-    def test_build_prompt_with_last_messages(self):
-        """Test prompt with conversation history."""
-        messages = build_prompt(
-            system_prompt="You are helpful.",
-            conversation_summary=None,
-            user_memory="",
-            last_messages=[
-                {"role": "user", "content": "Hi"},
-                {"role": "assistant", "content": "Hello!"}
-            ],
-            current_message="How are you?"
-        )
-        
+
+    def test_default_system_prompt(self):
+        messages = build_messages("Hi", [], "conv_1", system_prompt="")
+        assert "You are a helpful AI assistant." in messages[0]["content"]
+
+    def test_custom_system_prompt_used(self):
+        messages = build_messages("Hi", [], "conv_1", system_prompt="Be terse.")
+        assert messages[0]["content"] == "Be terse."
+
+    def test_retrieval_context_injected(self):
+        res = RetrievalResult(chunks=["Acme's return policy is 30 days.", "Q4 revenue was $20M."])
+        messages = build_messages("What is the return policy?", [res], "conv_1")
+        sys = messages[0]["content"]
+        assert "return policy is 30 days" in sys
+        assert "[1]" in sys and "[2]" in sys
+
+    def test_file_context_injected(self):
+        res = FileResult(text="Raw extracted file text.")
+        messages = build_messages("Summarize this file", [res], "conv_1")
+        assert "Raw extracted file text." in messages[0]["content"]
+
+    def test_search_context_injected(self):
+        res = SearchResult(items=[{"title": "LM-WebUI", "url": "https://lm-webui", "snippet": "docs"}])
+        messages = build_messages("search the web", [res], "conv_1")
+        assert "Web search results:" in messages[0]["content"]
+        assert "[LM-WebUI](https://lm-webui)" in messages[0]["content"]
+
+    def test_vision_context_injected(self):
+        res = VisionResult(text="A red apple on a desk.")
+        messages = build_messages("What is in this image?", [res], "conv_1")
+        assert "red apple on a desk" in messages[0]["content"]
+
+    def test_mixed_results_merged_in_order(self):
+        results = [FileResult(text="FILE"), RetrievalResult(chunks=["RETRIEVAL"])]
+        messages = build_messages("q", results, "conv_1")
+        sys = messages[0]["content"]
+        assert "FILE" in sys and "RETRIEVAL" in sys
+
+    def test_empty_result_types_skipped(self):
+        results = [RetrievalResult(chunks=[]), SearchResult(items=[]), VisionResult(text="")]
+        messages = build_messages("q", results, "conv_1")
+        assert "Relevant context" not in messages[0]["content"]
+
+    def test_conversation_summary_injected(self):
+        with patch("app.chat.service.get_conversation_summary",
+                   return_value="Talked about Acme earlier"):
+            messages = build_messages("continue", [], "conv_1")
+        assert any("Talked about Acme earlier" in m["content"] for m in messages)
+
+    def test_last_messages_included(self):
+        history = [
+            {"role": "user", "content": "Hi"},
+            {"role": "assistant", "content": "Hello!"},
+        ]
+        with patch("app.chat.service.get_last_n_messages", return_value=history):
+            messages = build_messages("How are you?", [], "conv_1")
         assert len(messages) == 4
-        assert messages[1]["role"] == "user"
         assert messages[1]["content"] == "Hi"
-        assert messages[2]["role"] == "assistant"
-    
-    def test_build_prompt_all_contexts(self):
-        """Test prompt with all context types."""
-        messages = build_prompt(
-            system_prompt="System",
-            conversation_summary="Summary",
-            user_memory="Memory",
-            last_messages=[{"role": "user", "content": "Past"}],
-            current_message="Now",
-            rag_context="RAG",
-            attached_files_context="Files",
-            web_search_context="Web"
-        )
-        
-        # Should have: system, summary, memory, files, web, rag, past message, current
-        assert len(messages) == 8
-        
-        # Check order: system -> summary -> memory -> files -> web -> rag -> history -> current
-        assert messages[0]["role"] == "system"
-        assert "System" in messages[0]["content"]
-        assert "Summary" in messages[1]["content"]
-        assert "Memory" in messages[2]["content"]
-        assert "Files" in messages[3]["content"]
-        assert "Web" in messages[4]["content"]
-        assert "RAG" in messages[5]["content"]
+        assert messages[2]["content"] == "Hello!"
+        assert messages[3]["content"] == "How are you?"

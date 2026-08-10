@@ -22,6 +22,7 @@ class ExecutionPlan:
     file_context: bool = False  # inject direct extracted text of attachments
     search: bool = False        # run web search
     vision: bool = False        # image attachment -> vision model
+    vision_mode: str = "direct" # "direct" (VL answers) | "describe" (VL describes → selected LLM)
     diffusion: bool = False     # image generation
     processing_class: str = ""  # informational (DIRECT/LIVE/KNOWLEDGE/VISION/GENERATE)
     background: List[str] = field(default_factory=list)  # post-answer jobs
@@ -58,6 +59,7 @@ def plan(
     # Vision runs for any image attachment — even when mixed with documents.
     if has_images:
         p.vision = True
+        p.vision_mode = intent.vision_mode
 
     if intent.processing_class == ProcessingClass.LIVE:
         p.search = True

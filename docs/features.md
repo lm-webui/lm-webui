@@ -54,7 +54,20 @@ To use Vision:
 2. Ensure `llama-server` is available (installed as part of the GGUF runtime).
 3. When the vision bundle is complete, the **Vision** capability in the Runtime Manager shows **Ready** and the chat can analyze images.
 
-The vision-capable model must be paired with its `mmproj`; without it the bundle is reported as not ready.
+### How Vision answers
+
+- **Simple queries** — for a bare description request such as *"what's in this image"*, the VL model answers directly.
+- **Complex queries** — for anything more (e.g. *"analyze this image and write a prompt to regenerate it"*), the VL
+  model describes the image and that description is fed to your **selected chat model**, which composes the final
+  answer. This pairs a small VL's visual grounding with a stronger text model's reasoning/writing.
+
+### Mixed attachments
+
+Attaching an image together with a document runs **both** capabilities: the image goes to Vision and the document
+is used for retrieval (RAG). The selected model composes the answer from both.
+
+If the vision bundle is incomplete (missing `mmproj`) or `llama-server` isn't available, the chat shows a clear
+notice and answers the text without image analysis.
 
 ## Projects
 

@@ -10,6 +10,27 @@ from .results import VisionResult
 logger = logging.getLogger(__name__)
 
 
+async def _describe(provider, images: list) -> str:
+    """One-shot VL describe pass — produces text the selected LLM composes from."""
+    from app.providers.schemas import GenerateRequest
+    req = GenerateRequest(
+        model="vision",
+        messages=[{
+            "role": "user",
+            "content": "Describe this image in detail: subject, composition, colors, lighting, style, and any notable elements.",
+        }],
+        images=images,
+        max_tokens=500,
+        stream=False,
+    )
+    try:
+        resp = await provider.generate(req)
+        return (resp.content or "").strip()
+    except Exception as exc:
+        logger.warning("Vision describe pass failed: %s", exc)
+        return ""
+
+
 def _health(model: str) -> bool:
     """Capability health: runtime (llama-server) + model bundle + mmproj."""
     import shutil
@@ -132,7 +153,13 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
             ctx.vision_provider = OpenAIProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
             ctx.vision_provider_id = "vision"
             ctx.vision_ready = True
-            return VisionResult(images=images, provider=ctx.vision_provider, ready=True)
+            # Vision mode comes from the intent classifier (direct vs describe).
+            ctx.vision_mode = getattr(ctx, "vision_mode", "direct")
+            if ctx.vision_mode == "direct":
+                return VisionResult(images=images, provider=ctx.vision_provider, ready=True)
+            desc = await _describe(ctx.vision_provider, images)
+            ctx.vision_description = desc
+            return VisionResult(images=images, provider=ctx.vision_provider, ready=True, text=desc)
     except Exception as exc:
         logger.warning("Vision config resolution failed: %s", exc)
     ctx.vision_ready = False

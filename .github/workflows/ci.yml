@@ -81,11 +81,11 @@ jobs:
           cd backend
           uv pip install --system -r requirements.txt
           uv pip install --system pytest pytest-cov
-      # Run backend tests (non-blocking due to current issues)
+      # Run backend unit tests (hermetic; integration excluded via pytest.ini)
       - name: Run backend tests
         run: |
           cd backend
-          python -m pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=0 || echo "Tests failed - continuing for now"
+          python -m pytest tests/ -v --cov=app --cov-report=xml --cov-fail-under=0
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v3
         with:

@@ -31,6 +31,7 @@ class CapabilityContext:
     vision_provider: Any = None
     vision_provider_id: str = ""
     vision_ready: bool = False
+    vision_mode: str = "direct"  # "direct" | "describe"
 
 
 def get_user_api_key(user_id: int, provider_id: str) -> str | None:

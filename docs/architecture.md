@@ -46,7 +46,10 @@ User → WebSocket/REST → Orchestrator → Intent Classifier → Execution Pla
 ```
 User attaches image → Smart-Modality (VISION) → Vision Capability
      → ensure llama-server → launch llama-server --model <main> --mmproj <mmproj>
-     → OpenAI-compatible provider → analyze → Stream → UI
+     → VL provider (OpenAI-compatible)
+        ├─ simple query ("what's in this image") → VL answers directly → Stream → UI
+        └─ complex query → VL describes → description injected → selected chat model
+                          → composes final answer → Stream → UI
 ```
 
 ### Image Generation (Studio)
