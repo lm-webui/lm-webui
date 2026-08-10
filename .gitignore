@@ -58,12 +58,5 @@ AGENTS.md
 
 # Root data
 data/
-
-# Docker runtime data (host-mount volume)
 .lmwebui/
-
-# Landing page
 landing/
-
-# Local llama.cpp build artifacts
-backend/llama.cpp/build/

@@ -9,12 +9,10 @@ README.md
 node_modules
 **/node_modules
 backend/venv
-frontend/node_modules
 
 # --- Build Artifacts ---
 dist
 build
-frontend/dist
 
 # --- Environment & Secrets ---
 .env
@@ -46,21 +44,8 @@ htmlcov
 .idea
 *.swp
 
-# --- Development & Planning Directories ---
-__dev__/
-__plans__/
-__implementation__/
-__internal__/
-__prompt___/
-__sample__/
-__test__/
-__backup__/
-
 # --- Local dev artifacts not needed for build ---
 landing/
-backend/llama.cpp/build/
-backend/llama.cpp/models/
 backend/tests/
 backend/coverage.xml
 backend/.env
-frontend/
