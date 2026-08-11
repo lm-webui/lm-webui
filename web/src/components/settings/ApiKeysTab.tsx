@@ -199,7 +199,7 @@ export function ApiKeysTab() {
     setConnectionStatus("testing");
 
     try {
-      // If not configured but we have an API key, save it temporarily for testing
+      // Save the key so connection testing can use it
       if (!isConfigured && apiKey) {
         // Save the API key/URL first
         await addApiKey(selectedProvider, apiKey);

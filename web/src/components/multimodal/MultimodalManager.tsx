@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { useActiveChatId, useCreateNewChat, useChatStore } from '@/store/chatStore';
+import { useActiveChatId, useCreateNewChat } from '@/store/chatStore';
 
 interface MediaLibraryEntry {
   id: string;
@@ -159,65 +159,16 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
     provider: string,
     conversationId?: string
   ): Promise<string | null> => {
-    console.log("🎯 generateImageWithMediaLibrary CALLED", { prompt, model, provider, conversationId });
     setState(prev => ({ ...prev, isGeneratingImage: true }));
 
     try {
       const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
-      console.log("🌐 API_BASE_URL:", API_BASE_URL);
 
       let finalConversationId = conversationId || activeChatId;
-      console.log("🔍 Initial conversation resolution:", {
-        input: conversationId,
-        active: activeChatId,
-        final: finalConversationId,
-        needsCreate: !finalConversationId
-      });
 
       if (!finalConversationId) {
-        console.log("  🚨 NO CONVERSATION - CREATING NEW ONE");
-        console.log("  🏗️ Calling createNewChat()...");
-        finalConversationId = await createNewChat(); // FIX: Added await
-        console.log("  ✅ createNewChat() returned:", finalConversationId);
-
-        // Check Zustand state immediately
-        const immediateState = useChatStore.getState().activeChatId;
-        console.log("  📊 Zustand state after createNewChat():", immediateState);
-
-        // Try Option 3: Skip state sync for now to confirm this is the issue
-        console.log("  ⚠️ SIDESTEPPING STATE SYNC - Using created ID directly");
-        // Comment out the Promise-based sync temporarily
-        /*
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            console.warn("⏰ Timeout waiting for conversation state sync");
-            reject(new Error('Zustand state sync timeout'));
-          }, 1000);
-
-          const unsubscribe = useChatStore.subscribe(
-            (state) => {
-              console.log("  🔄 State changed, new activeChatId:", state.activeChatId);
-              if (state.activeChatId === finalConversationId) {
-                console.log("  ✅ State synchronized!");
-                clearTimeout(timeout);
-                unsubscribe();
-                resolve();
-              }
-            }
-          );
-
-          // Check if already synchronized
-          if (useChatStore.getState().activeChatId === finalConversationId) {
-            console.log("  ⚡ Already synchronized");
-            clearTimeout(timeout);
-            unsubscribe();
-            resolve();
-          }
-        });
-        */
+        finalConversationId = await createNewChat();
       }
-
-      console.log("  📤 FINAL conversation ID for API:", finalConversationId);
 
       const requestBody = {
         message: prompt,
@@ -226,8 +177,6 @@ const MultimodalProvider: React.FC<MultimodalProviderProps> = ({ children }) => 
         api_key: "", // Will be handled by backend
         conversation_id: finalConversationId,
       };
-
-      console.log("  📡 Sending API request with conversation_id:", finalConversationId);
 
       const response = await fetch(`${API_BASE_URL}/api/generate/image`, {
         method: 'POST',

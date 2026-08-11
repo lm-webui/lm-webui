@@ -1,6 +1,5 @@
 import React from "react";
-import { cn } from "@/lib/utils";
-import { Image, FileText, ListCollapse, Lightbulb } from "lucide-react";
+import { FileText, ListCollapse, Lightbulb } from "lucide-react";
 
 interface WelcomeProps {
   user: { email: string } | null;
@@ -16,8 +15,8 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
       <div className="flex-1 flex flex-col items-center justify-center w-full space-y-8 min-h-0">
         <div className="w-full max-w-2xl flex flex-col items-start space-y-2 animate-in fade-in zoom-in duration-500 px-2">
            <div className="flex items-center gap-3">
-              <img src="/logo1.png" alt="Logo" className="h-8 w-8 object-contain" />
-              <h1 className="text-3xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">
+              <img src="/logo1.png" alt="Logo" className="h-9 w-9 object-contain" />
+              <h1 className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">
                 <span className="bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent">
                   Hi, {userName}
                 </span>
@@ -32,7 +31,7 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
           {children}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 w-full max-w-2xl animate-in slide-in-from-bottom-8 duration-1000 fade-in">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-2 w-full max-w-2xl animate-in slide-in-from-bottom-8 duration-1000 fade-in">
             {[
               { label: "Create image", icon: "🍌" },
               { label: "Write docs", icon: <FileText className="h-4 w-4" /> },
@@ -42,7 +41,7 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
               <div
                 key={item.label}
                 onClick={() => onAction?.(item.label)}
-                className="p-3 text-sm font-medium text-zinc-600 dark:text-zinc-400 bg-zinc-100/50 dark:bg-zinc-800/50 rounded-3xl text-center border border-zinc-200/60 dark:border-zinc-800 cursor-pointer flex items-center justify-center gap-2 transition-all duration-200 hover:bg-amber-500/10 hover:border-amber-500/30 hover:scale-[1.03] active:scale-95"
+                className="p-3 text-sm font-medium text-zinc-50 dark:text-zinc-500 bg-neutral-400/50 dark:bg-neutral-800/50 rounded-3xl text-center border border-zinc-200/60 dark:border-zinc-800/25 cursor-pointer flex items-center justify-center gap-2 transition-all duration-200 hover:scale-[1.03] active:scale-95"
               >
                 <span>{item.icon}</span>
                 <span>{item.label}</span>

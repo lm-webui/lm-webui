@@ -355,7 +355,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     }
   };
 
-  // Minimalist capability/runtime status icon: green check (ready) or yellow ! (needs action).
+  // Status icon: green = ready, yellow = needs action
   const StatusIcon = ({ ready, tip }: { ready: boolean; tip: string }) => (
     <TooltipProvider delayDuration={100}>
       <Tooltip>
@@ -373,7 +373,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
 
   const ggufRuntime = runtimes.find(r => r.type === "gguf");
   const ggufReady = !!ggufRuntime?.installed;
-  // Capability/engine status (prompt10: one GGUF runtime, granular readiness).
+  // Capability/engine status
   const llamaServerPresent = !!ggufHealth?.executables?.llama_server;
   const ggufBackend = gpuInfo?.has_gpu ? (gpuInfo.gpu?.backend || "gpu").toUpperCase() : "CPU";
 
