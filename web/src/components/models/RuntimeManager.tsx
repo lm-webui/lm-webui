@@ -90,15 +90,15 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [detectedExternals, setDetectedExternals] = useState<DetectedExternal[]>([]);
   const [comfyuiConnected, setComfyuiConnected] = useState(false);
   const [comfyuiEndpoint, setComfyuiEndpoint] = useState("http://host.docker.internal:8188");
+  const [applyingConfig, setApplyingConfig] = useState(false);
+  const [gpuInfo, setGpuInfo] = useState<any>(null);
+  const [installingGpu, setInstallingGpu] = useState(false);
   const [ggufConfig, setGgufConfig] = useState({
     n_ctx: 4096,
     n_gpu_layers: -1,
     cache_type_k: "q8_0",
     cache_type_v: "q8_0",
   });
-  const [applyingConfig, setApplyingConfig] = useState(false);
-  const [gpuInfo, setGpuInfo] = useState<any>(null);
-  const [installingGpu, setInstallingGpu] = useState(false);
 
   useEffect(() => {
     if (inline || open) {

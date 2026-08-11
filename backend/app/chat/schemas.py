@@ -15,7 +15,7 @@ class ChatRequest:
     message: str
     model: str
     provider: Optional[str] = "openai"
-    file_references: Optional[List[str]] = None
+    file_references: Optional[List[dict]] = None
     metadata: Optional[Dict[str, Any]] = None
     # Reasoning-specific fields
     conversationId: Optional[str] = None

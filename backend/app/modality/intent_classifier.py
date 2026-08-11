@@ -80,7 +80,7 @@ _VISION_SIMPLE_RE = re.compile(
 def _is_simple_vision_query(message: str) -> bool:
     """A bare description / "what X in the picture" query → one-stage VL."""
     m = message.lower()
-    return _has_hint(m, VISION_SIMPLE_HINTS) or bool(_VISION_SIMPLE_RE.search(message))
+    return bool(_has_hint(m, VISION_SIMPLE_HINTS) or _VISION_SIMPLE_RE.search(message))
 
 
 def _is_image(ref: Any) -> bool:

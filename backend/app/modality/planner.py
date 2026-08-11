@@ -50,7 +50,7 @@ def plan(
 
     p = ExecutionPlan(processing_class=intent.processing_class.value)
     has_images = any(_is_image(r) for r in (file_references or []))
-    has_docs = _has_docs(file_references)
+    has_docs = _has_docs(file_references or [])
 
     if intent.processing_class == ProcessingClass.GENERATE:
         p.diffusion = True

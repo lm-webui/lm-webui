@@ -226,7 +226,7 @@ starlette==1.4.0
     # via fastapi
 tiktoken==0.13.0
     # via -r requirements.txt
-tokenizers==0.23.1
+tokenizers==0.22.2
     # via
     #   fastembed
     #   flashrank

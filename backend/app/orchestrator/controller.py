@@ -8,6 +8,7 @@ import time
 from typing import AsyncGenerator, Optional, Dict, Any, List
 from app.providers.schemas import ModelEvent
 from app.providers.factory import ProviderFactory
+from app.database import get_db
 from app.chat.schemas import ChatRequest
 from app.chat.session_manager import get_chat_session_manager
 from app.chat.service import (
@@ -42,6 +43,7 @@ class OrchestratorController:
             yield ModelEvent.error("Session already streaming")
             return
 
+        provider = None
         try:
             # Ensure conversation exists
             actual_conversation_id = ensure_conversation_exists(
@@ -75,7 +77,6 @@ class OrchestratorController:
             # Check if user has a custom base URL stored (e.g. custom Ollama instance)
             base_url = None
             if provider_id == "ollama":
-                from app.database import get_db
                 from app.security.encryption import decrypt_key
                 db = get_db()
                 row = db.execute(
@@ -88,7 +89,7 @@ class OrchestratorController:
                     except Exception:
                         base_url = row[0]  # fallback: use raw value
 
-            provider = ProviderFactory.get_provider(provider_id, base_url=base_url) if base_url else ProviderFactory.get_provider(provider_id)
+            provider = ProviderFactory.get_provider(provider_id or "", base_url=base_url) if base_url else ProviderFactory.get_provider(provider_id or "")
             if not provider:
                 yield ModelEvent.error(f"Provider {provider_id} not available")
                 return
@@ -118,16 +119,16 @@ class OrchestratorController:
             exec_plan = modality_plan(
                 message=chat_request.message,
                 file_references=chat_request.file_references,
-                web_search=chat_request.webSearch,
-                image_mode=getattr(chat_request, "isImageMode", False),
+                web_search=bool(chat_request.webSearch),
+                image_mode=bool(getattr(chat_request, "isImageMode", False)),
             )
 
             from app.capabilities import CapabilityContext, execute_plan as run_capabilities
             ctx = CapabilityContext(
                 chat_request=chat_request,
                 user_id=user_id,
-                provider_id=provider_id,
-                model_id=model_id,
+                provider_id=provider_id or "",
+                model_id=model_id or "",
                 provider=provider,
                 conversation_id=actual_conversation_id,
             )
@@ -163,6 +164,7 @@ class OrchestratorController:
             # Check for project-level system prompt override (from conversation metadata)
             project_id = None
             try:
+                db = get_db()
                 row = db.execute(
                     "SELECT metadata FROM conversations WHERE id = ?",
                     (actual_conversation_id,),
@@ -208,7 +210,7 @@ class OrchestratorController:
             # 4/5. Build messages + request via the chat capability, then stream.
             from app.capabilities import chat_execute
             from app.capabilities.base import get_user_api_key
-            ctx.api_key = get_user_api_key(user_id, provider_id)
+            ctx.api_key = get_user_api_key(user_id, provider_id or "")
             provider_to_use, req = await chat_execute(ctx)
 
             response_content = ""
@@ -261,8 +263,9 @@ class OrchestratorController:
             # (asyncio is imported at module scope — no local import, or it would make
             # `asyncio` a function-local name and break earlier asyncio.to_thread calls).
             try:
-                if hasattr(provider, '_session') and provider._session and not provider._session.closed:
-                    asyncio.ensure_future(provider._session.close())
+                session = getattr(provider, '_session', None)
+                if session and not session.closed:
+                    asyncio.ensure_future(session.close())
             except Exception:
                 pass
             yield ModelEvent.done()
