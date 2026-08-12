@@ -36,6 +36,7 @@ class SettingsUpdate(BaseModel):
 
     # Defaults
     selectedSearchEngine: str = "duckduckgo"
+    searxngUrl: str = ""
     defaultImageProvider: str = "openai"
     defaultImageModel: str = ""
     defaultVisionModel: str = ""
@@ -83,6 +84,7 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
         "topP": 0.9,
         "systemPrompt": "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions.",
         "selectedSearchEngine": "duckduckgo",
+        "searxngUrl": "http://127.0.0.1:8080",
         "selectedModel": "",
         "defaultVisionModel": "",
         "showRawResponse": False,
@@ -144,6 +146,7 @@ async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_
         "topP": settings.topP,
         "systemPrompt": settings.systemPrompt,
         "selectedSearchEngine": settings.selectedSearchEngine,
+        "searxngUrl": settings.searxngUrl or "",
         "selectedModel": settings.selectedModel,
         "defaultImageProvider": settings.defaultImageProvider,
         "defaultImageModel": settings.defaultImageModel,
@@ -184,6 +187,19 @@ async def set_default_vision_model(req: VisionModelUpdate, user_id: dict = Depen
     )
     db.commit()
     return {"message": "Default vision model updated", "defaultVisionModel": settings["defaultVisionModel"]}
+
+
+class SearxngProbeRequest(BaseModel):
+    base_url: str = ""
+
+
+@router.post("/search/connectivity")
+async def test_searxng_connectivity(req: SearxngProbeRequest):
+    """Probe a SearXNG instance URL for reachability + JSON API."""
+    from app.search import get_search_provider
+    provider = get_search_provider("searxng")
+    ok, msg = await provider.test(base_url=req.base_url.strip() or None)
+    return {"valid": ok, "message": msg}
 
 
 @router.get("/themes")

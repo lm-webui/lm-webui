@@ -48,6 +48,15 @@ async def save_api_key(request: ApiKeyRequest, user_id: dict = Depends(get_curre
                 "INSERT OR REPLACE INTO api_keys (user_id, provider, encrypted_key) VALUES (?, ?, ?)",
                 (user_id["id"], request.provider, encrypted_url)
             )
+    elif request.provider == "google_search" and request.base_url:
+        # Google Search pairs an API key (encrypted_key) with a Programmable
+        # Search Engine ID / cx (stored in base_url). Both are encrypted at rest.
+        encrypted_key = encrypt_key(request.api_key)
+        encrypted_cx = encrypt_key(request.base_url.strip())
+        db.execute(
+            "INSERT OR REPLACE INTO api_keys (user_id, provider, encrypted_key, base_url) VALUES (?, ?, ?, ?)",
+            (user_id["id"], request.provider, encrypted_key, encrypted_cx)
+        )
     else:
         # For cloud providers, encrypt the API key
         encrypted = encrypt_key(request.api_key)
@@ -192,6 +201,18 @@ async def test_api_key(provider: str, user_id: dict = Depends(get_current_user))
             return {"valid": False, "message": "Connection timeout"}
         except Exception as e:
             return {"valid": False, "message": f"Connection error: {str(e)}"}
+    elif provider in {"google_search", "perplexity"}:
+        # Web-search providers — test the key against their API directly.
+        from app.search import get_search_provider
+        provider_instance = get_search_provider(provider)
+        try:
+            cx = None
+            if provider == "google_search" and result[1]:
+                cx = decrypt_key(result[1])  # stored cx in base_url
+            ok, msg = await provider_instance.test(api_key=decrypted_key, cx=cx)
+            return {"valid": ok, "message": msg}
+        except Exception as e:
+            return {"valid": False, "message": f"Search provider test failed: {str(e)}"}
     else:
         # For cloud providers, test by fetching models
         from app.services.model_registry import get_model_registry

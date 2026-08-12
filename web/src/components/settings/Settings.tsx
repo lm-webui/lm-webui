@@ -294,8 +294,8 @@ export function Settings({
                         <SelectTrigger><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
-                          <SelectItem value="google">Google</SelectItem>
-                          <SelectItem value="bing">Bing</SelectItem>
+                          <SelectItem value="searxng">SearXNG</SelectItem>
+                          <SelectItem value="google_search">Google Search</SelectItem>
                           <SelectItem value="perplexity">Perplexity</SelectItem>
                         </SelectContent>
                       </Select>

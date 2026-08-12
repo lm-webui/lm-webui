@@ -680,20 +680,13 @@ export interface ApiKey {
   created_at: string;
 }
 
-export async function addApiKey(provider: string, apiKey: string): Promise<void> {
-  // For local providers (lmstudio, ollama), the apiKey is actually a URL
-  const localProviders = ["lmstudio", "ollama"];
+export async function addApiKey(provider: string, apiKey: string, baseUrl?: string): Promise<void> {
   const requestBody: any = {
     provider,
-    api_key: apiKey
+    api_key: apiKey,
+    ...(baseUrl ? { base_url: baseUrl } : {}),
   };
-  
-  if (localProviders.includes(provider)) {
-    // For local providers, we should send the URL as the api_key
-    // The backend will handle it appropriately
-    requestBody.api_key = apiKey;
-  }
-  
+
   await authFetch(`${API_BASE_URL}/api/api_keys`, {
     method: 'POST',
     headers: {
@@ -716,6 +709,15 @@ export async function testApiKey(provider: string): Promise<{ valid: boolean; me
 export async function getApiKey(provider: string): Promise<string> {
   const response = await authFetch(`${API_BASE_URL}/api/api_keys/${provider}`);
   return response.api_key;
+}
+
+export async function testSearxngUrl(baseUrl: string): Promise<{ valid: boolean; message: string }> {
+  const response = await authFetch(`${API_BASE_URL}/api/settings/search/connectivity`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ base_url: baseUrl }),
+  });
+  return response;
 }
 
 export async function deleteApiKey(provider: string): Promise<void> {
