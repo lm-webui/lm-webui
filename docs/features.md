@@ -84,7 +84,7 @@ Project instructions are intended for recurring workflows such as code review, r
 
 ## Models and providers
 
-LM-WebUI separates model providers from local runtimes. A provider is the interface used to communicate with a model; a runtime is the local software that executes or exposes models.
+LM-WebUI separates model providers from inference engines. A provider is the interface used to communicate with a model; an inference engine is the local software that executes models (e.g. llama.cpp for GGUF, mlx-lm for MLX), and a workflow runtime (ComfyUI) executes image-generation models.
 
 ### Supported provider integrations
 
@@ -97,9 +97,9 @@ LM-WebUI separates model providers from local runtimes. A provider is the interf
 | xAI | Cloud | Chat |
 | vLLM | Local or self-hosted | Chat |
 | Ollama | Local | Chat |
-| GGUF | Local | Chat through llama.cpp |
-| MLX | Local Apple Silicon | Chat through MLX |
-| ComfyUI | Local image runtime | Image generation |
+| GGUF | Local | Chat through the llama.cpp engine (GGUF format) |
+| MLX | Local Apple Silicon | Chat through the mlx-lm engine (MLX framework) |
+| ComfyUI | Local image | Image generation (workflow runtime) |
 
 Provider and model availability is dynamic. Cloud providers require configured credentials, while local providers require a reachable or installed runtime.
 

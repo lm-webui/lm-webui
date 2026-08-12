@@ -17,6 +17,23 @@ def auth_headers():
     """Authentication headers fixture"""
     return {"Authorization": "Bearer test-token"}
 
+@pytest.fixture(scope="session", autouse=True)
+def init_test_db(tmp_path_factory):
+    """Point the app DB at an isolated temp file and create the schema.
+
+    The app's module-level `database_manager`/`database_migration` singletons are created at
+    import with the real `~/.lmwebui` path (base_dir from config.yaml, not env). On a fresh CI
+    runner that DB is uninitialized, so DB-dependent tests (auth/api_keys) fail with
+    "no such table: users". Re-point both singletons to a temp file and create the schema.
+    """
+    from app.database.sqlite.connection_pool import database_manager
+    from app.database.migration import database_migration
+    db_file = str(tmp_path_factory.mktemp("db") / "test.db")
+    database_manager.connection_pool.db_path = db_file
+    database_migration.db_path = db_file
+    database_migration.initialize_database()
+    yield
+
 @pytest.fixture(autouse=True)
 def mock_env_vars(monkeypatch):
     """Mock environment variables for tests"""

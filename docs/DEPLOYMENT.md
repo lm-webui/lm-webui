@@ -128,15 +128,15 @@ The Runtime Manager auto-detects running external services via HTTP probes on `l
 For a small office or SMB deployment:
 
 1. Run LM-WebUI on a trusted internal server (native install or Docker).
-2. GGUF (llama.cpp) inference is available immediately — bundled with hardware-accelerated defaults.
-3. For additional runtimes:
-   - Install MLX on a macOS workstation, or Ollama/vLLM/ComfyUI on any host machine.
+2. GGUF (llama.cpp engine) inference is available immediately — bundled with hardware-accelerated defaults.
+3. For additional engines and runtimes:
+   - Install the MLX framework on a macOS workstation, or Ollama/vLLM/ComfyUI on any host machine.
    - The Runtime Manager auto-detects running services via `localhost` (native) or `host.docker.internal` (Docker) probes.
    - Connect with one click from the admin Runtime Manager UI.
 4. Configure API providers (OpenAI, Anthropic, Google, Ollama, vLLM) in Settings → API Providers.
 5. Create users through the admin user-management menu.
 
-> **Runtime Manager scope**: Manages GGUF (engine config), MLX (external server on Apple Silicon), and ComfyUI (external server for image gen). Ollama and vLLM are configured as API providers, not managed runtimes.
+> **Runtime Manager scope**: Manages inference engines and formats — llama.cpp (GGUF engine config), MLX (engine on Apple Silicon), and ComfyUI (image workflow runtime). Ollama and vLLM are configured as API providers, not managed runtimes.
 
 Normal users cannot install runtimes, change endpoints, or control host services.
 

@@ -1,6 +1,6 @@
 # LM WebUI 🛡️
 
-**LM-WebUI** makes running local AI as easy as installing an app. No more juggling separate apps, model or vendor limitations, or runtime setup headaches. A built-in Runtime Manager will manages runtime and models for you, while chat, vision, image generation, and file context all live in one interface inside your own machine. Built for privacy-first and sovereign AI systems.
+**LM-WebUI** makes running local AI as easy as installing an app. No more juggling separate apps, model or vendor limitations, or runtime setup headaches. A built-in Runtime Manager manages inference engines and models for you, while chat, vision, image generation, and file context all live in one interface on your own machine. Built for privacy-first and sovereign AI systems.
 
 <p align="center">
   <img src="./assets/demo.png" width="1080" />
@@ -51,67 +51,55 @@ Open `http://localhost:7070` in your browser.
 
 Your models, data, and configuration are stored locally under ~/.lmwebui/. You can change the location with the LMWEBUI_HOME environment variable.
 
-### Development Setup
-
-For contributors and developers who want to run LM-WebUI from source:
-
-```bash
-git clone https://github.com/lm-webui/lm-webui.git
-cd lm-webui
-
-# Start backend
-cd backend
-uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 7070
-
-# In another terminal, start frontend
-cd web
-npm install
-npm run dev
-```
-
-The development frontend runs on the configured Vite port and proxies API requests to the backend on port 7070.
-
 ---
 
 ## ⚡ Core Features
 
 | Feature | Capabilities |
 |---|---|
-| **Authentication** | Secure JWT-based authentication with httpOnly cookies, refresh tokens, session persistence, and role-based permissions. Remember-me toggle for session control. |
-| **Chat** | Multi-provider chat through OpenAI, Gemini, Anthropic, DeepSeek, xAI, vLLM, Ollama, GGUF (llama.cpp), and MLX. Streaming responses, code rendering, Mermaid diagrams, conversation management, and search. Smart-Modality routes each request to the right capability (plain chat, RAG, search, image, vision). |
-| **Vision** | Multimodal image understanding with image-text-to-text (VL) GGUF models served through `llama-server`. Simple queries ("what's in this image") use the VL directly; complex ones pair a small VL's visual description with your selected text model for the final answer. Vision bundles pair a main GGUF with an `mmproj` in `models/vision/<model>/`. |
+| **Smart-Modality** | Automatically chooses the right path for each request, direct chat, RAG, web search, vision, or image generation, so simple tasks stay fast without unnecessary processing. |
+| **Chat** | Chat with local or cloud AI models from one interface. Supports GGUF/llama.cpp, MLX, Ollama, vLLM, OpenAI, Gemini, Anthropic, DeepSeek, Grok, and more. Includes streaming, code rendering, Mermaid diagrams, tables, conversations, and web search.|
+| **Multimodal Vision** | Analyze images, screenshots, diagrams, and other visual content using compatible local vision models.
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
 | **File Context** | Upload files for conversation context. Image and document processing (incl. OCR), upload status, file references with conversations, and citation display in chat. |
-| **GGUF Runtime** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally. Vision via `llama-server`. Background, single-flight download queue that survives closing the UI. |
-| **MLX Runtime** | Inference on Apple Silicon via mlx-lm. Model download from HuggingFace with one click. Seamless chat integration. |
+| **GGUF / llama.cpp** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally via the llama.cpp engine. Vision through `llama-server`. Background, single-flight download queue that survives closing the UI. |
+| **MLX** | Inference on Apple Silicon via the MLX framework (`mlx-lm`). Model download from HuggingFace with one click. Seamless chat integration. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
-| **Runtime Manager** | Manage GGUF (in-container with hardware-accelerated defaults), MLX (Apple Silicon in-process), and ComfyUI (image generation). Ollama and vLLM are configured as API providers in Settings. |
+| **Runtime Manager** | Manages the inference engines and model formats below — llama.cpp (GGUF), MLX, and ComfyUI (image workflows). Ollama and vLLM are configured as API providers in Settings. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
 | **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
 | **Self-Hosted Ready** | Native Python service, zero external telemetry, offline-capable. Data in `~/.lmwebui/`. Docker deployment also available. |
 
 ---
 
-##  MLX Runtime Highlights
+##  MLX
 
-- **Apple Silicon Optimized**: Native MLX inference without an additional model server
-- **One-Click Runtime Setup**: Install and manage MLX directly from Runtime Manager
+- **Apple Silicon Optimized**: Native MLX inference (`mlx-lm`) without an additional model server
+- **One-Click Setup**: Install and manage MLX from the Runtime Manager
 - **Model Management**: Download, organize, or remove MLX models with one click
 - **HuggingFace Integration**: Direct download support from HuggingFace MLX repositories
-- **Seamless Integration**: Use MLX models directly in chat interface
-- **Automatic Detection**: Auto-detects Apple Silicon hardware and manages the MLX runtime
+- **Seamless Integration**: Use MLX models directly in the chat interface
+- **Automatic Detection**: Auto-detects Apple Silicon hardware and manages the MLX framework
 
 ---
 
-## 🤗 GGUF / llama.cpp Runtime Highlights
+## 🤗 GGUF / llama.cpp
 
 - **Model Management**: Download, organize, or remove GGUF models with one click
-- **Vision Models**: Image-text-to-text (VL) GGUF models compatible with auto pair with each mmproj file
-- **HuggingFace Integration**: Direct download from HuggingFace repositories and auto resolve quantization model options
-- **Hardware Awareness**: Detects available hardware and helps you choose compatible runtime and model
-- **Seamless Integration**: Use GGUF models directly in chat interface
+- **Vision Models**: Image-text-to-text (VL) GGUF models that auto-pair with their `mmproj` file
+- **HuggingFace Integration**: Direct download from HuggingFace repositories with auto-resolved quantization options
+- **Hardware Awareness**: Detects available hardware and helps you choose a compatible engine and model
+- **Seamless Integration**: Use GGUF models directly in the chat interface
+
+---
+
+## 🔤 Runtime Terminology
+
+- **GGUF / llama.cpp** — Inference engine: **llama.cpp**. Model format: **GGUF**.
+- **MLX** — Framework: **MLX**. LLM inference: **mlx-lm**. Model format: MLX-compatible.
+- **Diffusion / Image** — Workflow runtime: **ComfyUI**. Models: SDXL, FLUX, etc.
+- The **Runtime Manager** orchestrates these engines and formats in one place.
 
 ---
 
@@ -137,16 +125,26 @@ See **[docs/architecture.md](./docs/architecture.md)** for the full directory st
 
 ---
 
-## 🔧 Development Commands
+## 🔧 Development Setup
+
+For contributors and developers who want to run LM-WebUI from source:
 
 ```bash
-npm run dev          # Start both backend and web client
-npm run build        # Build the web client (output: web/dist/)
-npm run typecheck    # TypeScript checks
-npm run test         # Frontend tests
-npm run lint         # Frontend linting
-npm run format       # Format frontend code
+git clone https://github.com/lm-webui/lm-webui.git
+cd lm-webui
+
+# Start backend
+cd backend
+uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 7070
+
+# In another terminal, start frontend
+cd web
+npm install
+npm run dev
 ```
+
+The development frontend runs on the configured Vite port and proxies API requests to the backend on port 7070.
 
 ---
 
