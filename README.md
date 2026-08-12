@@ -1,6 +1,6 @@
 # LM WebUI 🛡️
 
-**LM-WebUI** is a self-hosted workspace for running AI on your own hardware. It brings chat, vision, image generation, file context, and provider orchestration into one interface — with a built-in Runtime Manager to install and manage the runtimes and models underneath, no terminal required. Built for privacy-first and sovereign AI systems.
+**LM-WebUI** makes running local AI as easy as installing an app. No more juggling separate apps, model or vendor limitations, or runtime setup headaches. A built-in Runtime Manager will manages runtime and models for you, while chat, vision, image generation, and file context all live in one interface inside your own machine. Built for privacy-first and sovereign AI systems.
 
 <p align="center">
   <img src="./assets/demo.png" width="1080" />
@@ -22,14 +22,16 @@
 </p>
 
 <p align="center">
-  <b>Run local AI in one simple workspace</b>
+  <b>Local AI, without the setup maze</b>
 </p>
 
 ---
 
-One workspace to install and run local AI, manage your models and runtimes, and use AI tools — chat, vision, and image generation — without juggling separate apps. A Smart-Modality router reads each request and sends it to the right capability automatically — plain chat, RAG over your files, web search, vision, or image generation. Run fully offline, bring in cloud APIs when you want, and keep your data on your machine.
+No more setup maze. LM-WebUI makes local AI easier to install, manage, and use — download a model, choose a runtime, and start working from one interface. Smart-Modality automatically chooses the right path for each request, whether it is plain chat, RAG over your files, web search, vision, or image generation.
 
-Built open-source for developers, system integrators, and organizations that want **local inference, reproducibility, and infrastructure-level control** without the setup overhead.
+Run local AI offline when you want, connect cloud APIs when you need them, and keep control of your data and infrastructure.
+
+Built open-source for developers, system integrators, and organizations that want local inference, reproducibility, and infrastructure-level control without the usual setup overhead.
 
 ---
 
@@ -37,35 +39,38 @@ Built open-source for developers, system integrators, and organizations that wan
 
 ### One-Line Install (Recommended)
 
+Install LM-WebUI with one command:
+
 ```bash
 curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
 ```
 
-This will install Python dependencies, create `~/.lmwebui/` for data and models, build the frontend, and start the service.
+The installer sets up LM-WebUI as a system service and starts it automatically.
 
-Open `http://localhost:7070`.
+Open `http://localhost:7070` in your browser.
 
-### Manual / Development
+Your models, data, and configuration are stored locally under ~/.lmwebui/. You can change the location with the LMWEBUI_HOME environment variable.
+
+### Development Setup
+
+For contributors and developers who want to run LM-WebUI from source:
 
 ```bash
-# 1. Clone and set up backend
 git clone https://github.com/lm-webui/lm-webui.git
 cd lm-webui
-cd backend
-# Using uv (recommended, fast): uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
-# Or using pip: python -m venv .venv && source .venv/bin/activate && pip install -r requirements.txt
-uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
 
-# 2. Start backend
+# Start backend
+cd backend
+uv venv .venv && source .venv/bin/activate && uv pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 7070
 
-# 3. In another terminal, start frontend dev server
+# In another terminal, start frontend
 cd web
 npm install
 npm run dev
 ```
 
-The web client runs on the configured Vite port and proxies API requests to the FastAPI backend on port `7070`.
+The development frontend runs on the configured Vite port and proxies API requests to the backend on port 7070.
 
 ---
 
@@ -89,15 +94,24 @@ The web client runs on the configured Vite port and proxies API requests to the 
 
 ---
 
-## 🤗 GGUF Runtime Highlights
+##  MLX Runtime Highlights
 
-- **Model Management**: Upload and download GGUF models with progress tracking
-- **Vision Models**: Image-text-to-text (VL) GGUF models served via `llama-server`, paired with their `mmproj` in `models/vision/<model>/`
-- **Background Downloads**: Single-flight queue (one at a time) that continues even if you close the UI; progress resyncs on reopen
-- **HuggingFace Integration**: Direct download from HuggingFace repositories
-- **Hardware Compatibility**: Automatic model validation for your system
-- **Local Registry**: Manage and organize local GGUF models
-- **Seamless Integration**: Use GGUF models directly in chat conversations
+- **Apple Silicon Optimized**: Native MLX inference without an additional model server
+- **One-Click Runtime Setup**: Install and manage MLX directly from Runtime Manager
+- **Model Management**: Download, organize, or remove MLX models with one click
+- **HuggingFace Integration**: Direct download support from HuggingFace MLX repositories
+- **Seamless Integration**: Use MLX models directly in chat interface
+- **Automatic Detection**: Auto-detects Apple Silicon hardware and manages the MLX runtime
+
+---
+
+## 🤗 GGUF / llama.cpp Runtime Highlights
+
+- **Model Management**: Download, organize, or remove GGUF models with one click
+- **Vision Models**: Image-text-to-text (VL) GGUF models compatible with auto pair with each mmproj file
+- **HuggingFace Integration**: Direct download from HuggingFace repositories and auto resolve quantization model options
+- **Hardware Awareness**: Detects available hardware and helps you choose compatible runtime and model
+- **Seamless Integration**: Use GGUF models directly in chat interface
 
 ---
 
@@ -117,7 +131,7 @@ For detailed documentation, see the [`docs/`](./docs/) directory:
 
 ## </> Architecture
 
-LM-WebUI is a **React + FastAPI** application — a modular monolith backend and a feature-based frontend, orchestrated by a Smart-Modality router that routes each request to the right capability.
+LM-WebUI is a **React + FastAPI** application, a modular monolith backend and a feature-based frontend, orchestrated by a Smart-Modality router that routes each request to the right capability.
 
 See **[docs/architecture.md](./docs/architecture.md)** for the full directory structure, module breakdown, data flows, and design decisions.
 
@@ -138,7 +152,7 @@ npm run format       # Format frontend code
 
 ## 🚢 Deployment
 
-### Native service (recommended)
+### Native One-line Install (recommended)
 
 The `install.sh` script sets up a systemd (Linux) or launchd (macOS) service running on port 7070.
 
