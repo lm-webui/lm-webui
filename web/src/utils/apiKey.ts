@@ -32,17 +32,3 @@ export async function getApiKeyForProvider(
 
   return undefined;
 }
-
-/**
- * Get backend provider name from frontend provider name
- */
-export function getBackendProviderName(frontendProvider: string): string {
-  return PROVIDER_MAPPING[frontendProvider as keyof typeof PROVIDER_MAPPING] || frontendProvider;
-}
-
-/**
- * Get frontend provider name from backend provider name
- */
-export function getFrontendProviderName(backendProvider: string): string {
-  return PROVIDER_MAPPING[backendProvider as keyof typeof PROVIDER_MAPPING] || backendProvider;
-}

@@ -1,5 +1,5 @@
 import { ActiveModes } from "./types/modelModality";
-import { detectModelModality, isReasoningModel, isImageModel } from "@/utils/modelDetection";
+import { detectModelModality } from "@/utils/modelDetection";
 import { parsePrefixedModel } from "./useAllModels";
 
 // Extract base model name from prefixed format
@@ -55,13 +55,14 @@ export const getModelsByModality = (
 ): string[] => {
   return models.filter(model => {
     const baseName = extractBaseModelName(model);
+    const mod = detectModelModality(baseName);
     switch (modality) {
       case "image":
-        return isImageModel(baseName);
+        return mod.imageGeneration === true;
       case "reasoning":
-        return isReasoningModel(baseName);
+        return mod.reasoning === true;
       case "text":
-        return !isImageModel(baseName);
+        return mod.imageGeneration !== true;
       default:
         return true;
     }
