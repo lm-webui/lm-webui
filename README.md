@@ -1,6 +1,6 @@
 # LM WebUI 🛡️
 
-**LM-WebUI** is a self-hosted private multimodal AI workspace with runtime manager. It combines multimodal chat, and image generation with multi-model (local and cloud models) compatible, file context, and provider orchestration in one interface — built for privacy-first and sovereign AI systems.
+**LM-WebUI** is a self-hosted workspace for running AI on your own hardware. It brings chat, vision, image generation, file context, and provider orchestration into one interface — with a built-in Runtime Manager to install and manage the runtimes and models underneath, no terminal required. Built for privacy-first and sovereign AI systems.
 
 <p align="center">
   <img src="./assets/demo.png" width="1080" />
@@ -22,14 +22,14 @@
 </p>
 
 <p align="center">
-  <b>Run AI on your control</b>
+  <b>Run local AI in one simple workspace</b>
 </p>
 
 ---
 
-Built open-source for the community, developers, system integrators, and organizations that require **local inference, reproducibility, and infrastructure-level control**, lm-webui bridges the power of modern cloud LLM features with the integrity of local data ownership.
+One workspace to install and run local AI, manage your models and runtimes, and use AI tools — chat, vision, and image generation — without juggling separate apps. A Smart-Modality router reads each request and sends it to the right capability automatically — plain chat, RAG over your files, web search, vision, or image generation. Run fully offline, bring in cloud APIs when you want, and keep your data on your machine.
 
-Run fully offline, integrate with cloud APIs when needed, and deploy across environments without sacrificing performance, privacy, or sovereignty.
+Built open-source for developers, system integrators, and organizations that want **local inference, reproducibility, and infrastructure-level control** without the setup overhead.
 
 ---
 
@@ -111,51 +111,15 @@ For detailed documentation, see the [`docs/`](./docs/) directory:
 - **[Deployment](./docs/DEPLOYMENT.md)** — Production deployment guides
 - **[CLI](./docs/cli.md)** — Host CLI reference
 - **[Contributing](./CONTRIBUTING.md)** — How to contribute to the project
-- **[Security](./SECURITY.md)** — Security政策和 practices
+- **[Security](./SECURITY.md)** — Security policy and practices
 
 ---
 
-## </> Architecture Overview
+## </> Architecture
 
-LM-WebUI is a React + FastAPI application with a modular monolith backend and a feature-based frontend.
+LM-WebUI is a **React + FastAPI** application — a modular monolith backend and a feature-based frontend, orchestrated by a Smart-Modality router that routes each request to the right capability.
 
-```
-lm-webui/
-├── backend/               # FastAPI application
-│   ├── app/
-│   │   ├── routes/        # REST + WebSocket API endpoints
-│   │   ├── providers/     # AI provider implementations (remote + local)
-│   │   ├── orchestrator/  # Chat flow controller and streaming
-│   │   ├── modality/      # Intent classifier + execution planner (Smart-Modality)
-│   │   ├── capabilities/  # Capability executor (chat, vision, RAG, search, image)
-│   │   ├── services/      # Models, images, files, audit, usage tracking
-│   │   ├── chat/          # Session and message persistence
-│   │   ├── database/      # SQLite schema, migrations, connection pool
-│   │   ├── hardware/      # GPU/CPU detection and quantization
-│   │   ├── memory/        # Context assembly and conversation summarization
-│   │   ├── runtime/       # Runtime detection + vision_runtime (llama-server)
-│   │   └── security/      # JWT authentication, encryption, RBAC
-│   └── tests/             # Backend tests
-├── web/                   # React 19 + TypeScript frontend
-│   ├── src/
-│   │   ├── components/    # UI components (shadcn/ui + custom)
-│   │   ├── features/      # Domain logic (chat, images, models, sessions)
-│   │   ├── store/         # Zustand state management
-│   │   ├── services/      # WebSocket client and API services
-│   │   └── utils/         # API client, providers, helpers
-│   └── dist/              # Built frontend (served by backend in production)
-└── docs/                  # Canonical documentation
-```
-
-The backend is a modular monolith. Providers implement a shared interface, the orchestrator coordinates chat execution, and the frontend consumes REST and WebSocket APIs.
-
-### Data Flow
-
-```
-Chat:     User → WebSocket/REST → Orchestrator → Provider → LLM → Stream → UI
-Images:   Studio → POST /api/images/generate → Handler → API/ComfyUI → Save → Gallery
-Models:   Model Selector → GET /api/models/* → Model Registry → Provider.list_models()
-```
+See **[docs/architecture.md](./docs/architecture.md)** for the full directory structure, module breakdown, data flows, and design decisions.
 
 ---
 
