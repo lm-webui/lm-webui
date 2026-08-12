@@ -42,7 +42,7 @@ Built open-source for developers, system integrators, and organizations that wan
 Install LM-WebUI with one command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/lm-webui/lm-webui/main/install.sh | bash
+curl -fsSL https://lmwebui.com/install.sh | bash
 ```
 
 The installer sets up LM-WebUI as a system service and starts it automatically.
