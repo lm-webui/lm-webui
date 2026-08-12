@@ -99,7 +99,7 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 - **GGUF / llama.cpp** — Inference engine: **llama.cpp**. Model format: **GGUF**.
 - **MLX** — Framework: **MLX**. LLM inference: **mlx-lm**. Model format: MLX-compatible.
 - **Diffusion / Image** — Workflow runtime: **ComfyUI**. Models: SDXL, FLUX, etc.
-- The **Runtime Manager** orchestrates these engines and formats in one place.
+- LM-WebUI **Runtime Manager** orchestrates these engines and formats in one place.
 
 ---
 
@@ -187,14 +187,17 @@ See [Host CLI](./docs/cli.md) and [Deployment](./docs/DEPLOYMENT.md) for setup, 
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
+We welcome and appreciate all kinds of contributions!
+
+Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Add tests
+4. Add or update tests where appropriate
 5. Submit a pull request
 
+Not ready to code? Bug reports, feature ideas, documentation improvements, and real-world testing are also valuable contributions. 🙏
 ---
 
 ## 📄 License

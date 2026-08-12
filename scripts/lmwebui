@@ -185,6 +185,11 @@ except Exception:
     "$0" stop || true
     sleep 1
 
+    # If anything fails after this point, bring the (old) service back up so a
+    # bad update never leaves the app offline.
+    _restart_on_fail() { echo "⚠️ Update failed — restarting previous service."; "$0" start || true; }
+    trap '_restart_on_fail' ERR
+
     # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
     sudo -v 2>/dev/null || true
 
@@ -245,10 +250,27 @@ except Exception:
     fi
 
     "$0" start || true
+    trap - ERR  # success — don't restart again
     echo ""
     echo "✅ LM-WebUI updated successfully."
     echo "   Data preserved at $LMWEBUI_HOME/data/"
     echo "   Models at $LMWEBUI_HOME/models/"
+    ;;
+
+  runtime)
+    echo "GGUF / Vision runtime:"
+    check_gguf_runtime || true
+    ;;
+
+  version)
+    curl -sf http://localhost:7070/api/health 2>/dev/null | python3 -c "
+import sys, json
+try:
+    d = json.load(sys.stdin)
+    print('LM-WebUI', d.get('version', 'unknown'))
+except Exception:
+    print('unknown (service not reachable)')
+" 2>/dev/null || echo "unknown (service not reachable)"
     ;;
 
   help|--help|-h)
@@ -260,6 +282,8 @@ except Exception:
     echo "  restart   Restart the LM-WebUI service"
     echo "  status    Show service health and status"
     echo "  logs      Follow service logs"
+    echo "  runtime   Show GGUF/llama-server/Vision runtime health"
+    echo "  version   Show the installed version"
     echo "  update    Update code from GitHub, preserve data"
     echo ""
     echo "Environment:"
@@ -268,7 +292,7 @@ except Exception:
 
   *)
     echo "Unknown command: $1"
-    echo "Usage: lm-webui <start|stop|restart|status|logs|update>"
+    echo "Usage: lm-webui <start|stop|restart|status|logs|runtime|version|update>"
     exit 1
     ;;
 esac

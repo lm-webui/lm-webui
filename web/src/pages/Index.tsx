@@ -106,7 +106,6 @@ export default function IndexEnhanced() {
   const {
     loadModels: modelLoadModels,
     loadImageModels: modelLoadImageModels,
-    refreshModels: modelRefreshModels,
   } = useModelManagement({
     selectedLLM,
     selectedModel,
@@ -126,8 +125,7 @@ export default function IndexEnhanced() {
       if (isAuthenticated) {
         await sessionLoadUserSessions();
         await sessionLoadStoredApiKeys();
-        await modelLoadImageModels();
-        
+
         try {
           const settings = await fetchSettings();
           if (settings.selectedSearchEngine) {
@@ -144,24 +142,6 @@ export default function IndexEnhanced() {
         }
       }
     };
-    initializeApp();
-  }, [isAuthenticated]);
-
-  // Initialize app
-  useEffect(() => {
-    const initializeApp = async () => {
-      if (isAuthenticated) {
-        await sessionLoadUserSessions();
-        await sessionLoadStoredApiKeys();
-      } else {
-        const tempSessions = localStorage.getItem('tempSessions');
-        if (tempSessions) {
-          // Zustand will handle persistence automatically
-          // No need to set React state
-        }
-      }
-    };
-
     initializeApp();
   }, [isAuthenticated]);
 
@@ -195,13 +175,6 @@ export default function IndexEnhanced() {
       modelLoadModels();
     }
   }, [selectedLLM, storedApiKeys, isAuthenticated]);
-
-  // Trigger model refresh when authentication status changes
-  useEffect(() => {
-    if (isAuthenticated) {
-      modelRefreshModels();
-    }
-  }, [isAuthenticated]);
 
   // Fetch supported image models - only when authenticated
   useEffect(() => {

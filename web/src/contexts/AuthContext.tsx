@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import axios from 'axios';
+import { useChatStore } from '@/store/chatStore';
 
 interface User {
   id: number;
@@ -225,6 +226,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       stopRefreshTimer();
       localStorage.removeItem('chat-storage');
       clearTempStorage();
+      // Reset in-memory per-user state so the next login doesn't inherit the
+      // previous user's conversations/active chat.
+      useChatStore.setState({ conversations: {}, activeChatId: null });
     }
   };
 

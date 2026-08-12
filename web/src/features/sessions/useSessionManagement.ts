@@ -12,29 +12,24 @@ export function useSessionManagement(options: UseSessionManagementOptions) {
   const loadUserSessions = async () => {
     const sessions = await SessionService.loadUserSessions(options.isAuthenticated);
 
-    // Update Zustand store with loaded sessions — merge strategy:
-    // - For sessions that DON'T exist in the store, add them with messages: []
-    // - For sessions that DO exist, update title/metadata but KEEP existing messages
+    // Rebuild the conversation map from the authoritative backend list (which is
+    // scoped to the current user). Anything not returned is dropped, so a previous
+    // user's conversations can't linger after logout/login. Existing messages are
+    // preserved for sessions that match the current user's.
     const store = useChatStore.getState();
-    const updatedConversations = { ...store.conversations };
+    const updatedConversations: Record<string, any> = {};
 
     sessions.forEach(session => {
-      if (!updatedConversations[session.id]) {
-        updatedConversations[session.id] = {
-          id: session.id,
-          title: session.title,
-          messages: [],
-          created_at: session.lastMessage.toISOString(),
-          isBackendConfirmed: true,
-        };
-      } else {
-        // Update title/metadata but keep existing messages (may have been loaded)
-        const existing = updatedConversations[session.id]!;
-        updatedConversations[session.id] = {
-          ...existing,
-          title: session.title,
-        };
-      }
+      const existing = store.conversations[session.id];
+      updatedConversations[session.id] = existing
+        ? { ...existing, title: session.title }
+        : {
+            id: session.id,
+            title: session.title,
+            messages: [],
+            created_at: session.lastMessage.toISOString(),
+            isBackendConfirmed: true,
+          };
     });
 
     useChatStore.setState({ conversations: updatedConversations });
