@@ -6,6 +6,7 @@ Attaches user context to every request from JWT (cookie or Bearer).
 from fastapi import Request
 from typing import Optional, Dict, Any
 from jose import jwt
+from jose.exceptions import JWTError
 from app.security.auth.core import get_secret_key
 
 
@@ -50,8 +51,9 @@ async def extract_context_from_request(request: Request) -> RequestContext:
     if token:
         try:
             payload = jwt.decode(token, get_secret_key(), algorithms=["HS256"])
-            context.user_id = int(payload.get("sub"))
-        except jwt.InvalidTokenError:
+            if payload.get("sub") is not None:
+                context.user_id = int(payload.get("sub"))
+        except JWTError:
             pass
 
     return context

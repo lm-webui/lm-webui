@@ -193,10 +193,9 @@ except Exception:
     # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
     sudo -v 2>/dev/null || true
 
-    # Fix ownership first so cp/rm can write
-    OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
-    if [ "$OWNER" = "root" ]; then
-      echo "   Fixing root ownership..."
+    # Fix ownership first so cp/rm can write — catches nested root-owned files too
+    if [ -n "$(find "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web" ! -user "$(whoami)" 2>/dev/null | head -1)" ]; then
+      echo "   Fixing ownership (stale non-user files)..."
       chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || \
       sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
         echo "❌ Could not fix ownership. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"
@@ -204,16 +203,23 @@ except Exception:
       }
     fi
 
-    TMP="/tmp/lmwebui-update-$$"
-    git clone --depth 1 https://github.com/lm-webui/lm-webui.git "$TMP" 2>&1 || { echo "❌ Update failed — git clone error"; exit 1; }
+    # Back up the live config, then bring the latest from the release tarball
+    [ -f "$LMWEBUI_HOME/config.yaml" ] && cp "$LMWEBUI_HOME/config.yaml" "$LMWEBUI_HOME/config.yaml.bak"
 
-    # Replace code, preserve everything else
+    # Download + verify + extract the latest release tarball (same as installer)
+    TMP="/tmp/lmwebui-update-$$"
+    if curl -fsSL --retry 3 --retry-delay 2 -o /tmp/lmwebui-update.tar.gz \
+        "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
+      tar -tzf /tmp/lmwebui-update.tar.gz >/dev/null 2>&1 || { echo "❌ Downloaded archive is corrupt"; exit 1; }
+      mkdir -p "$TMP" && tar -xzf /tmp/lmwebui-update.tar.gz -C "$TMP" --strip-components=1
+    else
+      echo "❌ Release download failed"; exit 1
+    fi
+
+    # Replace app/ + web/ wholesale; the tarball ships a prebuilt web/dist
     rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
-    cp -r "$TMP/backend/"* "$LMWEBUI_HOME/"
-    cp -r "$TMP/web" "$LMWEBUI_HOME/web"
-    cp "$TMP/package.json" "$LMWEBUI_HOME/package.json"
-    cp "$TMP/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui"
-    rm -rf "$TMP"
+    cp -r "$TMP/." "$LMWEBUI_HOME/"
+    rm -rf "$TMP" /tmp/lmwebui-update.tar.gz
 
     # Update Python deps (including new ones added in update)
     if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then
@@ -237,18 +243,7 @@ except Exception:
     echo "   Refreshing service unit..."
     reinstall_service || true
 
-    # Rebuild frontend (build to pick up new deps) — fail loudly, never silent skip
-    if command -v npm >/dev/null 2>&1 && [ -f "$LMWEBUI_HOME/web/package.json" ]; then
-      cd "$LMWEBUI_HOME/web" \
-        && npm install --quiet \
-        && npm run build \
-        && echo "   Frontend rebuilt." \
-        || { echo "❌ Frontend build failed — update incomplete."; exit 1; }
-    else
-      echo "❌ npm not found or web/package.json missing — frontend NOT rebuilt."
-      exit 1
-    fi
-
+    # Frontend ships prebuilt in the tarball (web/dist) — no npm build needed.
     "$0" start || true
     trap - ERR  # success — don't restart again
     echo ""
