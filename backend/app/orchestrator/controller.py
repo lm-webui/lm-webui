@@ -117,6 +117,7 @@ class OrchestratorController:
             # Gated: only on a question-like follow-up, and only the MOST RECENT attachment set
             # (not every attachment ever attached), so a plain "thanks"/"ok" doesn't re-run RAG
             # or vision against stale/unrelated files.
+            _backfilled = False
             if not chat_request.file_references and actual_conversation_id:
                 try:
                     msg = (chat_request.message or "").strip()
@@ -132,6 +133,7 @@ class OrchestratorController:
                                 break
                         if latest:
                             chat_request.file_references = latest
+                            _backfilled = True
                 except Exception:
                     pass  # fall back to no file refs
 
@@ -154,15 +156,19 @@ class OrchestratorController:
                 provider=provider,
                 conversation_id=actual_conversation_id,
             )
+            # Mark refs as inherited so vision only gates backfilled images (rec-3), not this message's.
+            ctx.backfilled_refs = chat_request.file_references is not None and _backfilled
             await run_capabilities(exec_plan, ctx)
 
-            # Vision not ready → surface a clear notice as streamed text (not a fatal error),
-            # and continue so the text question is still answered.
+            # Vision not ready → surface the concrete reason (not a generic message), then continue
+            # so the text question is still answered.
             if exec_plan.vision and not getattr(ctx, "vision_ready", False) and getattr(ctx, "images", None):
+                reason = getattr(ctx, "vision_error", "") or (
+                    "no vision model installed — download a vision bundle (main GGUF + mmproj) and set it "
+                    "as your default vision model in Settings → Inference."
+                )
                 yield ModelEvent.token(
-                    "⚠️ Vision isn't ready — install a vision model (main GGUF + mmproj) and set it as your "
-                    "default vision model in Settings → Inference, then ensure llama-server is available. "
-                    "Your message was answered without image analysis.\n\n"
+                    f"⚠️ Vision isn't ready: {reason}\nYour message was answered without image analysis.\n\n"
                 )
 
             # Load user inference preferences from DB

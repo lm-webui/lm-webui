@@ -60,6 +60,18 @@ check_prerequisites() {
   log_success "All prerequisites satisfied"
 }
 
+check_sudo() {
+  # Prompt for the sudo password up front so later sudo steps (venv ownership
+  # fix, CLI symlink, systemd service) don't each need a password — or fail
+  # silently in a non-interactive context.
+  [ "$(id -u)" = "0" ] && return 0   # already root
+  command -v sudo &>/dev/null || return 0
+  log_info "Requesting sudo privileges (needed for system-level setup)..."
+  if ! sudo -v 2>/dev/null; then
+    log_warning "Sudo unavailable — skipping system-level steps (CLI symlink, service)."
+  fi
+}
+
 setup_environment() {
   log_info "Setting up environment at $LMWEBUI_HOME..."
   if [ ! -w "$LMWEBUI_HOME" ]; then
@@ -396,6 +408,7 @@ main() {
   print_banner
   log_info "Starting LM-WebUI installation..."
   check_prerequisites
+  check_sudo
   setup_environment
   setup_repository
   build_frontend

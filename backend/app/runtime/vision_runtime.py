@@ -24,10 +24,18 @@ logger = logging.getLogger(__name__)
 VISION_PORT = int(os.getenv("VISION_PORT", "8081"))
 # Speed/perf flags for the vision llama-server subprocess (independent of the GGUF text backend).
 VISION_CTX = int(os.getenv("VISION_CTX", "8192"))            # context for image tokens (not a speed lever)
-VISION_NGL = os.getenv("VISION_NGL", "auto")                 # GPU layers: number | 'auto' | 'all' (llama-server >= v10330 rejects -1)
+VISION_NGL = os.getenv("VISION_NGL", "99")                   # GPU layers: an exact number (llama-server rejects 'auto'/'-1')
 VISION_FLASH_ATTN = os.getenv("VISION_FLASH_ATTN", "on")     # FlashAttention on/off/auto
 VISION_CACHE_K = os.getenv("VISION_CACHE_K", "q8_0")         # quantized KV cache → speed + memory
 VISION_CACHE_V = os.getenv("VISION_CACHE_V", "q8_0")
+
+
+def _ngl_value(raw: str) -> str:
+    """llama-server's --ngl/--gpu-layers requires a number; coerce bad env values."""
+    v = (raw or "99").strip().lower()
+    if v in ("", "auto", "all", "-1", "none"):
+        return "99"
+    return v
 
 
 class VisionRuntime:
@@ -38,6 +46,7 @@ class VisionRuntime:
         self._active_model = ""  # model currently loaded into llama-server
         self._stderr: Optional[object] = None
         self._lock = asyncio.Lock()
+        self.last_error: str = ""
 
     # ── Bundle resolution ──────────────────────────────────────────────
     def _bundle_folder(self) -> Optional[Path]:
@@ -63,6 +72,14 @@ class VisionRuntime:
                         best, best_len = d, len(dn)
             if best is not None:
                 return best
+            # Fallback: any complete bundle (main GGUF + mmproj) so vision works out of the box
+            # once a bundle is installed, even if the configured model string doesn't match.
+            for d in vision_root.iterdir():
+                if d.is_dir():
+                    mains = [f for f in d.iterdir() if f.suffix.lower() == ".gguf" and "mmproj" not in f.name.lower()]
+                    mmprojs = [f for f in d.iterdir() if f.suffix.lower() == ".gguf" and "mmproj" in f.name.lower()]
+                    if mains and (mmprojs or (d / "mmproj.gguf").exists()):
+                        return d
         return None
 
     def resolve_bundle(self) -> Optional[dict]:
@@ -100,11 +117,13 @@ class VisionRuntime:
                 self.stop()
             bundle = self.resolve_bundle()
             if not bundle:
-                logger.warning("Vision bundle not found for model %r", self.model)
+                self.last_error = f"no vision bundle found for model {self.model!r}"
+                logger.warning(self.last_error)
                 return False
             server_bin = shutil.which("llama-server")
             if not server_bin:
-                logger.warning("llama-server binary not found on PATH")
+                self.last_error = "llama-server binary not found on PATH"
+                logger.warning(self.last_error)
                 return False
             # Capture llama-server stderr for diagnosis (failures surface in the log).
             log_path = Path(os.environ.get("LMWEBUI_HOME", str(Path.home() / ".lmwebui"))) / "logs" / "llama-server.log"
@@ -122,7 +141,8 @@ class VisionRuntime:
                     "--host", "127.0.0.1",
                     "--port", str(self._port),
                     "--ctx-size", str(VISION_CTX),
-                    "--ngl", str(VISION_NGL),
+                    # --gpu-layers (not --ngl): llama-server v10330 rejects the --ngl alias.
+                    "--gpu-layers", _ngl_value(VISION_NGL),
                     "--flash-attn", VISION_FLASH_ATTN,
                     "--cache-type-k", VISION_CACHE_K,
                     "--cache-type-v", VISION_CACHE_V,
@@ -133,14 +153,29 @@ class VisionRuntime:
             # Wait for the health endpoint; exit early if the process dies.
             for _ in range(60):
                 if not self.running:
+                    self.last_error = self._last_log_lines(log_path)
+                    logger.warning("Vision llama-server exited early: %s", self.last_error)
                     return False
                 if await self._healthy():
                     self._active_model = self.model
+                    self.last_error = ""
                     logger.info("Vision runtime ready on %s", self.base_url)
                     return True
                 await asyncio.sleep(1)
-            logger.warning("Vision runtime not ready (timed out) — see %s", log_path)
+            self.last_error = self._last_log_lines(log_path)
+            logger.warning("Vision runtime not ready (timed out) — %s", self.last_error)
             return False
+
+    @staticmethod
+    def _last_log_lines(log_path: Path, n: int = 6) -> str:
+        """Return the last few lines of the llama-server log for diagnosis."""
+        try:
+            if log_path.exists():
+                lines = log_path.read_text(errors="ignore").splitlines()
+                return " | ".join(lines[-n:])
+        except Exception:
+            pass
+        return "see llama-server.log"
 
     async def _healthy(self) -> bool:
         try:

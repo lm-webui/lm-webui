@@ -176,22 +176,32 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
             ctx.vision_ready = ctx.vision_provider is not None
             return VisionResult(images=images, provider=ctx.vision_provider, ready=ctx.vision_ready)
 
-        # Rec 3: don't spin up llama-server for a text-only follow-up that merely
-        # inherited a previously-attached image. Skip vision and let the text LLM answer.
-        if not _needs_vision(ctx):
-            logger.info("Skipping vision runtime: message doesn't request image analysis")
+        # Rec 3: don't spin up llama-server for a text-only FOLLOW-UP that merely inherited a
+        # previously-attached image (backfilled refs). A current message's own image always runs
+        # vision — no keyword heuristic — so "explain this chart" works.
+        if getattr(ctx, "backfilled_refs", False) and not _needs_vision(ctx):
+            logger.info("Skipping vision runtime: backfilled follow-up doesn't request image analysis")
             ctx.vision_ready = False
             return VisionResult(images=images, provider=None, ready=False)
 
         # Local vision bundle — check capability health first.
         if not _health(ctx.vision_model):
-            logger.warning("Vision not ready (need llama-server + vision bundle + mmproj). Set a default vision model in Settings → Inference or open the model downloader.")
+            ctx.vision_error = (
+                "no vision model available — install a vision bundle (main GGUF + mmproj) and set it as "
+                "your default vision model in Settings → Inference"
+            )
+            logger.warning(ctx.vision_error)
             ctx.vision_ready = False
             return VisionResult(images=images, provider=None, ready=False)
 
         from app.runtime.vision_runtime import vision_runtime
         vision_runtime.model = ctx.vision_model
-        if await vision_runtime.start():
+        if not await vision_runtime.start():
+            ctx.vision_error = vision_runtime.last_error or "llama-server failed to start"
+            logger.warning("Vision runtime failed to start: %s", ctx.vision_error)
+            ctx.vision_ready = False
+            return VisionResult(images=images, provider=None, ready=False)
+        else:
             from app.providers.remote.openai import OpenAIProvider
             ctx.vision_provider = OpenAIProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
             ctx.vision_provider_id = "vision"

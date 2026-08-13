@@ -32,6 +32,8 @@ class CapabilityContext:
     vision_provider_id: str = ""
     vision_ready: bool = False
     vision_mode: str = "direct"  # "direct" | "describe"
+    vision_error: str = ""       # actionable reason vision isn't ready (if any)
+    backfilled_refs: bool = False  # file refs were inherited from conversation history, not this message
 
 
 def get_user_api_key(user_id: int, provider_id: str) -> str | None:
