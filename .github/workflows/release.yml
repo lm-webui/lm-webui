@@ -30,6 +30,7 @@ jobs:
           cp -r web/dist lm-webui/web/dist
           cp web/package.json lm-webui/web/package.json
           cp backend/requirements.txt backend/requirements.lock lm-webui/
+          cp backend/config.yaml lm-webui/config.yaml
           cp package.json lm-webui/
           cp install.sh lm-webui/
           cp scripts/lmwebui lm-webui/lmwebui

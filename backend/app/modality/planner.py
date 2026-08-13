@@ -94,18 +94,25 @@ def plan(
             p.vision_mode = "describe"
             p.file_context = True
             p.retrieve = True
-        return p
 
-    # Image-only → vision.
-    if has_images:
+    elif has_images:
+        # Image-only → vision.
         p.vision = True
         p.vision_mode = intent.vision_mode
-        return p
 
-    # Documents (or knowledge scope) → direct file context + retrieval (RAG).
-    if intent.processing_class == ProcessingClass.KNOWLEDGE or has_docs:
+    elif intent.processing_class == ProcessingClass.KNOWLEDGE or has_docs:
+        # Documents (or knowledge scope) → direct file context + retrieval (RAG).
         if has_docs:
             p.file_context = True
         p.retrieve = True
+
+    # Honor an explicit web-search toggle alongside RAG/vision (the user asked for
+    # "vision/RAG → websearch → LLM compose"). Vision must be in describe mode so the
+    # VL produces a description the text LLM composes with — direct mode would answer
+    # alone and drop the web context.
+    if web_search:
+        p.search = True
+        if p.vision:
+            p.vision_mode = "describe"
 
     return p

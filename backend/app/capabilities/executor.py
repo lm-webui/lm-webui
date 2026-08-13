@@ -16,9 +16,11 @@ async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
         ctx.results.append(await file_context.execute(ctx))
     if plan.retrieve:
         ctx.results.append(await retrieve.execute(ctx))
-    if plan.search:
-        ctx.results.append(await search.execute(ctx))
     if plan.vision:
         ctx.vision_mode = getattr(plan, "vision_mode", "direct")
         ctx.results.append(await vision.execute(ctx))
+    if plan.search:
+        # Web search runs last, so when combined with RAG/vision the results follow
+        # the file/image context and the LLM composes from all of them.
+        ctx.results.append(await search.execute(ctx))
     return ctx

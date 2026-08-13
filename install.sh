@@ -80,45 +80,26 @@ setup_environment() {
       log_error "Cannot write to $LMWEBUI_HOME. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
   fi
   mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,models/vision,cache/fastembed,cache/flashrank,secrets,logs}
-  # Check if config.yaml needs creation or upgrade from old format
-  _NEEDS_CONFIG=false
-  if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
-    _NEEDS_CONFIG=true
-  elif grep -q "app_config\|port: 8000\|llm_config" "$LMWEBUI_HOME/config.yaml" 2>/dev/null; then
-    log_warning "Detected old config format (port 8000). Backing up to config.yaml.bak..."
-    cp "$LMWEBUI_HOME/config.yaml" "$LMWEBUI_HOME/config.yaml.bak"
-    _NEEDS_CONFIG=true
-  fi
-
-  if [ "$_NEEDS_CONFIG" = true ]; then
-    cat > "$LMWEBUI_HOME/config.yaml" << CONFIGEOF
-server:
-  host: "0.0.0.0"
-  port: 7070
-database:
-  url: "sqlite:///$LMWEBUI_HOME/data/sql_db/app.db"
-paths:
-  base_dir: "$LMWEBUI_HOME"
-  data_dir: "$LMWEBUI_HOME/data"
-  media_dir: "$LMWEBUI_HOME/media"
-  models_dir: "$LMWEBUI_HOME/models"
-rag:
-  enabled: true
-  embedding_model: "BAAI/bge-small-en-v1.5"
-  reranker_model: "ms-marco-MultiBERT-L-12"
-  chunk_size: 512
-  chunk_overlap: 64
-  top_k_retrieval: 20
-  scope: "user"
-  context_token_budget: 2000
-  query_rewrite: false
-vision:
-  provider: ""
-  model: "unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf"
-CONFIGEOF
-    log_success "Created config.yaml"
-  fi
   log_success "Directory structure created"
+}
+
+ensure_config() {
+  # Create/upgrade config.yaml from the canonical template shipped in the release
+  # (backend/config.yaml), pointing its ~/.lmwebui paths at the real install dir.
+  local cfg="$LMWEBUI_HOME/config.yaml"
+  local tpl="$LMWEBUI_HOME/config.yaml.template"
+  local needs=false
+  if [ ! -f "$cfg" ]; then
+    needs=true
+  elif grep -q "app_config\|port: 8000\|llm_config" "$cfg" 2>/dev/null; then
+    log_warning "Detected old config format. Backing up to config.yaml.bak..."
+    cp "$cfg" "$cfg.bak"; needs=true
+  fi
+  if [ "$needs" = true ] && [ -f "$tpl" ]; then
+    sed "s|~/.lmwebui|$LMWEBUI_HOME|g" "$tpl" > "$cfg.new" && mv "$cfg.new" "$cfg"
+    log_success "Created config.yaml from canonical template"
+  fi
+  rm -f "$tpl"
 }
 
 clean_stale_clone_layout() {
@@ -130,6 +111,18 @@ clean_stale_clone_layout() {
   done
 }
 
+stage_config_template() {
+  # Stage the canonical config as a template and remove it from $SRC_DIR so the
+  # bulk copy below can't clobber a user's live config.yaml on update.
+  if [ -f "$SRC_DIR/config.yaml" ]; then           # release tarball
+    cp "$SRC_DIR/config.yaml" "$LMWEBUI_HOME/config.yaml.template"
+    rm -f "$SRC_DIR/config.yaml"
+  elif [ -f "$SRC_DIR/backend/config.yaml" ]; then # git-clone fallback
+    cp "$SRC_DIR/backend/config.yaml" "$LMWEBUI_HOME/config.yaml.template"
+    rm -f "$SRC_DIR/backend/config.yaml"
+  fi
+}
+
 setup_repository() {
   log_info "Setting up application code..."
   SRC_DIR=""; SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -137,7 +130,10 @@ setup_repository() {
     SRC_DIR="$SCRIPT_DIR"; log_info "Using local installation at $SRC_DIR"
   else
     log_info "Downloading latest release..."
-    if curl -fsSL -o /tmp/lmwebui.tar.gz "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
+    if curl -fsSL --retry 3 --retry-delay 2 -o /tmp/lmwebui.tar.gz "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
+      if ! tar -tzf /tmp/lmwebui.tar.gz >/dev/null 2>&1; then
+        log_error "Downloaded archive is corrupt"; return 1
+      fi
       mkdir -p /tmp/lmwebui-tar && tar -xzf /tmp/lmwebui.tar.gz -C /tmp/lmwebui-tar --strip-components=1
       SRC_DIR="/tmp/lmwebui-tar"
     else
@@ -145,6 +141,7 @@ setup_repository() {
       git clone --branch "$BRANCH" --depth 1 "$REPO_URL" /tmp/lmwebui-clone; SRC_DIR="/tmp/lmwebui-clone"
     fi
   fi
+  stage_config_template
   if [ -f "$LMWEBUI_HOME/app/main.py" ]; then
     OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
     if [ "$OWNER" = "root" ]; then
@@ -157,6 +154,9 @@ setup_repository() {
       cp "$SRC_DIR/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || true
     else
       clean_stale_clone_layout
+      # tarball owns complete app/ + web/dist; replace wholesale so removed
+      # modules and stale hashed assets don't linger across updates
+      rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web/dist"
       cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
     fi
     cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json" 2>/dev/null || true
@@ -169,6 +169,9 @@ setup_repository() {
   else
     # release tarball: app/, web/dist/ already in target layout
     clean_stale_clone_layout
+    # tarball owns complete app/ + web/dist; replace wholesale so removed
+    # modules and stale hashed assets don't linger across updates
+    rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web/dist"
     cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
   fi
   cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json"
@@ -387,11 +390,17 @@ CLIEOF
 
 wait_for_ready() {
   log_info "Waiting for application to start..."
+  local spin='-\|/'
+  local i=0
   for attempt in $(seq 1 30); do
     if curl -fsS "http://localhost:7070/api/health" 2>/dev/null | grep -q '"ready":true'; then
-      log_success "LM-WebUI is running and healthy!"; return
-    fi; sleep 2
+      printf "\r\033[K"; log_success "LM-WebUI is running and healthy!"; return
+    fi
+    printf "\r\033[K  %s starting..." "${spin:i%4:1}"
+    i=$(( i + 1 ))
+    sleep 2
   done
+  printf "\r\033[K"
   log_error "Not ready. Check logs at $LMWEBUI_HOME/logs/"; exit 1
 }
 
@@ -411,6 +420,7 @@ show_instructions() {
 
 cleanup() { log_warning "Installation interrupted"; exit 1; }
 trap cleanup INT TERM
+trap 'rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz' EXIT
 
 main() {
   print_banner
@@ -419,6 +429,7 @@ main() {
   check_sudo
   setup_environment
   setup_repository
+  ensure_config
   build_frontend
   install_dependencies
   install_llamacpp
