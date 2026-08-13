@@ -32,7 +32,7 @@ class FileProcessor:
         try:
             text = self._extract_text(path, suffix)
             self._store_media_text(file_path, text)
-            return {"status": "success", "file_name": path.name, "text_length": len(text)}
+            return {"status": "success", "file_name": path.name, "text_length": len(text), "text": text}
         except Exception as e:
             logger.error(f"File processing failed: {e}")
             return {"status": "error", "message": str(e)}

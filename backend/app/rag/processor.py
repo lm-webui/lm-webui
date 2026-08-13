@@ -53,17 +53,23 @@ class RAGProcessor:
         """
         self.ensure_ready()
 
-        # 1. Extract text (reuse existing FileProcessor).
+        # 1. Reuse the text already extracted and stored by the upload-time
+        #    FileProcessor task (avoids a second extraction/OCR per file).
         try:
-            from app.services.file_processor import FileProcessor
-
-            extractor = FileProcessor()
-            result = extractor.process_file(file_path, conversation_id, user_id)
-            text = result.get("text")
-            if not text or result.get("status") == "error":
+            from app.database import get_db
+            db = get_db()
+            try:
+                row = db.execute(
+                    "SELECT extracted_text FROM media_library WHERE file_path = ?",
+                    (file_path,),
+                ).fetchone()
+            finally:
+                db.close()
+            text = (row[0] if row and row[0] else "") or ""
+            if not text:
                 return {"status": "skipped", "reason": "no extractable text"}
         except Exception as exc:
-            logger.warning("Text extraction failed for %s: %s", file_path, exc)
+            logger.warning("Failed to read extracted text for %s: %s", file_path, exc)
             return {"status": "error", "message": str(exc)}
 
         # Truncate to reasonable max (fastembed has a 512-token limit per segment;
