@@ -136,6 +136,13 @@ class VisionConfig(BaseModel):
     """Vision (image understanding) configuration."""
     provider: str = Field(default="", description="Vision provider (empty = use active chat provider)")
     model: str = Field(default="unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf", description="Default vision model")
+    # llama-server launch tuning (also overridable via VISION_* env vars).
+    port: int = Field(default=8081, ge=1, le=65535, description="Vision llama-server port")
+    ctx_size: int = Field(default=8192, ge=256, description="Vision context size (image tokens)")
+    gpu_layers: int = Field(default=99, ge=0, description="llama-server --gpu-layers (number; 0=CPU, 99=all)")
+    flash_attn: str = Field(default="on", description="FlashAttention on/off/auto")
+    cache_type_k: str = Field(default="q8_0", description="KV cache type for K")
+    cache_type_v: str = Field(default="q8_0", description="KV cache type for V")
 
 
 class AppConfig(BaseModel):

@@ -105,6 +105,29 @@ class VisionRuntime:
     def base_url(self) -> str:
         return f"http://127.0.0.1:{self._port}/v1"
 
+    def _tunables(self) -> dict:
+        """Resolve launch knobs: config.yaml `vision:` section, overridden by VISION_* env vars."""
+        try:
+            from app.core.config_manager import get_config
+            v = get_config().vision
+            return {
+                "port": int(os.getenv("VISION_PORT", str(v.port))),
+                "ctx_size": int(os.getenv("VISION_CTX", str(v.ctx_size))),
+                "ngl": _ngl_value(os.getenv("VISION_NGL", str(v.gpu_layers))),
+                "flash_attn": os.getenv("VISION_FLASH_ATTN", v.flash_attn),
+                "cache_k": os.getenv("VISION_CACHE_K", v.cache_type_k),
+                "cache_v": os.getenv("VISION_CACHE_V", v.cache_type_v),
+            }
+        except Exception:
+            return {
+                "port": VISION_PORT,
+                "ctx_size": VISION_CTX,
+                "ngl": _ngl_value(VISION_NGL),
+                "flash_attn": VISION_FLASH_ATTN,
+                "cache_k": VISION_CACHE_K,
+                "cache_v": VISION_CACHE_V,
+            }
+
     async def start(self) -> bool:
         # Fast path: already running with the requested model.
         if self.running and self._active_model == self.model:
@@ -115,6 +138,8 @@ class VisionRuntime:
             if self.running:
                 # Model changed — stop and reload so the correct bundle is served.
                 self.stop()
+            t = self._tunables()
+            self._port = t["port"]
             bundle = self.resolve_bundle()
             if not bundle:
                 self.last_error = f"no vision bundle found for model {self.model!r}"
@@ -140,12 +165,12 @@ class VisionRuntime:
                     "--mmproj", str(bundle["mmproj"]),
                     "--host", "127.0.0.1",
                     "--port", str(self._port),
-                    "--ctx-size", str(VISION_CTX),
+                    "--ctx-size", str(t["ctx_size"]),
                     # --gpu-layers (not --ngl): llama-server v10330 rejects the --ngl alias.
-                    "--gpu-layers", _ngl_value(VISION_NGL),
-                    "--flash-attn", VISION_FLASH_ATTN,
-                    "--cache-type-k", VISION_CACHE_K,
-                    "--cache-type-v", VISION_CACHE_V,
+                    "--gpu-layers", t["ngl"],
+                    "--flash-attn", t["flash_attn"],
+                    "--cache-type-k", t["cache_k"],
+                    "--cache-type-v", t["cache_v"],
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=self._stderr,

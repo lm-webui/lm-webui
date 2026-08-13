@@ -29,3 +29,9 @@ rag:
 vision:
   provider: ""
   model: "unsloth/Qwen3-VL-2B-Instruct-1M-Q4_K_M.gguf"
+  port: 8081
+  ctx_size: 8192
+  gpu_layers: 99
+  flash_attn: "on"
+  cache_type_k: "q8_0"
+  cache_type_v: "q8_0"

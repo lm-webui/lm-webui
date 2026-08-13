@@ -178,13 +178,10 @@ build_frontend() {
 
 install_dependencies() {
   log_info "Installing Python dependencies..."
-  if [ -d "$LMWEBUI_HOME/.venv" ]; then
-    VENV_OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/.venv" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/.venv" 2>/dev/null || echo "")
-    if [ -n "$VENV_OWNER" ] && [ "$VENV_OWNER" != "$(whoami)" ]; then
-      log_warning "Fixing .venv ownership ($VENV_OWNER -> $(whoami))..."
-      chown -R "$(whoami)" "$LMWEBUI_HOME/.venv" 2>/dev/null || sudo chown -R "$(whoami)" "$LMWEBUI_HOME/.venv" 2>/dev/null || {
-        log_error "Run: sudo chown -R $(whoami) $LMWEBUI_HOME/.venv"; return 1; }
-    fi
+  if [ -d "$LMWEBUI_HOME/.venv" ] && [ -n "$(find "$LMWEBUI_HOME/.venv" ! -user "$(whoami)" 2>/dev/null | head -1)" ]; then
+    log_warning "Fixing .venv ownership (stale non-user files)..."
+    chown -R "$(whoami)" "$LMWEBUI_HOME/.venv" 2>/dev/null || sudo chown -R "$(whoami)" "$LMWEBUI_HOME/.venv" 2>/dev/null || {
+      log_error "Run: sudo chown -R $(whoami) $LMWEBUI_HOME/.venv"; return 1; }
   fi
   if command -v uv &>/dev/null; then
     uv venv "$LMWEBUI_HOME/.venv" --python 3.12 --clear 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv" --clear
