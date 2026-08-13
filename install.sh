@@ -121,6 +121,15 @@ CONFIGEOF
   log_success "Directory structure created"
 }
 
+clean_stale_clone_layout() {
+  # Remove dirs/files a git-clone install creates that the release tarball never does.
+  # Keeps a prior clone -> tarball upgrade from leaving a half-src/half-dist tree.
+  # Runtime state (cache/, logs/, secrets/, config.yaml) is left untouched.
+  for p in .git backend scripts web/src web/node_modules web/vite.config.ts; do
+    rm -rf "$LMWEBUI_HOME/$p" 2>/dev/null || true
+  done
+}
+
 setup_repository() {
   log_info "Setting up application code..."
   SRC_DIR=""; SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -147,6 +156,7 @@ setup_repository() {
       cp "$SRC_DIR/web/vite.config.ts" "$LMWEBUI_HOME/web/vite.config.ts" 2>/dev/null || true
       cp "$SRC_DIR/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || true
     else
+      clean_stale_clone_layout
       cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
     fi
     cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json" 2>/dev/null || true
@@ -158,6 +168,7 @@ setup_repository() {
     cp -r "$SRC_DIR/web" "$LMWEBUI_HOME/web"
   else
     # release tarball: app/, web/dist/ already in target layout
+    clean_stale_clone_layout
     cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
   fi
   cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json"
