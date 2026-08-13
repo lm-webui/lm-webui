@@ -1,7 +1,7 @@
 {
   "name": "lm-webui",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Self-hosted AI workspace for local and cloud models. Multi-provider chat, image generation, model and runtime management.",
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
