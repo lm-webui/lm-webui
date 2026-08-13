@@ -1,0 +1,43 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: Assemble release tarball
+        run: |
+          mkdir -p lm-webui/web
+          cp -r backend/app lm-webui/app
+          cp -r web/dist lm-webui/web/dist
+          cp web/package.json lm-webui/web/package.json
+          cp backend/requirements.txt backend/requirements.lock lm-webui/
+          cp package.json lm-webui/
+          cp install.sh lm-webui/
+          cp scripts/lmwebui lm-webui/lmwebui
+          tar -czf lm-webui.tar.gz lm-webui
+
+      - name: Create release + upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" lm-webui.tar.gz --clobber

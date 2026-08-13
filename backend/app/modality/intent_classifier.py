@@ -111,9 +111,6 @@ def classify(req: IntentRequest) -> IntentResult:
     has_doc = any(not _is_image(r) for r in refs)
 
     # 1. VISION — image attachments / image mode.
-    if has_image and not req.image_mode and has_doc:
-        # an image AND a doc: prefer knowledge? keep it simple: vision when image only.
-        pass
     if req.image_mode or (has_image and not has_doc):
         return IntentResult(
             ProcessingClass.VISION, KnowledgeScope.MODEL, matched_hint="image",

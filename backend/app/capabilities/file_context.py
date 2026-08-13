@@ -19,27 +19,15 @@ async def execute(ctx: CapabilityContext) -> FileResult:
             if not file_id:
                 continue
             cursor.execute(
-                "SELECT filename, file_path, extracted_text FROM media_library WHERE id = ?",
+                "SELECT filename, extracted_text FROM media_library WHERE id = ?",
                 (file_id,),
             )
             row = cursor.fetchone()
             if not row:
                 continue
-            filename, file_path, extracted = row[0], row[1], row[2]
+            filename, extracted = row[0], row[1]
             if extracted:
                 parts.append(f"--- {filename} ---\n{extracted}")
-                continue
-            # Fallback: raw-file preview while extraction is pending.
-            try:
-                import os
-                if file_path and os.path.exists(file_path):
-                    with open(file_path, "rb") as fh:
-                        raw = fh.read(20000)
-                    preview = raw.decode("utf-8", errors="ignore").strip()
-                    if preview:
-                        parts.append(f"--- {filename} (raw preview) ---\n{preview[:6000]}")
-            except Exception:
-                pass
         return FileResult(text="\n\n".join(parts))
     finally:
         db.close()

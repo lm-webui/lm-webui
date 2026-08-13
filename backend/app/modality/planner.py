@@ -9,6 +9,7 @@ Principle: RAG is a capability, not the default. Plain chat skips retrieval.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import List
 
@@ -29,8 +30,24 @@ class ExecutionPlan:
 
 
 def _has_docs(refs: List[dict]) -> bool:
-    from .intent_classifier import _is_image
     return any(not _is_image(r) for r in (refs or []))
+
+
+# Text signals that target one modality — used only when BOTH an image and a doc
+# are attached, to avoid running both pipelines when the question clearly points
+# at just one.
+_IMG_HINTS = re.compile(
+    r"\b(image|picture|photo|screenshot|snapshot|see|l[o]?ok at|what'?s in|show me|"
+    r"depict|visual|diagram)\b", re.I)
+_DOC_HINTS = re.compile(
+    r"\b(pdf|document|doc|file|summary|summar|read|page|paragraph|text|sheet|slides?|"
+    r"attached|contents?)\b", re.I)
+
+
+def _message_target(message: str) -> tuple[bool, bool]:
+    """Return (targets_image, targets_document) from message text hints."""
+    m = message or ""
+    return bool(_IMG_HINTS.search(m)), bool(_DOC_HINTS.search(m))
 
 
 def plan(
@@ -56,13 +73,33 @@ def plan(
         p.diffusion = True
         return p  # image generation takes over
 
-    # Vision runs for any image attachment — even when mixed with documents.
+    if intent.processing_class == ProcessingClass.LIVE:
+        p.search = True
+        return p
+
+    # Mixed image + doc: run ONLY the pipeline the question targets (rec 2), to
+    # avoid paying for RAG + vision + file_context on every message. Ambiguous
+    # text ("what about both?") still runs both, with the VL describing the image
+    # so the text LLM can compose with the doc context.
+    if has_images and has_docs:
+        img_hint, doc_hint = _message_target(message)
+        if doc_hint and not img_hint:
+            p.file_context = True
+            p.retrieve = True
+        elif img_hint and not doc_hint:
+            p.vision = True
+            p.vision_mode = "direct"
+        else:
+            p.vision = True
+            p.vision_mode = "describe"
+            p.file_context = True
+            p.retrieve = True
+        return p
+
+    # Image-only → vision.
     if has_images:
         p.vision = True
         p.vision_mode = intent.vision_mode
-
-    if intent.processing_class == ProcessingClass.LIVE:
-        p.search = True
         return p
 
     # Documents (or knowledge scope) → direct file context + retrieval (RAG).

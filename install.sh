@@ -112,11 +112,17 @@ CONFIGEOF
 setup_repository() {
   log_info "Setting up application code..."
   SRC_DIR=""; SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  if [ -f "$SCRIPT_DIR/web/vite.config.ts" ] && [ -f "$SCRIPT_DIR/package.json" ]; then
-    SRC_DIR="$SCRIPT_DIR"; log_info "Using local repository at $SRC_DIR"
+  if [ -f "$SCRIPT_DIR/package.json" ] && { [ -f "$SCRIPT_DIR/web/vite.config.ts" ] || [ -f "$SCRIPT_DIR/web/dist/index.html" ]; }; then
+    SRC_DIR="$SCRIPT_DIR"; log_info "Using local installation at $SRC_DIR"
   else
-    log_info "Cloning repository from $REPO_URL..."
-    git clone --branch "$BRANCH" --depth 1 "$REPO_URL" /tmp/lmwebui-clone; SRC_DIR="/tmp/lmwebui-clone"
+    log_info "Downloading latest release..."
+    if curl -fsSL -o /tmp/lmwebui.tar.gz "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
+      mkdir -p /tmp/lmwebui-tar && tar -xzf /tmp/lmwebui.tar.gz -C /tmp/lmwebui-tar --strip-components=1
+      SRC_DIR="/tmp/lmwebui-tar"
+    else
+      log_warning "Release download failed — falling back to git clone"
+      git clone --branch "$BRANCH" --depth 1 "$REPO_URL" /tmp/lmwebui-clone; SRC_DIR="/tmp/lmwebui-clone"
+    fi
   fi
   if [ -f "$LMWEBUI_HOME/app/main.py" ]; then
     OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
@@ -125,16 +131,25 @@ setup_repository() {
       chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
         log_error "Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
     fi
-    cp "$SRC_DIR/web/vite.config.ts" "$LMWEBUI_HOME/web/vite.config.ts" 2>/dev/null || true
+    if [ -d "$SRC_DIR/backend" ]; then
+      cp "$SRC_DIR/web/vite.config.ts" "$LMWEBUI_HOME/web/vite.config.ts" 2>/dev/null || true
+      cp "$SRC_DIR/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || true
+    else
+      cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
+    fi
     cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json" 2>/dev/null || true
-    cp "$SRC_DIR/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || true
-    rm -rf /tmp/lmwebui-clone 2>/dev/null || true
-    log_info "Application config updated at $LMWEBUI_HOME"; return
+    rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz 2>/dev/null || true
+    log_info "Application code updated at $LMWEBUI_HOME"; return
   fi
-  cp -r "$SRC_DIR/backend/"* "$LMWEBUI_HOME/"
-  cp -r "$SRC_DIR/web" "$LMWEBUI_HOME/web"
+  if [ -d "$SRC_DIR/backend" ]; then
+    cp -r "$SRC_DIR/backend/"* "$LMWEBUI_HOME/"
+    cp -r "$SRC_DIR/web" "$LMWEBUI_HOME/web"
+  else
+    # release tarball: app/, web/dist/ already in target layout
+    cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
+  fi
   cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json"
-  rm -rf /tmp/lmwebui-clone 2>/dev/null || true
+  rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz 2>/dev/null || true
   log_success "Application code installed"
 }
 

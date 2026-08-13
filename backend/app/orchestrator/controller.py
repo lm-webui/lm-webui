@@ -20,6 +20,19 @@ from app.services.usage_tracking import record_usage, estimate_tokens
 
 logger = logging.getLogger(__name__)
 
+# Follow-ups that plausibly reference previously attached files (vs. chit-chat like "thanks").
+_FOLLOWUP_QUESTION = (
+    r"(what|which|how|why|where|when|who|summar|explain|about|detail|refer|mention|"
+    r"compare|point|section|more on|go deeper)"
+)
+
+
+def _is_followup_question(message: str) -> bool:
+    """True if a follow-up message looks like it's asking about the conversation's files."""
+    import re
+    return message.rstrip().endswith("?") or bool(re.search(_FOLLOWUP_QUESTION, message, re.I))
+
+
 class OrchestratorController:
     """
     Central controller for handling chat interactions.
@@ -98,18 +111,27 @@ class OrchestratorController:
             logger.info(f"Provider {provider_id} api_base: {api_base[:80] if api_base else 'None'}")
 
             # Follow-up: if this request carries no file refs, fall back to the conversation's
-            # persisted attachments (metadata.attachments) so a later vision/RAG question about a
-            # previously attached file works without re-attaching.
+            # persisted attachments so a later vision/RAG question about a previously attached
+            # file works without re-attaching.
+            #
+            # Gated: only on a question-like follow-up, and only the MOST RECENT attachment set
+            # (not every attachment ever attached), so a plain "thanks"/"ok" doesn't re-run RAG
+            # or vision against stale/unrelated files.
             if not chat_request.file_references and actual_conversation_id:
                 try:
-                    from app.chat.service import get_conversation_messages
-                    persisted = []
-                    for m in get_conversation_messages(actual_conversation_id) or []:
-                        att = (m.get("metadata") or {}).get("attachments")
-                        if isinstance(att, list):
-                            persisted.extend(att)
-                    if persisted:
-                        chat_request.file_references = persisted
+                    msg = (chat_request.message or "").strip()
+                    if not msg or not _is_followup_question(msg):
+                        chat_request.file_references = []
+                    else:
+                        from app.chat.service import get_conversation_messages
+                        latest: list = []
+                        for m in reversed(get_conversation_messages(actual_conversation_id) or []):
+                            att = (m.get("metadata") or {}).get("attachments")
+                            if isinstance(att, list) and att:
+                                latest = att
+                                break
+                        if latest:
+                            chat_request.file_references = latest
                 except Exception:
                     pass  # fall back to no file refs
 

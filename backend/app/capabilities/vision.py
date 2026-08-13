@@ -3,11 +3,27 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 
 from .base import CapabilityContext
 from .results import VisionResult
 
 logger = logging.getLogger(__name__)
+
+# Text signals that request image analysis (used to avoid starting the local
+# llama-server vision runtime on a plain text follow-up that merely inherited a
+# previously-attached image).
+_IMG_NEED = re.compile(r"\b(image|picture|photo|screenshot|snapshot|see|l[o]?ok at|what'?s in|show me|depict|visual)\b", re.I)
+
+
+def _needs_vision(ctx: CapabilityContext) -> bool:
+    """Whether this request justifies starting the local vision runtime."""
+    if getattr(ctx, "image_mode", False):
+        return True
+    if getattr(ctx, "vision_mode", "direct") != "describe":
+        return True  # "direct" = a bare image question ("what's in this image")
+    msg = (ctx.chat_request.message or "").strip()
+    return bool(_IMG_NEED.search(msg))
 
 
 async def _describe(provider, images: list) -> str:
@@ -159,6 +175,13 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
             ctx.vision_provider = ProviderFactory.get_provider(ctx.vision_provider_id)
             ctx.vision_ready = ctx.vision_provider is not None
             return VisionResult(images=images, provider=ctx.vision_provider, ready=ctx.vision_ready)
+
+        # Rec 3: don't spin up llama-server for a text-only follow-up that merely
+        # inherited a previously-attached image. Skip vision and let the text LLM answer.
+        if not _needs_vision(ctx):
+            logger.info("Skipping vision runtime: message doesn't request image analysis")
+            ctx.vision_ready = False
+            return VisionResult(images=images, provider=None, ready=False)
 
         # Local vision bundle — check capability health first.
         if not _health(ctx.vision_model):

@@ -402,7 +402,7 @@ async def _handle_image_generation_upload(
 async def get_upload_status(file_id: str, user_id: dict = Depends(get_current_user)):
     db = get_db()
     cursor = db.cursor()
-    cursor.execute("SELECT filename, file_path, media_type FROM media_library WHERE id = ? AND user_id = ?", (file_id, user_id["id"]))
+    cursor.execute("SELECT filename, file_path, media_type, extracted_text FROM media_library WHERE id = ? AND user_id = ?", (file_id, user_id["id"]))
     file_record = cursor.fetchone()
 
     if not file_record:
@@ -416,7 +416,7 @@ async def get_upload_status(file_id: str, user_id: dict = Depends(get_current_us
         "filename": file_record[0],
         "file_path": file_record[1],
         "media_type": file_record[2],
-        "status": "processed", # Simplified, ideally we'd check Chroma or a processing_status table
+        "status": "processed" if file_record[3] else "pending",
         "user_id": user_id["id"]
     }
 

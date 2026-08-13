@@ -19,7 +19,7 @@ async def execute(ctx: CapabilityContext) -> RetrievalResult:
     except Exception:
         rag_cfg = None
 
-    if rag_cfg is not None and getattr(rag_cfg, "query_rewrite", False) and ctx.conversation_id:
+    if rag_cfg is not None and getattr(rag_cfg, "enabled", False) and getattr(rag_cfg, "query_rewrite", False) and ctx.conversation_id:
         try:
             from app.chat.service import get_last_n_messages
             from app.rag.query_rewriter import rewrite_query
