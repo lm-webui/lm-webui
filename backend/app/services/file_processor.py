@@ -67,6 +67,11 @@ class FileProcessor:
         if suffix == '.xls':
             return self._extract_xls(path)
 
+        # Audio — no text extraction here; ASR transcription happens in the
+        # multimodal ingestion path (Architecture B).
+        if suffix in ('.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'):
+            return "[Audio — transcribed via ASR in multimodal ingestion]"
+
         return "[Unsupported file format]"
 
     def _extract_xlsx(self, path: Path) -> str:

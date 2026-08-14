@@ -58,9 +58,24 @@ if _LANCE_OK:
         conversation_id: str | None = None
         payload_text: str | None = None  # OCR caption / text anchor
         uploaded_at: str | None = None
+
+    class AudioRow(LanceModel):
+        """A CLAP-embedded audio row (raw sound-event search)."""
+
+        chunk_id: str
+        modality: str = "audio"
+        media_path: str
+        vector: Vector(512)  # CLAP audio dim
+        file_id: str
+        user_id: int
+        conversation_id: str | None = None
+        payload_text: str | None = None  # ASR transcript / caption
+        timestamp_start: float | None = None
+        uploaded_at: str | None = None
 else:
     TextRow = None
     VisionRow = None
+    AudioRow = None
 
 
 _db: Any = None
@@ -139,6 +154,21 @@ def insert_vision_rows(records: list[dict[str, Any]], user_id: int) -> int:
         return len(records)
     except Exception as exc:
         logger.warning("Multimodal vision insert failed: %s", exc)
+        return 0
+
+
+def insert_audio_rows(records: list[dict[str, Any]], user_id: int) -> int:
+    if not _LANCE_OK:
+        return 0
+    try:
+        for rec in records:
+            rec.setdefault("modality", "audio")
+        table = _get_table("audio", user_id, AudioRow)
+        table.add(records)
+        _ensure_indexes(table)
+        return len(records)
+    except Exception as exc:
+        logger.warning("Multimodal audio insert failed: %s", exc)
         return 0
 
 

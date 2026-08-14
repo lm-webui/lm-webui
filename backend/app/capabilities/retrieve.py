@@ -30,13 +30,15 @@ async def execute(ctx: CapabilityContext) -> RetrievalResult:
             logger.warning("Query rewrite skipped: %s", exc)
             rag_query = ctx.chat_request.message
 
-    retrieved = await asyncio.to_thread(_retrieve, rag_query, ctx.user_id, ctx.conversation_id)
-    chunks = [c for c in retrieved.split("\n\n") if c.strip()] if retrieved else []
+    chunks = await asyncio.to_thread(_retrieve, rag_query, ctx.user_id, ctx.conversation_id)
     return RetrievalResult(chunks=chunks)
 
 
-def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> str:
-    """RAG pipeline: filters -> embed -> hybrid search -> rerank -> numbered context."""
+def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> list[str]:
+    """RAG pipeline: filters -> embed -> hybrid search -> rerank -> context chunks.
+
+    Returns un-numbered ``source\\ntext`` chunks; the prompt builder numbers them.
+    """
     try:
         from app.core.config_manager import get_config
         cfg = get_config()
@@ -62,7 +64,7 @@ def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> s
             conversation_id=conversation_id if scope_conv else None,
         )
         if not candidates:
-            return ""
+            return []
 
         # Dedup BEFORE rerank (None-safe key) so the reranker's top-k slots aren't wasted.
         seen: set = set()
@@ -79,18 +81,15 @@ def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> s
         budget = getattr(cfg.rag, "context_token_budget", 2000)
         parts: list[str] = []
         used = 0
-        n = 0
         for c in top_chunks:
-            text = c.get("text", "")
             source = c.get("file_name", "source")
-            formatted = f"[{n+1}] {source}\n{text}"
+            formatted = f"{source}\n{c.get('text', '')}"
             approx = max(1, len(formatted) // 3)
             if used + approx > budget:
                 break
             used += approx
-            n += 1
             parts.append(formatted)
-        return "\n\n".join(parts) if parts else ""
+        return parts
     except Exception as exc:
         logger.warning("RAG retrieval failed: %s", exc)
-        return ""
+        return []

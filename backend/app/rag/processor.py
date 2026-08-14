@@ -118,10 +118,10 @@ class RAGProcessor:
         # the multimodal engine is enabled. Docs get short SigLIP chunks/captions;
         # images get a vision row + a text anchor. BGE deep-text indexing above is kept.
         try:
-            engine = get_config().rag.engine
+            multimodal = get_config().rag.is_multimodal
         except Exception:
-            engine = "bge"
-        if engine == "multimodal":
+            multimodal = False
+        if multimodal:
             self._ingest_multimodal(file_path, file_name, text, chunks, conversation_id, user_id)
 
         logger.info("Indexed %d chunks from %s", count, file_name)
@@ -130,6 +130,27 @@ class RAGProcessor:
     # ── Architecture B: multimodal latent ingestion ─────────────────────────
 
     _IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'}
+    _AUDIO_EXT = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'}
+
+    @classmethod
+    def _asr_transcribe(cls, file_path: str, provider: str, model_size: str) -> str:
+        """Transcribe audio via the configured ASR provider; '' if unavailable."""
+        try:
+            if provider == "openai_whisper":
+                import whisper
+                model = getattr(cls, "_whisper", None)
+                if model is None:
+                    model = whisper.load_model(model_size or "tiny")
+                    cls._whisper = model
+                return (whisper.transcribe(model, file_path)["text"] or "").strip()
+            if provider == "faster_whisper":
+                from faster_whisper import WhisperModel
+                model = WhisperModel(model_size or "tiny", device="cpu", compute_type="int8")
+                segments, _ = model.transcribe(file_path)
+                return " ".join(s.text for s in segments).strip()
+        except Exception as exc:
+            logger.warning("ASR transcription failed for %s (%s): %s", file_path, provider, exc)
+        return ""
 
     @classmethod
     def _short_text(cls, text: str, n: int) -> str:
@@ -154,8 +175,7 @@ class RAGProcessor:
         """Add SigLIP short-text rows (docs) / vision + text-anchor rows (images)."""
         from pathlib import Path
         from app.core.config_manager import get_config
-        from app.rag.embedder_multimodal import embed_text_multimodal
-        from app.rag.embedder_vision import embed_image
+        from app.rag.embedder_multimodal import embed_image, embed_text_multimodal
         from app.rag import vector_store_multimodal as vs
 
         try:
@@ -164,8 +184,34 @@ class RAGProcessor:
             short_n = 50
 
         n_vis = n_txt = 0
+        suffix = Path(file_path).suffix.lower()
         try:
-            if Path(file_path).suffix.lower() in self._IMAGE_EXT:
+            if suffix in self._AUDIO_EXT:
+                # Audio: ASR → text into latent_text (gated on audio config + ASR availability).
+                try:
+                    a_cfg = get_config().rag.multimodal.audio
+                except Exception:
+                    a_cfg = None
+                if a_cfg is not None and getattr(a_cfg, "enabled", False):
+                    transcript = self._asr_transcribe(file_path, a_cfg.asr_provider, a_cfg.asr_model)
+                    if transcript:
+                        cap = self._short_text(transcript, short_n)
+                        v = embed_text_multimodal([cap])[0]
+                        vs.insert_text_rows([{
+                            "chunk_id": f"{file_path}_audiotxt",
+                            "text": cap,
+                            "vector": v,
+                            "file_id": file_path,
+                            "user_id": user_id,
+                            "conversation_id": conversation_id,
+                            "source_file": file_name,
+                            "media_path": file_path,
+                            "chunk_index": 0,
+                        }], user_id)
+                        n_txt += 1
+                # Audio is never a doc — return whether or not ASR ran.
+                return
+            elif suffix in self._IMAGE_EXT:
                 # Vision row for cross-modal retrieval.
                 vec = embed_image([file_path])[0]
                 cap = self._short_text(text, short_n)

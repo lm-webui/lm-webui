@@ -25,11 +25,16 @@ rag:
   scope: "user"
   context_token_budget: 2000
   query_rewrite: false
-  engine: "bge"          # "bge" (legacy text) | "multimodal" (Architecture B)
+  engine: "multimodal"          # "bge" (legacy text) | "multimodal" (Architecture B)
   multimodal:
-    enabled: false
+    enabled: true
     vision_model: "google/siglip2-base-patch16-224"
     short_chunk_words: 50
+    audio:
+      enabled: false
+      asr_provider: "none"     # "none" | "openai_whisper" | "faster_whisper"
+      asr_model: "tiny"
+      clap_enabled: false
 
 vision:
   provider: ""

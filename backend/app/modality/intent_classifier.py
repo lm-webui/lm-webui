@@ -64,6 +64,11 @@ GENERATION_HINTS = ("generate an image", "create an image", "make an image", "dr
                     "draw an", "create a picture", "generate a picture", "image of",
                     "picture of", "logo of", "illustrate", "generate a logo", "design a")
 AUDIO_HINTS = ("transcribe", "voice note", "audio note", "what did they say", "convert audio")
+# Free-text signals that the user is asking about an image — shared by the planner
+# (mixed image+doc disambiguation) and the vision capability (runtime gating).
+IMG_SIGNAL_RE = re.compile(
+    r"\b(image|picture|photo|screenshot|snapshot|see|l[o]?ok at|what'?s in|show me|"
+    r"depict|visual|diagram)\b", re.IGNORECASE)
 # Simple "what's in this image" queries → VL answers directly; otherwise describe → selected LLM composes.
 VISION_SIMPLE_HINTS = (
     "what's in", "what is in", "what do you see", "what do i see",

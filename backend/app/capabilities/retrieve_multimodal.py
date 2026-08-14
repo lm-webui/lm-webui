@@ -21,39 +21,37 @@ from .retrieve import _retrieve  # reuse the existing BGE deep-text pipeline
 logger = logging.getLogger(__name__)
 
 
-async def execute(ctx: CapabilityContext) -> MultimodalResult:
-    """Run BGE deep-text + SigLIP short-text + SigLIP cross-modal vision, then fuse."""
-    query = (ctx.chat_request.message or "").strip()
-    if not query:
-        return MultimodalResult()
-    if not _multimodal_enabled():
-        return MultimodalResult()
-
-    # 1. BGE deep-text (existing pipeline) — off the event loop.
-    deep_text = await asyncio.to_thread(_retrieve, query, ctx.user_id, ctx.conversation_id)
-
-    # 2. SigLIP short-text + cross-modal vision — off the event loop.
-    sig = await asyncio.to_thread(_siglip_retrieve, query, ctx.user_id, ctx.conversation_id)
-
-    text_chunks = ([deep_text] if deep_text else []) + sig["short_texts"]
-    return MultimodalResult(text_chunks=text_chunks, image_refs=sig["image_refs"])
-
-
 def _multimodal_enabled() -> bool:
     try:
         from app.core.config_manager import get_config
-        return get_config().rag.engine == "multimodal"
+        return get_config().rag.is_multimodal
     except Exception:
         return False
+
+
+async def execute(ctx: CapabilityContext) -> MultimodalResult:
+    """Run BGE deep-text + SigLIP short-text + SigLIP cross-modal vision, then fuse."""
+    query = (ctx.chat_request.message or "").strip()
+    if not query or not _multimodal_enabled():
+        return MultimodalResult()
+
+    # Parallel retrieval: BGE deep-text + SigLIP short-text/vision run concurrently
+    # (each off the event loop) so one doesn't wait on the other.
+    deep_text, sig = await asyncio.gather(
+        asyncio.to_thread(_retrieve, query, ctx.user_id, ctx.conversation_id),
+        asyncio.to_thread(_siglip_retrieve, query, ctx.user_id, ctx.conversation_id),
+    )
+
+    return MultimodalResult(text_chunks=(deep_text or []) + sig["short_texts"], image_refs=sig["image_refs"])
 
 
 def _siglip_retrieve(query: str, user_id: int, conversation_id: str | None) -> dict:
     """SigLIP short-text + vision retrieval. Runs in a worker thread."""
     try:
-        from app.rag.embedder_multimodal import embed_query
+        from app.rag.embedder_multimodal import embed_text_multimodal
         from app.rag import vector_store_multimodal as vs
 
-        qvec = embed_query(query)
+        qvec = embed_text_multimodal([query])[0]
         filters = {"conversation_id": conversation_id} if conversation_id else None
 
         # Cross-modal vision search — a SigLIP text query finds matching images.

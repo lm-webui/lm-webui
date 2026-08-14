@@ -1,13 +1,13 @@
 """
-SigLIP2 text embedder (Architecture B — multimodal latent retrieval).
+SigLIP2 embedder (Architecture B — multimodal latent retrieval).
 
-Encodes SHORT text units (≤~50 words) / 1-sentence captions and the query into the
-shared SigLIP latent space (768-dim) so they can be cosine-matched against SigLIP
-*image* embeddings (cross-modal) and other short semantic text.
+One lazy-loaded SigLIP model serves both the shared latent space:
+  - `embed_text_multimodal` — SHORT text units (≤~50 words) / 1-sentence captions + the query.
+  - `embed_image` — images, for cross-modal search (a SigLIP text query finds matching images).
 
-SigLIP is a contrastive vision-language model — good on short self-contained units,
-weak on long passages. Keep deep long-context text search on BGE (`embedder.py`);
-use this only for short chunks, captions, and the cross-modal query.
+SigLIP is contrastive — strong on short self-contained units, weak on long passages.
+Keep deep long-context text search on BGE (`embedder.py`); use this for short chunks,
+captions, images, and the cross-modal query. Graceful if transformers/torch are missing.
 """
 import logging
 
@@ -18,7 +18,7 @@ _processor = None
 
 
 def _load() -> None:
-    """Lazy-load SigLIP2 model + processor (shared with the vision embedder)."""
+    """Lazy-load SigLIP2 model + processor once (shared by text & image embedding)."""
     global _model, _processor
     if _model is not None:
         return
@@ -28,11 +28,19 @@ def _load() -> None:
     except Exception:
         model_name = "google/siglip2-base-patch16-224"
 
-    from transformers import AutoModel, AutoProcessor
-    logger.info("Loading SigLIP text model %s ...", model_name)
-    _model = AutoModel.from_pretrained(model_name).eval()
-    _processor = AutoProcessor.from_pretrained(model_name)
-    logger.info("SigLIP text model ready")
+    from transformers.models.siglip.modeling_siglip import SiglipModel
+    from transformers.models.siglip.processing_siglip import SiglipProcessor
+    logger.info("Loading SigLIP model %s ...", model_name)
+    _model = SiglipModel.from_pretrained(model_name).eval()
+    _processor = SiglipProcessor.from_pretrained(model_name)
+    logger.info("SigLIP model ready")
+
+
+def _vectors(out) -> list[list[float]]:
+    """Pull the 768-dim pooler (or [CLS]) vectors off the GPU and to plain floats."""
+    import torch
+    embeds = out.pooler_output if getattr(out, "pooler_output", None) is not None else out.last_hidden_state[:, 0]
+    return embeds.detach().cpu().float().tolist()
 
 
 def embed_text_multimodal(texts: list[str]) -> list[list[float]]:
@@ -41,10 +49,34 @@ def embed_text_multimodal(texts: list[str]) -> list[list[float]]:
     import torch
     with torch.no_grad():
         inputs = _processor(text=list(texts), padding="max_length", return_tensors="pt")
-        embeds = _model.get_text_features(**inputs)
-    return embeds.detach().cpu().float().tolist()
+        out = _model.get_text_features(**inputs)
+    return _vectors(out)
 
 
-def embed_query(query: str) -> list[float]:
-    """Embed a single short query into a 768-dim SigLIP vector."""
-    return embed_text_multimodal([query])[0]
+def embed_image(images: list) -> list[list[float]]:
+    """Embed images (PIL Images or file paths) into 768-dim vectors, one per input."""
+    _load()
+    import torch
+    from PIL import Image
+
+    pil_images: list = []
+    for img in images:
+        if isinstance(img, (str, bytes)):
+            pil_images.append(Image.open(img).convert("RGB") if isinstance(img, str) else Image.open(img))
+        else:
+            pil_images.append(img.convert("RGB") if hasattr(img, "convert") else img)
+
+    with torch.no_grad():
+        inputs = _processor(images=pil_images, return_tensors="pt")
+        out = _model.get_image_features(**inputs)
+    return _vectors(out)
+
+
+def is_available() -> bool:
+    """True if transformers + torch are importable (SigLIP can load)."""
+    try:
+        import transformers  # noqa: F401
+        import torch  # noqa: F401
+        return True
+    except Exception:
+        return False

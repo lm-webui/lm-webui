@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import List
 
-from .intent_classifier import IntentRequest, IntentResult, ProcessingClass, classify, _is_image
+from .intent_classifier import IntentRequest, IntentResult, ProcessingClass, classify, _is_image, IMG_SIGNAL_RE
 
 
 @dataclass
@@ -37,27 +37,24 @@ def _has_docs(refs: List[dict]) -> bool:
 # Text signals that target one modality — used only when BOTH an image and a doc
 # are attached, to avoid running both pipelines when the question clearly points
 # at just one.
-_IMG_HINTS = re.compile(
-    r"\b(image|picture|photo|screenshot|snapshot|see|l[o]?ok at|what'?s in|show me|"
-    r"depict|visual|diagram)\b", re.I)
 _DOC_HINTS = re.compile(
     r"\b(pdf|document|doc|file|summary|summar|read|page|paragraph|text|sheet|slides?|"
     r"attached|contents?)\b", re.I)
-
-
-def _message_target(message: str) -> tuple[bool, bool]:
-    """Return (targets_image, targets_document) from message text hints."""
-    m = message or ""
-    return bool(_IMG_HINTS.search(m)), bool(_DOC_HINTS.search(m))
 
 
 def _multimodal_enabled() -> bool:
     """True when Architecture B (multimodal latent retrieval) is the active RAG engine."""
     try:
         from app.core.config_manager import get_config
-        return get_config().rag.engine == "multimodal"
+        return get_config().rag.is_multimodal
     except Exception:
         return False
+
+
+def _message_target(message: str) -> tuple[bool, bool]:
+    """Return (targets_image, targets_document) from message text hints."""
+    m = message or ""
+    return bool(IMG_SIGNAL_RE.search(m)), bool(_DOC_HINTS.search(m))
 
 
 def plan(
@@ -95,7 +92,10 @@ def plan(
         img_hint, doc_hint = _message_target(message)
         if doc_hint and not img_hint:
             p.file_context = True
-            p.retrieve = True
+            if _multimodal_enabled():
+                p.latent_retrieve = True
+            else:
+                p.retrieve = True
         elif img_hint and not doc_hint:
             p.vision = True
             p.vision_mode = "direct"
@@ -103,7 +103,10 @@ def plan(
             p.vision = True
             p.vision_mode = "describe"
             p.file_context = True
-            p.retrieve = True
+            if _multimodal_enabled():
+                p.latent_retrieve = True
+            else:
+                p.retrieve = True
 
     elif has_images:
         # Image-only → vision.

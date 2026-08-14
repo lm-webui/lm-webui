@@ -3,17 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
 from .base import CapabilityContext
 from .results import VisionResult
+from app.modality.intent_classifier import IMG_SIGNAL_RE
 
 logger = logging.getLogger(__name__)
-
-# Text signals that request image analysis (used to avoid starting the local
-# llama-server vision runtime on a plain text follow-up that merely inherited a
-# previously-attached image).
-_IMG_NEED = re.compile(r"\b(image|picture|photo|screenshot|snapshot|see|l[o]?ok at|what'?s in|show me|depict|visual)\b", re.I)
 
 
 def _needs_vision(ctx: CapabilityContext) -> bool:
@@ -23,7 +18,10 @@ def _needs_vision(ctx: CapabilityContext) -> bool:
     if getattr(ctx, "vision_mode", "direct") != "describe":
         return True  # "direct" = a bare image question ("what's in this image")
     msg = (ctx.chat_request.message or "").strip()
-    return bool(_IMG_NEED.search(msg))
+    # Text signals that request image analysis (used to avoid starting the local
+    # llama-server vision runtime on a plain text follow-up that merely inherited a
+    # previously-attached image).
+    return bool(IMG_SIGNAL_RE.search(msg))
 
 
 async def _describe(provider, images: list) -> str:

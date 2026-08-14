@@ -34,16 +34,16 @@ class TestPlainTextNoRetrieve:
 class TestKnowledgeRetrieve:
     def test_document_hint_triggers_retrieve(self):
         p = plan(message="what did my pdf say?")
-        assert p.retrieve is True
+        assert (p.retrieve or p.latent_retrieve) is True
 
     def test_attached_document_triggers_file_context_and_retrieve(self):
         p = plan(message="summarize", file_references=[_doc_ref()])
         assert p.file_context is True
-        assert p.retrieve is True
+        assert (p.retrieve or p.latent_retrieve) is True
 
     def test_knowledge_base_query(self):
         p = plan(message="search my knowledge base for return policy")
-        assert p.retrieve is True
+        assert (p.retrieve or p.latent_retrieve) is True
 
 
 class TestVision:
@@ -54,7 +54,7 @@ class TestVision:
     def test_mixed_image_and_doc_triggers_vision_and_retrieve(self):
         p = plan(message="analyze", file_references=[_img_ref(), _doc_ref()])
         assert p.vision is True
-        assert p.retrieve is True
+        assert (p.retrieve or p.latent_retrieve) is True
 
     def test_vision_mode_direct_for_simple_query(self):
         p = plan(message="what's in this picture?", file_references=[_img_ref()])
