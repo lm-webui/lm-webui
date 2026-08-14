@@ -19,12 +19,25 @@ class RAGProcessor:
         """Lazy-init: import and validate that all sub-modules load."""
         if self._ready:
             return
-        # Trigger model loads early so the first upload doesn't pay the cost.
+        from app.core.config_manager import get_config
+        try:
+            multimodal = get_config().rag.is_multimodal
+        except Exception:
+            multimodal = False
+        # BGE deep-text (used by both engines — retrieve_multimodal reuses it).
         from app.rag import embedder  # noqa: F401
         from app.rag import vector_store  # noqa: F401
+        if multimodal:
+            # Pre-warm the SigLIP multimodal model so the first query/upload is fast.
+            try:
+                from app.rag.embedder_multimodal import is_available, embed_text_multimodal
+                if is_available():
+                    embed_text_multimodal(["warm"])  # cached; loads weights into RAM
+            except Exception as exc:
+                logger.warning("SigLIP pre-warm failed: %s", exc)
 
         self._ready = True
-        logger.info("RAGProcessor ready (BGE-small + LanceDB)")
+        logger.info("RAGProcessor ready (%s)", "multimodal (BGE + SigLIP)" if multimodal else "BGE-small")
 
     def process_file(
         self,

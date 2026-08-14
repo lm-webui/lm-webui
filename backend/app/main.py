@@ -314,7 +314,7 @@ async def initialize_app():
                 rag_p = RAGProcessor()
                 rag_p.ensure_ready()
                 app_state.setdefault("rag_ready", True)
-                logger.info("RAG processor initialized")
+                logger.info("RAG processor initialized (engine=%s)", config_manager.get_config().rag.engine)
         except Exception:
             logger.info("RAG not configured — skipping")
 
