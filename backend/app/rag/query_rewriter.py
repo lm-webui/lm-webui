@@ -8,13 +8,9 @@ doesn't fail on context-free queries. Config-gated via ``rag.query_rewrite``
 """
 import logging
 
-logger = logging.getLogger(__name__)
+from app.core.prompts import REWRITE_SYSTEM
 
-_REWRITE_SYSTEM = (
-    "You rewrite the user's latest question to be self-contained for a "
-    "vector-search knowledge base, resolving pronouns and context from the "
-    "conversation. Reply with only the rewritten question, no preamble."
-)
+logger = logging.getLogger(__name__)
 
 
 async def rewrite_query(
@@ -48,7 +44,7 @@ async def rewrite_query(
         req = GenerateRequest(
             model=model,
             messages=[
-                {"role": "system", "content": _REWRITE_SYSTEM},
+                {"role": "system", "content": REWRITE_SYSTEM},
                 {"role": "user", "content": user},
             ],
             max_tokens=80,

@@ -11,7 +11,7 @@
     <img src="https://img.shields.io/badge/development-active-green" />
   </a>
   <a href="https://github.com/lm-webui/lm-webui/releases">
-    <img src="https://img.shields.io/badge/release-v0.7.0-blue" />
+    <img src="https://img.shields.io/badge/release-v0.7.7-blue" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-black" />
@@ -22,16 +22,18 @@
 </p>
 
 <p align="center">
-  <b>Local AI, without the setup maze</b>
+  <b>Run Local AI, Without the Complexity</b>
 </p>
 
 ---
 
-No more setup maze. LM-WebUI makes local AI easier to install, manage, and use — download a model, choose a runtime, and start working from one interface. Smart-Modality automatically chooses the right path for each request, whether it is plain chat, RAG over your files, web search, vision, or image generation.
+No more setup maze. **LM-WebUI makes local AI inference easier to run and use.** Install and manage inference runtimes, download models, and work with local AI instantly from one interface.
 
-Run local AI offline when you want, connect cloud APIs when you need them, and keep control of your data and infrastructure.
+Powered by **Smart-Modality™**, an intent-routing system that automatically determines what each request needs, chat, files, RAG, web search, vision, or image generation. No manual model switching, no unnecessary processing, and reducing unnecessary context to achieve more efficient inference especially on low resource hardware. Make your local AI workflow multimodal without making it more complicated.
 
-Built open-source for developers, system integrators, and organizations that want local inference, reproducibility, and infrastructure-level control without the usual setup overhead.
+Run locally when you want, connect cloud APIs when you need, and keep control of your data.
+
+Built open-source for developers, system integrators, and organizations that want **easy local inference, reproducibility, and infrastructure-level control** without the usual setup overhead.
 
 ---
 

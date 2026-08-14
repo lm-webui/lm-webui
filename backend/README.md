@@ -1,163 +1,100 @@
-# LM WebUI Backend - Quick Start
+# LM-WebUI Backend
 
-A high-performance FastAPI backend for AI model management, real-time streaming, and multimodal processing.
+FastAPI backend for LM-WebUI: AI model management, real-time streaming, multimodal processing, and retrieval-augmented generation.
 
-## 🚀 Quick Start
+- **Runtime**: Python 3.13 · **HTTP**: `0.0.0.0:7070`
+- **Stack**: FastAPI, WebSockets, SQLite, LanceDB, SigLIP2, llama.cpp/MLX
 
-### Prerequisites
-
-- Python 3.9+
-- pip (Python package manager)
-- Virtual environment (recommended)
-
-### Installation
+## Quick Start
 
 ```bash
-# Clone the repository (if not already done)
-git clone https://github.com/lm-webui/lm-webui.git
-cd lm-webui/backend
+cd backend
+uv venv .venv && source .venv/bin/activate
+uv pip install -r requirements.txt
 
-# Create virtual environment
-python -m venv venv
+# dev (auto-reload)
+uvicorn app.main:app --host 0.0.0.0 --port 7070 --reload
 
-# Activate virtual environment
-# Linux/macOS:
-source venv/bin/activate
-# Windows:
-venv\Scripts\activate
+# prod
+uvicorn app.main:app --host 0.0.0.0 --port 7070
+```
 
-# Install dependencies
-pip install -r requirements.txt
+### Verify
 
-# Create necessary directories
-mkdir -p data .secrets
-
-# Initialize database
-python -c "from app.database import init_db; init_db()"
+```bash
+curl http://localhost:7070/api/health
+# {"status":"ready","ready":true,"message":...,"progress":100,"version":"0.7.7"}
 ```
 
 ### Configuration
 
-Create `.env` file:
+Settings come from `config.yaml` (checked in) and environment variables. Create `.env` to override:
 
-```bash
+```
 BACKEND_HOST=0.0.0.0
 BACKEND_PORT=7070
 DATABASE_URL=sqlite:///./data/app.db
 ```
 
-### Running the Backend
+## Features
 
-#### Development Mode (Recommended)
+| Area | Function |
+|---|---|
+| **Auth & Security** | JWT with refresh tokens, API keys, encryption of stored secrets |
+| **Streaming** | Real-time WebSocket token streaming (chat + multimodal) |
+| **Providers** | OpenAI-compatible (OpenAI, DeepSeek, xAI, vLLM), Gemini, Anthropic, Ollama, ComfyUI, MLX |
+| **GGUF / llama.cpp** | Download from HuggingFace, upload, validate, serve; vision via `llama-server` |
+| **MLX** | Apple Silicon inference via `mlx-lm`, one-click model download |
+| **RAG** | LanceDB vector+FTS hybrid, BGE-small embeddings, FlashRank rerank |
+| **Multimodal RAG** | Late-fusion retrieval: SigLIP2 shared latent (text + vision tables), Reciprocal Rank Fusion |
+| **Files & OCR** | Upload, text extraction, OCR, chunking, citation tracking |
+| **Hardware** | Auto-detect CPU / CUDA / ROCm / Metal with memory & layer tuning |
+| **Governance** | Usage analytics, admin dashboard, orgs, per-provider/model token tracking |
 
-```bash
-# From backend directory
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload
-```
-
-#### Production Mode
-
-```bash
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 7070
-```
-
-#### With Docker
-
-```bash
-# From project root
-docker-compose up
-
-# Or build individually
-docker build -t lm-webui-backend .
-docker run -p 7070:7070 lm-webui-backend
-```
-
-### Verify Installation
-
-```bash
-# Check health endpoint
-curl http://localhost:7070/api/health
-# Should return: {"status": "healthy", "auth": "jwt", "encryption": "fernet"}
-
-# Check detailed health
-curl http://localhost:7070/api/health
-```
-
-## 📖 Documentation
-
-For detailed documentation, see the main project documentation:
-
-- **[Main Documentation](../docs/)** - Complete documentation
-- **[Features](../docs/features.md)** - All backend features
-- **[API Reference](../docs/api-reference.md)** - Complete API documentation
-- **[Installation](../docs/installation.md)** - Detailed installation guide
-
-## 🔧 Key Features
-
-- **Authentication**: JWT-based auth with refresh tokens
-- **WebSocket Streaming**: Real-time token streaming with reasoning display
-- **GGUF Model Management**: Complete GGUF runtime with HuggingFace integration
-- **RAG System**: Retrieval-augmented generation with Qdrant vector store
-- **Multimodal Processing**: Image/document upload with OCR and extraction
-- **Hardware Acceleration**: Automatic CUDA/ROCm/Metal detection
-
-## 🏗️ Project Structure
+## Project Structure
 
 ```
 backend/
-├── app/                    # Application code
-│   ├── main.py            # FastAPI application entry point
-│   ├── routes/            # API endpoints
-│   ├── streaming/         # WebSocket streaming system
-│   ├── rag/               # RAG pipeline
-│   ├── gguf/              # GGUF model management
-│   ├── security/          # Authentication & encryption
-│   └── services/          # Business logic
-├── tests/                 # Test suite
-├── requirements.txt       # Python dependencies
-└── config.yaml           # Configuration (optional)
+├── app/
+│   ├── main.py             # FastAPI entry point, router registration, /api/health
+│   ├── routes/             # HTTP + WebSocket API endpoints
+│   ├── rag/                # RAG pipeline (embed, chunk, store, rerank, late-fusion)
+│   ├── providers/          # Provider adapters (remote + local: ollama, comfyui, mlx)
+│   ├── runtime/            # Inference engine lifecycle (llama.cpp, mlx, comfyui)
+│   ├── modality/           # Smart-Modality router
+│   ├── orchestrator/       # Per-session orchestration
+│   ├── security/           # JWT auth, encryption, api keys
+│   ├── hardware/           # Device detection & optimization
+│   ├── database/           # SQLite layer + migrations
+│   ├── files/              # Upload / OCR / extraction
+│   ├── services/           # Business logic
+│   ├── governance/         # Usage, admin, orgs
+│   ├── memory/             # Persistent memory
+│   └── search/             # Web search
+├── tests/                  # Pytest suite
+├── config.yaml             # Runtime configuration
+└── requirements.txt        # Python dependencies
 ```
 
-## 🧪 Testing
+## Testing
 
 ```bash
-# Install test dependencies
-pip install -r requirements-test.txt
-
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=app --cov-report=html
+cd backend
+make install-dev     # install dev + test deps
+make test            # pytest
+make test-cov        # pytest with coverage
+make lint            # linting
 ```
 
-## 🔄 Development
+Or directly: `pip install -r requirements-test.txt && pytest`
 
-### Adding New Endpoints
+## Development
 
-1. Create new router in `app/routes/`
-2. Add business logic in `app/services/`
-3. Include router in `app/main.py`
+1. Add a router in `app/routes/` (or a feature under `app/<feature>/`)
+2. Register it in `app/main.py` via `app.include_router(...)`
+3. Follow PEP 8, type hints, docstrings, and add tests in `tests/`
 
-### Code Style
+## Links
 
-- Follow PEP 8 guidelines
-- Use type hints
-- Add docstrings for public functions
-- Write tests for new features
-
-## 🤝 Contributing
-
-See the main [Contributing Guide](../docs/contributing.md) for details.
-
-## 📄 License
-
-MIT License - see [LICENSE](../LICENSE) file for details.
-
-## 🔗 Links
-
-- **Main Project**: [github.com/lm-webui/lm-webui](https://github.com/lm-webui/lm-webui)
-- **Issues**: [GitHub Issues](https://github.com/lm-webui/lm-webui/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/lm-webui/lm-webui/discussions)
+- **Main project**: [github.com/lm-webui/lm-webui](https://github.com/lm-webui/lm-webui)
+- **Docs**: [`../docs/`](../docs/) · **Issues**: [GitHub Issues](https://github.com/lm-webui/lm-webui/issues)

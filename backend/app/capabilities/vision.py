@@ -7,44 +7,11 @@ import logging
 from .base import CapabilityContext
 from .results import VisionResult
 from app.modality.intent_classifier import IMG_SIGNAL_RE
+from app.core.prompts import VISION_DESCRIBE_BASE, VISION_SPATIAL_APPEND, VISION_TECH_APPEND
 
 logger = logging.getLogger(__name__)
 
-
-def _needs_vision(ctx: CapabilityContext) -> bool:
-    """Whether this request justifies starting the local vision runtime."""
-    if getattr(ctx, "image_mode", False):
-        return True
-    if getattr(ctx, "vision_mode", "direct") != "describe":
-        return True  # "direct" = a bare image question ("what's in this image")
-    msg = (ctx.chat_request.message or "").strip()
-    # Text signals that request image analysis (used to avoid starting the local
-    # llama-server vision runtime on a plain text follow-up that merely inherited a
-    # previously-attached image).
-    return bool(IMG_SIGNAL_RE.search(msg))
-
-
-_VISION_DESCRIBE_BASE = (
-    "You are a visual analysis assistant. Analyze the provided image carefully before answering. "
-    "Prioritize: 1) accurate identification of visible objects and text; 2) spatial relationships "
-    "between relevant objects (left/right, above/below, in front/behind, inside/outside, near/far, "
-    "overlapping, connected/disconnected); 3) relative position, orientation, size, proximity; "
-    "4) fine visual details relevant to the question; 5) evidence directly supported by the image. "
-    "Separate direct observations from inference. Do not invent objects, text, measurements, or "
-    "relationships not supported by the image. If something is unclear due to resolution, occlusion, "
-    "lighting, or viewpoint, state the uncertainty explicitly. Do not confuse 2D image position with "
-    "3D depth."
-)
-_VISION_SPATIAL_APPEND = (
-    " This is a spatial reasoning task: identify the relevant objects, estimate their locations, "
-    "determine their visible relative relationships, and account for occlusion or ambiguity."
-)
-_VISION_TECH_APPEND = (
-    " Analyze this as a technical image: pay attention to components, labels, connectors, ports, "
-    "cables, slots, orientation, physical connections, and visible damage. Do not infer hidden "
-    "components; separate observations from conclusions. If text is too small or unclear to read, "
-    "say so rather than guessing."
-)
+# Routing keywords (not prompts) — decide when to append spatial/technical guidance.
 _SPATIAL_WORDS = ('left', 'right', 'above', 'below', 'spatial', 'position', 'location', 'near',
                   'far', 'between', 'layout', 'behind', 'front')
 _TECH_WORDS = ('connector', 'port', 'component', 'circuit', 'pcb', 'pin', 'solder', 'label',
@@ -54,12 +21,12 @@ _TECH_WORDS = ('connector', 'port', 'component', 'circuit', 'pcb', 'pin', 'solde
 async def _describe(provider, images: list, message: str = "") -> str:
     """One-shot VL describe pass — produces text the selected LLM composes from."""
     from app.providers.schemas import GenerateRequest
-    prompt = _VISION_DESCRIBE_BASE
+    prompt = VISION_DESCRIBE_BASE
     m = (message or "").lower()
     if any(w in m for w in _SPATIAL_WORDS):
-        prompt += _VISION_SPATIAL_APPEND
+        prompt += VISION_SPATIAL_APPEND
     if any(w in m for w in _TECH_WORDS):
-        prompt += _VISION_TECH_APPEND
+        prompt += VISION_TECH_APPEND
     req = GenerateRequest(
         model="vision",
         messages=[{"role": "user", "content": prompt}],

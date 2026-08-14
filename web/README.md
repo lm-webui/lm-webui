@@ -1,125 +1,89 @@
 # LM-WebUI Frontend
 
-Modern React/TypeScript frontend for the LM-WebUI AI chat interface with real-time streaming, multimodal support, and interactive reasoning display.
+React + TypeScript frontend for LM-WebUI. Real-time streaming chat, multimodal support, image studio, and interactive rendering (code, Mermaid, tables).
+
+- **Runtime**: Node.js ≥ 20
+- **Dev server**: Vite, port `5177` (proxies `/api` and `/ws` to the backend on `7070`)
 
 ## Quick Start
 
-### Prerequisites
-
-- Node.js 16+ and npm/yarn
-- Backend running (see [backend README](../backend/README.md))
-
-### Installation
+Prereq: backend running (see [`../backend/README.md`](../backend/README.md)).
 
 ```bash
-cd frontend
+cd web
 npm install
-```
-
-### Development
-
-```bash
-npm run dev          # Start dev server (http://localhost:5177)
-npm run build        # Build for production
-npm run preview      # Preview production build
-npm run lint         # Run ESLint
-npm run type-check   # TypeScript type checking
+npm run dev        # http://localhost:5177
 ```
 
 ### Configuration
 
-Create `.env` file:
+Copy `.env.example` or create `.env`:
 
 ```env
 VITE_BACKEND_URL=http://localhost:7070
-VITE_API_TIMEOUT=30000
-VITE_WEBSOCKET_RECONNECT_ATTEMPTS=3
 ```
 
-## Key Features
+## Scripts
 
-- **Real-Time Streaming**: Interactive reasoning display with WebSocket streaming
-- **Multi-Provider Support**: OpenAI, Claude, Gemini, Grok, DeepSeek
-- **Multimodal Intelligence**: Image/document upload with OCR and analysis
-- **RAG Integration**: Context-aware conversations with file integration
-- **Hardware Acceleration**: Adaptive UI based on system capabilities
-- **Dark Theme**: Responsive design with mobile support
+| Command | Function |
+|---|---|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build → `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm run typecheck` | TypeScript type checking (`tsc`) |
+| `npm run lint` / `lint:fix` | ESLint |
+| `npm run format` / `format:check` | Prettier |
+| `npm run test` | Vitest unit tests |
+| `npm run test:ui` | Vitest interactive UI |
+| `npm run test:coverage` | Vitest with coverage |
+| `npm run clean` | Remove `dist/` |
+
+## Features
+
+- **Chat**: multi-provider streaming, code highlighting, Mermaid diagrams, tables, markdown, conversations
+- **Multimodal**: image/document upload with analysis and OCR citation
+- **RAG context**: file-backed, context-aware answers
+- **Image Studio**: prompt, size, quality, seed controls + gallery
+- **Models**: GGUF / MLX download & management UI
+- **Projects**: grouped conversations with reusable system prompts
+- **Artifacts**: versioned document storage
+- **Hardware-aware**: adaptive UI; dark theme, responsive
 
 ## Project Structure
 
 ```
-frontend/
+web/
 ├── src/
-│   ├── main.tsx                    # Application entry point
-│   ├── App.tsx                     # Main application component
-│   ├── components/                 # Reusable UI components
-│   ├── pages/                      # Page-level components
-│   ├── services/                   # Service layer (API, WebSocket)
-│   ├── contexts/                   # React contexts (Auth, Chat)
-│   ├── hooks/                      # Custom React hooks
-│   ├── utils/                      # Utility functions
-│   ├── types/                      # TypeScript type definitions
-│   └── lib/                        # Library utilities
-├── public/                         # Static assets
-├── package.json                    # Dependencies and scripts
-├── tsconfig.json                   # TypeScript configuration
-├── vite.config.ts                  # Vite build configuration
-└── tailwind.config.ts              # Tailwind CSS configuration
-```
-
-## Testing
-
-```bash
-npm run test        # Run Vitest unit tests
-npm run test:ui     # Run component tests with @testing-library/react
-npm run test:e2e    # Run Playwright E2E tests (if configured)
+│   ├── main.tsx              # Entry point
+│   ├── App.tsx               # Root app component
+│   ├── features/             # Feature modules (chat, models, files, projects, images, artifacts…)
+│   ├── components/           # Reusable UI components
+│   ├── pages/                # Page-level components
+│   ├── api/                  # API client
+│   ├── services/             # Service layer (streaming, WebSocket)
+│   ├── contexts/             # React contexts (auth, chat)
+│   ├── store/                # State
+│   ├── hooks/                # Custom hooks
+│   ├── config/               # App config
+│   ├── lib/ / utils/         # Utilities
+│   └── types/                # TypeScript types
+├── public/                   # Static assets
+├── vite.config.ts            # Vite + proxy config
+├── tailwind.config.ts
+└── tsconfig.json
 ```
 
 ## Deployment
 
-### Production Build
+Build for production, then serve `dist/` on any static host:
 
 ```bash
 npm run build
 ```
 
-The build output is in `dist/` directory. Deploy to any static hosting service (Netlify, Vercel, S3, etc.).
+The build is API-only; point it at the backend URL (e.g. via `VITE_BACKEND_URL`) at build time or serve it behind the backend.
 
-### Docker Deployment
+## Links
 
-```dockerfile
-FROM node:16-alpine AS build
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-```
-
-## Documentation
-
-For detailed documentation on features, architecture, and API usage, see:
-
-- **[Main Documentation](../README.md)** - Project overview and features
-- **[Features Documentation](../docs/features.md)** - Comprehensive feature details
-- **[API Reference](../docs/api-reference.md)** - Complete API documentation
-- **[Installation Guide](../docs/installation.md)** - Detailed setup instructions
-
-## Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Install dependencies: `npm install`
-4. Make changes with tests
-5. Run tests: `npm run test`
-6. Commit changes: `git commit -m 'Add amazing feature'`
-7. Push branch: `git push origin feature/amazing-feature`
-8. Create Pull Request
-
-## License
-
-See [LICENSE](../LICENSE) file for details.
+- **Main project**: [github.com/lm-webui/lm-webui](https://github.com/lm-webui/lm-webui)
+- **Docs**: [`../docs/`](../docs/) · **Issues**: [GitHub Issues](https://github.com/lm-webui/lm-webui/issues)

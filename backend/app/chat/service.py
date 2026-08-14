@@ -13,6 +13,7 @@ from typing import Dict, List, Optional, Any
 from contextlib import contextmanager
 from functools import partial
 from app.database import get_db
+from app.core.prompts import SUMMARY_SYSTEM
 
 logger = logging.getLogger(__name__)
 
@@ -598,7 +599,7 @@ async def generate_conversation_summary_llm(conversation_id: str, messages: List
 
                 Updated Summary:"""
 
-                formatted_prompt = f"<|start_header_id|>system<|end_header_id|>\n\nYou are a concise summarizer.<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
+                formatted_prompt = f"<|start_header_id|>system<|end_header_id|>\n\n{SUMMARY_SYSTEM}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n{prompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n"
 
                 loop = asyncio.get_running_loop()
                 summary = await loop.run_in_executor(None, partial(run_gguf_summary, formatted_prompt, SUMMARY_MODEL_PATH))

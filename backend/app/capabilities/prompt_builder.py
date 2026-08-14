@@ -5,13 +5,11 @@ import re
 from typing import Any, List
 
 from .results import FileResult, MultimodalResult, RetrievalResult, SearchResult, VisionResult
+from app.core.prompts import CONTEXT_INTRO, VISION_SECTION, SEARCH_HEADER
 
 
 def _vision_section(r: VisionResult) -> str:
-    return (
-        "The user attached an image. The image itself is not shown to you, but its content "
-        f"is described below. Use this description to answer the user's question.\n\n{r.text}"
-    )
+    return VISION_SECTION + r.text
 
 
 def _multimodal_section(r: MultimodalResult) -> str:
@@ -36,7 +34,7 @@ def _retrieval_section(r: RetrievalResult) -> str:
 
 
 def _search_section(r: SearchResult) -> str:
-    lines = ["Web search results:"]
+    lines = [SEARCH_HEADER]
     for i, item in enumerate(r.items, 1):
         title = item.get("title", "")
         url = item.get("url", "")
@@ -115,12 +113,7 @@ def build_messages(
     from app.core.prompts import DEFAULT_SYSTEM_PROMPT
     system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     if context:
-        system_prompt += (
-            "\n\nContext is provided below, labeled by source (knowledge base / web search / "
-            "image description). Prefer this context over your prior knowledge for questions "
-            "about the provided documents or image. Cite sources as [n] where referenced. If "
-            "the context doesn't contain the answer, say so rather than guessing.\n\n" + context
-        )
+        system_prompt += CONTEXT_INTRO + context
 
     # 2. Bounded history — only for follow-ups that reference prior context. The summary is
     #    merged into the system prompt (one system message), recent messages added as turns.
