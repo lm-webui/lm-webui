@@ -57,6 +57,12 @@ async def execute(ctx: CapabilityContext) -> Tuple[Any, GenerateRequest]:
         ctx.conversation_id,
         system_prompt=ctx.system_prompt,
     )
+    # Linked-video transcript (YouTube summary) — inject as context so the LLM summarizes it.
+    if getattr(ctx, "transcript", ""):
+        ctx.messages.append({
+            "role": "system",
+            "content": f"Transcript of the linked video:\n{ctx.transcript}",
+        })
     # Two-stage vision: a bare "what's in this image" query → VL answers directly (one-stage).
     # Otherwise the VL describes the image and the selected text LLM composes the final answer.
     direct = ctx.vision_ready and getattr(ctx, "vision_mode", "direct") == "direct"
@@ -69,10 +75,12 @@ async def execute(ctx: CapabilityContext) -> Tuple[Any, GenerateRequest]:
         images = None
         model = ctx.model_id
 
-    # Architecture B: add cross-modal retrieved images to the payload so the model can
-    # see them alongside any user-attached images. Read off the event loop.
+    # Architecture B: add cross-modal retrieved images to the payload so a vision-capable
+    # model can see them alongside user-attached images. Read off the event loop.
+    # Images reach a model ONLY in direct-vision mode (the VL). Never attach image pixels to
+    # the text LLM (describe/text) — it gets the VL description / text context instead.
     retrieved = await asyncio.to_thread(_retrieved_image_uris, ctx)
-    if retrieved:
+    if retrieved and getattr(ctx, "vision_mode", "direct") == "direct":
         images = (images or []) + retrieved
 
     req = GenerateRequest(

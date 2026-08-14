@@ -1,13 +1,17 @@
 """PromptBuilder — the only place that merges typed capability results into LLM messages."""
 from __future__ import annotations
 
+import re
 from typing import Any, List
 
 from .results import FileResult, MultimodalResult, RetrievalResult, SearchResult, VisionResult
 
 
 def _vision_section(r: VisionResult) -> str:
-    return f"Vision description of the attached image:\n{r.text}"
+    return (
+        "The user attached an image. The image itself is not shown to you, but its content "
+        f"is described below. Use this description to answer the user's question.\n\n{r.text}"
+    )
 
 
 def _multimodal_section(r: MultimodalResult) -> str:
@@ -32,13 +36,44 @@ def _retrieval_section(r: RetrievalResult) -> str:
 
 
 def _search_section(r: SearchResult) -> str:
-    lines = []
-    for i, item in enumerate(r.items):
+    lines = ["Web search results:"]
+    for i, item in enumerate(r.items, 1):
         title = item.get("title", "")
         url = item.get("url", "")
         snippet = item.get("snippet", "")
-        lines.append(f"- [{title}]({url})" + (f" — {snippet}" if snippet else ""))
-    return "Web search results:\n" + "\n".join(lines)
+        lines.append(f"[{i}] {title} ({url})" + (f" — {snippet}" if snippet else ""))
+    return "\n".join(lines)
+
+
+# Rough token estimate (chars / 4) — good enough for prompt budgeting.
+def _approx_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+
+# Signals that the current request depends on prior context (pronouns/references) —
+# only then do we inject full conversation history. A standalone request gets minimal history.
+_FOLLOWUP_RE = re.compile(
+    r"\b(it|this|that|those|they|them|the above|the (file|doc|pdf|image|picture|chart)|"
+    r"go (deeper|further)|more (detail|on)|explain|refer|mention|earlier|before|"
+    r"continue|go on|proceed|again)\b", re.I)
+
+
+def _is_followup(message: str) -> bool:
+    m = (message or "").strip()
+    return bool(m.rstrip().endswith("?") or _FOLLOWUP_RE.search(m))
+
+
+def _trim(sections: List[str], budget: int) -> List[str]:
+    """Keep sections in priority order while the total stays within `budget`."""
+    used = 0
+    kept: List[str] = []
+    for s in sections:
+        cost = _approx_tokens(s)
+        if used + cost > budget:
+            break
+        used += cost
+        kept.append(s)
+    return kept
 
 
 def build_messages(
@@ -47,9 +82,22 @@ def build_messages(
     conversation_id: str,
     system_prompt: str = "",
 ) -> List[dict]:
-    """Construct messages from user_message + typed results + conversation history."""
-    from app.chat.service import get_conversation_summary, get_last_n_messages
+    """Construct messages from user_message + typed results + conversation history.
 
+    Enforces a bounded prompt so generation time stays consistent regardless of history
+    length: capability context is capped to `context_token_budget`, history (summary +
+    recent messages) to `history_token_budget`, and the current user message is always kept.
+    Full history is injected only for follow-ups that reference prior context.
+    """
+    from app.chat.service import get_conversation_summary, get_last_n_messages
+    from app.core.config_manager import get_config
+    try:
+        ctx_budget = get_config().rag.context_token_budget
+        hist_budget = get_config().rag.history_token_budget
+    except Exception:
+        ctx_budget, hist_budget = 2000, 4000
+
+    # 1. Capability results → bounded context.
     sections = []
     for r in results:
         if isinstance(r, FileResult) and r.text:
@@ -62,25 +110,40 @@ def build_messages(
             sections.append(_search_section(r))
         elif isinstance(r, VisionResult) and r.text:
             sections.append(_vision_section(r))
+    context = "\n\n".join(_trim(sections, ctx_budget))
 
-    context = "\n\n".join(sections)
-
-    system_prompt = system_prompt or "You are a helpful AI assistant."
+    from app.core.prompts import DEFAULT_SYSTEM_PROMPT
+    system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
     if context:
         system_prompt += (
-            "\n\nRelevant context is provided below (from web search or your knowledge base). "
-            "Use it to answer the user's question factually, citing numbered sources as [n] "
-            "where referenced. If the context doesn't contain enough information, say so and "
-            "use your own knowledge.\n\n" + context
+            "\n\nContext is provided below, labeled by source (knowledge base / web search / "
+            "image description). Prefer this context over your prior knowledge for questions "
+            "about the provided documents or image. Cite sources as [n] where referenced. If "
+            "the context doesn't contain the answer, say so rather than guessing.\n\n" + context
         )
+
+    # 2. Bounded history — only for follow-ups that reference prior context. The summary is
+    #    merged into the system prompt (one system message), recent messages added as turns.
+    followup = _is_followup(user_message)
+    if followup:
+        summary = get_conversation_summary(conversation_id)
+        if summary:
+            system_prompt += f"\n\nConversation Summary (prior turns): {summary}"
+        recent = get_last_n_messages(conversation_id, n=5)  # chronological (oldest first)
+        # Keep newest messages that fit the budget (drop oldest first).
+        kept: List[dict] = []
+        used = 0
+        for m in recent:
+            cost = _approx_tokens(m["content"])
+            if used + cost > hist_budget:
+                break
+            kept.append(m)
+            used += cost
+
     messages: List[dict] = [{"role": "system", "content": system_prompt}]
+    if followup:
+        messages.extend(kept)
 
-    summary = get_conversation_summary(conversation_id)
-    if summary:
-        messages.append({"role": "system", "content": f"Conversation Summary: {summary}"})
-
-    for msg in get_last_n_messages(conversation_id, n=5):
-        messages.append({"role": msg["role"], "content": msg["content"]})
-
+    # 3. Current user message — always kept (the anchor).
     messages.append({"role": "user", "content": user_message})
     return messages

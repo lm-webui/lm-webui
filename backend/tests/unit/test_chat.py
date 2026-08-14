@@ -28,7 +28,7 @@ class TestBuildMessages:
 
     def test_default_system_prompt(self):
         messages = build_messages("Hi", [], "conv_1", system_prompt="")
-        assert "You are a helpful AI assistant." in messages[0]["content"]
+        assert "You are a helpful, honest AI assistant" in messages[0]["content"]
 
     def test_custom_system_prompt_used(self):
         messages = build_messages("Hi", [], "conv_1", system_prompt="Be terse.")
@@ -50,7 +50,7 @@ class TestBuildMessages:
         res = SearchResult(items=[{"title": "LM-WebUI", "url": "https://lm-webui", "snippet": "docs"}])
         messages = build_messages("search the web", [res], "conv_1")
         assert "Web search results:" in messages[0]["content"]
-        assert "[LM-WebUI](https://lm-webui)" in messages[0]["content"]
+        assert "[1] LM-WebUI (https://lm-webui)" in messages[0]["content"]
 
     def test_vision_context_injected(self):
         res = VisionResult(text="A red apple on a desk.")

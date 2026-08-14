@@ -44,3 +44,11 @@ class VisionResult:
 class ImageGenResult:
     """Generated image URL (image-generation intent)."""
     image_url: str = ""
+
+
+@dataclass
+class TranscriptResult:
+    """Transcription of a linked video (YouTube summary path)."""
+    text: str = ""
+    title: str = ""
+    url: str = ""

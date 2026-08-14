@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from app.database import get_db
 from app.security.auth.dependencies import get_current_user
+from app.core.prompts import DEFAULT_SYSTEM_PROMPT
 
 router = APIRouter(prefix="/api/settings")
 
@@ -32,7 +33,7 @@ class SettingsUpdate(BaseModel):
     streamingEnabled: bool = True
     temperature: float = 0.7
     topP: float = 0.9
-    systemPrompt: str = "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions."
+    systemPrompt: str = DEFAULT_SYSTEM_PROMPT
 
     # Defaults
     selectedSearchEngine: str = "duckduckgo"
@@ -82,7 +83,7 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
         "streamingEnabled": True,
         "temperature": 0.7,
         "topP": 0.9,
-        "systemPrompt": "You are a helpful AI assistant. Provide clear, accurate, and helpful responses to user questions.",
+        "systemPrompt": DEFAULT_SYSTEM_PROMPT,
         "selectedSearchEngine": "duckduckgo",
         "searxngUrl": "http://127.0.0.1:8080",
         "selectedModel": "",

@@ -145,6 +145,7 @@ class OrchestratorController:
                 file_references=chat_request.file_references,
                 web_search=bool(chat_request.webSearch),
                 image_mode=bool(getattr(chat_request, "isImageMode", False)),
+                backfilled=_backfilled,
             )
 
             from app.capabilities import CapabilityContext, execute_plan as run_capabilities
@@ -252,15 +253,16 @@ class OrchestratorController:
                 yield ModelEvent.error(str(e))
                 return
 
-            # 6. Save Assistant Response
+            # 6. Save Assistant Response — record the ACTUAL generating provider/model
+            # (in direct-vision mode the VL answers, not the request's selected LLM).
             if response_content:
                 save_message(
                     actual_conversation_id,
                     user_id,
                     "assistant",
                     response_content,
-                    model=model_id,
-                    provider=provider_id
+                    model=req.model,
+                    provider=getattr(provider_to_use, "id", provider_id) or provider_id,
                 )
                 record_usage(
                     user_id=user_id,

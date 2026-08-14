@@ -24,6 +24,7 @@ rag:
   top_k_retrieval: 20
   scope: "user"
   context_token_budget: 2000
+  history_token_budget: 4000
   query_rewrite: false
   engine: "multimodal"          # "bge" (legacy text) | "multimodal" (Architecture B)
   multimodal:
@@ -31,8 +32,8 @@ rag:
     vision_model: "google/siglip2-base-patch16-224"
     short_chunk_words: 50
     audio:
-      enabled: false
-      asr_provider: "none"     # "none" | "openai_whisper" | "faster_whisper"
+      enabled: true
+      asr_provider: "faster_whisper"   # "none" | "openai_whisper" | "faster_whisper"
       asr_model: "tiny"
       clap_enabled: false
 

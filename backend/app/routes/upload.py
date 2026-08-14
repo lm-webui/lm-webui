@@ -44,7 +44,8 @@ except Exception as e:
 SUPPORTED_TYPES = {
     'image': ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'],
     'document': ['.pdf', '.docx', '.pptx', '.ppt', '.txt', '.md', '.py', '.js', '.ts', '.html', '.css', '.json'],
-    'spreadsheet': ['.xlsx', '.xls', '.csv']
+    'spreadsheet': ['.xlsx', '.xls', '.csv'],
+    'audio': ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac']
 }
 
 # Upload type configurations
@@ -197,6 +198,8 @@ async def _handle_general_upload(
             file_type_db = "image"
         elif ext in SUPPORTED_TYPES['spreadsheet']:
             file_type_db = "spreadsheet"
+        elif ext in SUPPORTED_TYPES['audio']:
+            file_type_db = "audio"
 
         # Insert into media library with authenticated user ID
         cursor.execute("""

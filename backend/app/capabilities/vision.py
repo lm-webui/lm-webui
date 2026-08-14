@@ -24,15 +24,45 @@ def _needs_vision(ctx: CapabilityContext) -> bool:
     return bool(IMG_SIGNAL_RE.search(msg))
 
 
-async def _describe(provider, images: list) -> str:
+_VISION_DESCRIBE_BASE = (
+    "You are a visual analysis assistant. Analyze the provided image carefully before answering. "
+    "Prioritize: 1) accurate identification of visible objects and text; 2) spatial relationships "
+    "between relevant objects (left/right, above/below, in front/behind, inside/outside, near/far, "
+    "overlapping, connected/disconnected); 3) relative position, orientation, size, proximity; "
+    "4) fine visual details relevant to the question; 5) evidence directly supported by the image. "
+    "Separate direct observations from inference. Do not invent objects, text, measurements, or "
+    "relationships not supported by the image. If something is unclear due to resolution, occlusion, "
+    "lighting, or viewpoint, state the uncertainty explicitly. Do not confuse 2D image position with "
+    "3D depth."
+)
+_VISION_SPATIAL_APPEND = (
+    " This is a spatial reasoning task: identify the relevant objects, estimate their locations, "
+    "determine their visible relative relationships, and account for occlusion or ambiguity."
+)
+_VISION_TECH_APPEND = (
+    " Analyze this as a technical image: pay attention to components, labels, connectors, ports, "
+    "cables, slots, orientation, physical connections, and visible damage. Do not infer hidden "
+    "components; separate observations from conclusions. If text is too small or unclear to read, "
+    "say so rather than guessing."
+)
+_SPATIAL_WORDS = ('left', 'right', 'above', 'below', 'spatial', 'position', 'location', 'near',
+                  'far', 'between', 'layout', 'behind', 'front')
+_TECH_WORDS = ('connector', 'port', 'component', 'circuit', 'pcb', 'pin', 'solder', 'label',
+               'technical', 'diagram', 'chart', 'hardware', 'cable', 'slot')
+
+
+async def _describe(provider, images: list, message: str = "") -> str:
     """One-shot VL describe pass — produces text the selected LLM composes from."""
     from app.providers.schemas import GenerateRequest
+    prompt = _VISION_DESCRIBE_BASE
+    m = (message or "").lower()
+    if any(w in m for w in _SPATIAL_WORDS):
+        prompt += _VISION_SPATIAL_APPEND
+    if any(w in m for w in _TECH_WORDS):
+        prompt += _VISION_TECH_APPEND
     req = GenerateRequest(
         model="vision",
-        messages=[{
-            "role": "user",
-            "content": "Describe this image in detail: subject, composition, colors, lighting, style, and any notable elements.",
-        }],
+        messages=[{"role": "user", "content": prompt}],
         images=images,
         max_tokens=500,
         stream=False,
@@ -208,7 +238,7 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
             ctx.vision_mode = getattr(ctx, "vision_mode", "direct")
             if ctx.vision_mode == "direct":
                 return VisionResult(images=images, provider=ctx.vision_provider, ready=True)
-            desc = await _describe(ctx.vision_provider, images)
+            desc = await _describe(ctx.vision_provider, images, ctx.chat_request.message)
             ctx.vision_description = desc
             if not desc:
                 # Describe pass failed (empty) — fall back to direct so the VL still answers

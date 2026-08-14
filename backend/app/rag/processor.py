@@ -89,7 +89,12 @@ class RAGProcessor:
         # chunking will split further, but cap the raw input).
         text = text[:100_000]
 
-        # 2. Chunk (honor configured chunk size/overlap).
+        # 2. Chunk (honor configured chunk size/overlap). Audio is skipped here — its
+        #    placeholder text isn't real content; the transcript path (multimodal ingest)
+        #    handles audio. BGE deep-text indexing below runs for docs/images only.
+        from pathlib import Path as _Path
+        is_audio = _Path(file_path).suffix.lower() in self._AUDIO_EXT
+
         from app.core.config_manager import get_config
         from app.rag.chunking import chunk_text
 
@@ -100,7 +105,7 @@ class RAGProcessor:
         except Exception:
             chunk_size, chunk_overlap = 512, 64
 
-        chunks = chunk_text(
+        chunks = [] if is_audio else chunk_text(
             text,
             file_id=file_path,
             conversation_id=conversation_id,
@@ -109,7 +114,7 @@ class RAGProcessor:
             chunk_size=chunk_size,
             overlap=chunk_overlap,
         )
-        if not chunks:
+        if not is_audio and not chunks:
             return {"status": "skipped", "reason": "text too short to chunk"}
 
         # 3. Embed.
@@ -144,26 +149,6 @@ class RAGProcessor:
 
     _IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'}
     _AUDIO_EXT = {'.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac'}
-
-    @classmethod
-    def _asr_transcribe(cls, file_path: str, provider: str, model_size: str) -> str:
-        """Transcribe audio via the configured ASR provider; '' if unavailable."""
-        try:
-            if provider == "openai_whisper":
-                import whisper
-                model = getattr(cls, "_whisper", None)
-                if model is None:
-                    model = whisper.load_model(model_size or "tiny")
-                    cls._whisper = model
-                return (whisper.transcribe(model, file_path)["text"] or "").strip()
-            if provider == "faster_whisper":
-                from faster_whisper import WhisperModel
-                model = WhisperModel(model_size or "tiny", device="cpu", compute_type="int8")
-                segments, _ = model.transcribe(file_path)
-                return " ".join(s.text for s in segments).strip()
-        except Exception as exc:
-            logger.warning("ASR transcription failed for %s (%s): %s", file_path, provider, exc)
-        return ""
 
     @classmethod
     def _short_text(cls, text: str, n: int) -> str:
@@ -206,7 +191,8 @@ class RAGProcessor:
                 except Exception:
                     a_cfg = None
                 if a_cfg is not None and getattr(a_cfg, "enabled", False):
-                    transcript = self._asr_transcribe(file_path, a_cfg.asr_provider, a_cfg.asr_model)
+                    from app.services.audio_transcriber import transcribe
+                    transcript = transcribe(file_path, a_cfg.asr_provider, a_cfg.asr_model)
                     if transcript:
                         cap = self._short_text(transcript, short_n)
                         v = embed_text_multimodal([cap])[0]

@@ -8,6 +8,18 @@ from .results import SearchResult
 
 logger = logging.getLogger(__name__)
 
+_SEARCH_PREFIXES = ("search for", "look up", "search the web for", "find", "google")
+
+
+def _clean_query(message: str) -> str:
+    """Strip leading web-search noise prefixes (e.g. 'search for X' → 'X')."""
+    q = (message or "").strip()
+    low = q.lower()
+    for p in _SEARCH_PREFIXES:
+        if low.startswith(p):
+            return q[len(p):].strip()
+    return q
+
 
 def _get_search_cx(user_id: int) -> str | None:
     """Read the user's stored Google Programmable Search Engine ID (cx)."""
@@ -57,7 +69,7 @@ async def execute(ctx: CapabilityContext) -> None:
     if not message:
         return SearchResult()
     try:
-        query = message[:200]
+        query = _clean_query(message)[:200]
         engine, searxng_url = _get_search_config(ctx.user_id)
         from app.search import get_search_provider
         search_provider = get_search_provider(engine)  # distinct from the LLM provider

@@ -64,6 +64,9 @@ GENERATION_HINTS = ("generate an image", "create an image", "make an image", "dr
                     "draw an", "create a picture", "generate a picture", "image of",
                     "picture of", "logo of", "illustrate", "generate a logo", "design a")
 AUDIO_HINTS = ("transcribe", "voice note", "audio note", "what did they say", "convert audio")
+# Matches a YouTube video link → signals the transcribe_url capability (video summarization).
+YOUTUBE_RE = re.compile(
+    r"(?:youtube\.com/(?:watch\?v=|shorts/|embed/)|youtu\.be/)([\w-]{6,})", re.IGNORECASE)
 # Free-text signals that the user is asking about an image — shared by the planner
 # (mixed image+doc disambiguation) and the vision capability (runtime gating).
 IMG_SIGNAL_RE = re.compile(
@@ -80,12 +83,22 @@ _VISION_SIMPLE_RE = re.compile(
     r"\b(what|which)\b.*\b(in|of|on)\b.*\b(picture|image|photo|screenshot|diagram|chart)\b",
     re.IGNORECASE,
 )
+# "what image is it?", "which picture is this", "what kind of image" — direct VL question
+# that doesn't use "in/of/on" (a simple image question should route to direct, not describe).
+_VISION_IMAGE_RE = re.compile(
+    r"\b(what|which)\b.*\b(image|picture|photo|screenshot)\b",
+    re.IGNORECASE,
+)
 
 
 def _is_simple_vision_query(message: str) -> bool:
     """A bare description / "what X in the picture" query → one-stage VL."""
     m = message.lower()
-    return bool(_has_hint(m, VISION_SIMPLE_HINTS) or _VISION_SIMPLE_RE.search(message))
+    return bool(
+        _has_hint(m, VISION_SIMPLE_HINTS)
+        or _VISION_SIMPLE_RE.search(message)
+        or _VISION_IMAGE_RE.search(message)
+    )
 
 
 def _is_image(ref: Any) -> bool:

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .base import CapabilityContext
-from . import file_context, retrieve, retrieve_multimodal, search, vision
+from . import file_context, retrieve, retrieve_multimodal, search, vision, transcribe_url
 
 
 async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
@@ -25,4 +25,7 @@ async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
         # Web search runs last, so when combined with RAG/vision the results follow
         # the file/image context and the LLM composes from all of them.
         ctx.results.append(await search.execute(ctx))
+    if getattr(plan, "transcribe", False):
+        # YouTube transcript is injected via ctx.transcript (prompt_builder), not a result.
+        await transcribe_url.execute(ctx)
     return ctx

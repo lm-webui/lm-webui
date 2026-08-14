@@ -50,3 +50,8 @@ dateparser>=1.2.0
 # NOTE: Hardware-specific dependencies (torch, torchvision, llama-cpp-python)
 # have been moved to their respective Dockerfiles to prevent conflicts
 # and ensure the correct hardware acceleration libraries are used.
+
+# Audio (voice notes → transcript; YouTube video summarization). Optional at runtime —
+# transcribe() degrades gracefully when absent. Models download on first use.
+faster-whisper>=1.0.0
+yt-dlp>=2024.1.0
