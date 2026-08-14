@@ -52,6 +52,7 @@ interface ChatStore {
   updateConversationTitle: (chatId: string, title: string) => Promise<void>;
   updateConversation: (chatId: string, updates: Partial<Conversation>) => void;
   streamMessageChunk: (chatId: string, messageId: string, chunk: string) => void;
+  finalizeMessage: (chatId: string, messageId: string, fields: Partial<Message> & Record<string, any>) => void;
   deleteConversation: (chatId: string) => Promise<void>;
   ensureConversation: () => Promise<string>;
 
@@ -451,6 +452,7 @@ export const useChatStore = create<ChatStore>()(
               messages[messageIndex] = {
                 ...message,
                 content: message.content + chunk,
+                isLoading: true, // streaming — shows the cursor / progress in the UI
                 timestamp: message.timestamp || new Date(), // Maintain original timestamp if exists
               };
             }
@@ -460,6 +462,7 @@ export const useChatStore = create<ChatStore>()(
               id: messageId,
               role: 'assistant',
               content: chunk,
+              isLoading: true,
               created_at: new Date().toISOString(),
             });
           }
@@ -471,6 +474,24 @@ export const useChatStore = create<ChatStore>()(
                 ...conversation,
                 messages,
               },
+            },
+          };
+        });
+      },
+
+      // Finalize a streaming assistant message: clear the loading flag and attach the
+      // multimodal context (sources, context_used, retrieved images, badges).
+      finalizeMessage: (chatId: string, messageId: string, fields: Partial<Message> & Record<string, any>) => {
+        set(state => {
+          const conversation = state.conversations[chatId];
+          if (!conversation) return state;
+          const messages = conversation.messages.map(m =>
+            m.id === messageId ? { ...m, ...fields, isLoading: false } : m
+          );
+          return {
+            conversations: {
+              ...state.conversations,
+              [chatId]: { ...conversation, messages },
             },
           };
         });
@@ -768,6 +789,7 @@ const selectActiveChatId = (state: ChatStore) => state.activeChatId;
 const selectSetActiveChat = (state: ChatStore) => state.setActiveChat;
 const selectCreateNewChat = (state: ChatStore) => state.createNewChat;
 const selectAddMessage = (state: ChatStore) => state.addMessage;
+const selectFinalizeMessage = (state: ChatStore) => state.finalizeMessage;
 const selectImageGenerationLoading = (state: ChatStore) => state.imageGenerationLoading;
 const selectConversationCreationLoading = (state: ChatStore) => state.conversationCreationLoading;
 const selectLastError = (state: ChatStore) => state.lastError;
@@ -802,6 +824,7 @@ export const useActiveChatId = () => useChatStore(selectActiveChatId);
 export const useSetActiveChat = () => useChatStore(selectSetActiveChat);
 export const useCreateNewChat = () => useChatStore(selectCreateNewChat);
 export const useAddMessage = () => useChatStore(selectAddMessage);
+export const useFinalizeMessage = () => useChatStore(selectFinalizeMessage);
 export const useUpdateConversation = () => useChatStore(state => state.updateConversation);
 
 export const useActiveConversation = (): Conversation | null => {

@@ -16,6 +16,20 @@ export interface ChatMessage extends BaseMessage {
   rawResponse?: string;
   generatedImageUrl?: string;
   editedAt?: string;
+  // Multimodal context surfaced by the backend (RAG/vision/web-search/transcript).
+  sources?: ChatSource[];
+  context_used?: { memory?: boolean; rag?: boolean; vision?: boolean; web_search?: boolean; audio?: boolean };
+  retrievedImages?: string[];
+  documentsReferenced?: boolean;
+  memoryUsed?: boolean;
+}
+
+// A source/citation surfaced alongside the assistant answer.
+export interface ChatSource {
+  title: string;
+  type: string; // "document" | "image" | "web" | "vision" | "transcript"
+  snippet?: string;
+  source?: string;
 }
 
 // File attachment for multimodal chat

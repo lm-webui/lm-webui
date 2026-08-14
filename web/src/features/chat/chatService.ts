@@ -1,9 +1,8 @@
-import { 
-  chatWithModel,
-  chatWithModelStream,
+import {
+  streamChat,
   createConversation,
   generateConversationTitle,
-  generateImage
+  generateImage,
 } from "@/utils/api";
 
 export interface ChatRequest {
@@ -29,6 +28,11 @@ export interface Message {
   searchUsed?: boolean;
   rawResponse?: string;
   generatedImageUrl?: string;
+  sources?: any[];
+  retrievedImages?: string[];
+  context_used?: any;
+  documentsReferenced?: boolean;
+  memoryUsed?: boolean;
   fileAttachments?: Array<{
     id: number;
     file_path: string;
@@ -66,7 +70,8 @@ export class ChatService {
       setMessages: (messages: Message[]) => void;
       setIsLoading: (loading: boolean) => void;
       onChunk?: (chunk: string) => void;
-      onStatus?: (status: string) => void;
+      onStatus?: (stage: string, message: string) => void;
+      onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[] }) => void;
     }
   ): Promise<{
     userMessage: Message;
@@ -154,8 +159,6 @@ export class ChatService {
     
     console.log(`🤖 Model resolution: '${selectedModel}' -> '${modelIdForAPI}' (using mapping: ${!!(modelMapping[providerPrefixedKey] || modelMapping[selectedModel])})`);
 
-    const shouldUseStreaming = showRawResponse;
-
     // Create a signal for the request - either use the provided one or create a new one
     const signal = request.signal || new AbortController().signal;
 
@@ -173,7 +176,9 @@ export class ChatService {
        selectedModel.toLowerCase().includes("nano banana") ||
        selectedModel.toLowerCase().includes("imagen"));
 
-    let response: string | Record<string, any>;
+    let processedResponse = "";
+    let generatedImageUrl: string | undefined;
+    let sourcesPayload: { context_used?: any; sources?: any[]; retrieved_images?: string[] } = {};
 
     if (isImageGenerationRequest) {
       console.log("🎨 Image generation intent detected in ChatService");
@@ -183,30 +188,19 @@ export class ChatService {
           message: request.message,
           provider: request.provider,
           model: modelIdForAPI,
-          api_key: request.api_key || "" 
+          api_key: request.api_key || ""
         }, sessionId);
-        
-        // The generateImage API returns the URL, but we need to return a markdown string
-        // The backend generate_image endpoints already return a markdown string with the image!
-        // Wait, looking at api.ts generateImage returns response.image_url
-        // But backend endpoints return a JSON with image_url AND message_id.
-        // Let's check api.ts again.
-        
-        // Re-reading api.ts: generateImage returns response.image_url.
-        // But the backend (gemini_image.py/openai_image.py) saves a message to the DB with markdown.
-        // So we might just need to fetch the last message or construct a fake one?
-        // Actually, if we look at api.ts generateImage implementation:
-        // return response.image_url;
-        
-        // We need to return a string response that will be displayed in the chat.
-        response = `![Generated Image](${imageUrl})`;
-        
+        processedResponse = `![Generated Image](${imageUrl})`;
+        generatedImageUrl = imageUrl;
       } catch (error: any) {
         console.error("Image generation failed:", error);
-        response = `Failed to generate image: ${error.message || "Unknown error"}`;
+        processedResponse = `Failed to generate image: ${error.message || "Unknown error"}`;
       }
-    } else if (shouldUseStreaming) {
-      response = await chatWithModelStream({
+    } else {
+      // Stream via SSE — tokens animate live, status stages the placeholder, sources
+      // carry the multimodal context for citations/badges/retrieved images.
+      let streamError: Error | null = null;
+      await streamChat({
         message: request.message,
         provider: request.provider,
         model: modelIdForAPI,
@@ -218,41 +212,20 @@ export class ChatService {
         file_references: request.file_references || [],
         web_search: isSearchEnabled ?? false,
         search_provider: selectedSearchEngine ?? "duckduckgo",
-      }, options.onChunk, options.onStatus);
-    } else {
-      response = await chatWithModel({
-        message: request.message,
-        provider: request.provider,
-        model: modelIdForAPI,
-        api_key: "",
-        conversation_history: conversationHistory,
-        signal: signal,
-        conversation_id: sessionId, // Pass conversation ID to backend
-        file_references: request.file_references || [],
-        web_search: isSearchEnabled ?? false,
-        search_provider: selectedSearchEngine ?? "duckduckgo",
-      });
-    }
+      }, {
+        onToken: (token) => {
+          processedResponse += token;
+          options.onChunk?.(token);
+        },
+        onStatus: (stage, msg) => options.onStatus?.(stage, msg),
+        onSources: (data) => {
+          sourcesPayload = data;
+          options.onSources?.(data);
+        },
+        onError: (err) => { streamError = err; },
+      }, signal);
 
-    let processedResponse: string = typeof response === "string" ? response : "";
-    let generatedImageUrl: string | undefined;
-    // Non-streaming /api/chat now returns { response, image_url?, conversation_id }.
-    if (typeof response === "object" && response !== null) {
-      generatedImageUrl = response.image_url;
-      const content = response.response || response.content || "";
-      processedResponse = typeof content === "string" ? content : JSON.stringify(content);
-    }
-    if (showRawResponse && typeof response === "string") {
-      try {
-        // Try to parse as JSON and extract content
-        const parsedResponse = JSON.parse(response);
-        if (parsedResponse.response || parsedResponse.content) {
-          processedResponse = parsedResponse.response || parsedResponse.content;
-        }
-      } catch (error) {
-        // If parsing fails, use the original response
-        console.log("Response is not JSON, using as-is");
-      }
+      if (streamError) throw streamError;
     }
 
     // Note: Assistant message is already persisted by the chat API (/api/chat)
@@ -285,6 +258,7 @@ export class ChatService {
       timestamp: new Date(),
     };
 
+    const contextUsed = sourcesPayload.context_used || {};
     const assistantMessage: Message = {
       id: (Date.now() + 1).toString(),
       role: "assistant",
@@ -292,7 +266,13 @@ export class ChatService {
       timestamp: new Date(),
       model: selectedModel,
       ...(generatedImageUrl ? { generatedImageUrl } : {}),
-    };
+      sources: sourcesPayload.sources || [],
+      retrievedImages: sourcesPayload.retrieved_images || [],
+      context_used: contextUsed,
+      searchUsed: !!contextUsed.web_search,
+      documentsReferenced: !!contextUsed.rag,
+      memoryUsed: !!contextUsed.memory,
+    } as Message;
 
     return {
       userMessage,

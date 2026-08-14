@@ -59,16 +59,18 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 
 | Feature | Capabilities |
 |---|---|
-| **Smart-Modality** | Automatically chooses the right path for each request, direct chat, RAG, web search, vision, or image generation, so simple tasks stay fast without unnecessary processing. |
+| **Smart-Modality™** | Automatically chooses the right path for each request, direct chat, RAG, web search, vision, or image generation. So, simple tasks stay fast without unnecessary processing, retrieval runs only when you need past data, and web search combines with RAG/vision (or is skipped for direct image questions). |
+| **Runtime Manager** | Manages the inference engines and model formats below — llama.cpp (GGUF), MLX, and ComfyUI (image workflows). Ollama and vLLM are configured as API providers in Settings. |
+| **Files & RAG** | Upload documents, images, and audio for conversation context. Extract/OCR content, upload status, file references, and citation display. Retrieval via **Multimodal Latent RAG**: a single query finds relevant text chunks and visually-matching images (SigLIP2 shared latent space), fused with Reciprocal Rank Fusion. |
+| **Multimodal Retrieval** | Cross-modal search across docs, images, and audio in one latent index (SigLIP2 text + vision, CLAP-ready). A text query returns matching paragraphs and diagrams/charts in a single pass. |
+| **Multimodal Vision** | Analyze images, screenshots, diagrams, and other visual content using compatible local vision models — auto-routed, no manual model switching. Simple image questions answer directly via the vision model; complex ones compose with RAG and web context.
 | **Chat** | Chat with local or cloud AI models from one interface. Supports GGUF/llama.cpp, MLX, Ollama, vLLM, OpenAI, Gemini, Anthropic, DeepSeek, Grok, and more. Includes streaming, code rendering, Mermaid diagrams, tables, conversations, and web search.|
-| **Multimodal Vision** | Analyze images, screenshots, diagrams, and other visual content using compatible local vision models.
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
-| **File Context** | Upload files for conversation context. Image and document processing (incl. OCR), upload status, file references with conversations, and citation display in chat. |
-| **GGUF / llama.cpp** | Built-in GGUF model lifecycle — download from HuggingFace, upload, validate, and serve models locally via the llama.cpp engine. Vision through `llama-server`. Background, single-flight download queue that survives closing the UI. |
-| **MLX** | Inference on Apple Silicon via the MLX framework (`mlx-lm`). Model download from HuggingFace with one click. Seamless chat integration. |
+| **Voice & Video** | Transcribe voice notes and audio (ASR → text into the retrieval index) and summarize linked YouTube videos — queried just like documents. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
-| **Runtime Manager** | Manages the inference engines and model formats below — llama.cpp (GGUF), MLX, and ComfyUI (image workflows). Ollama and vLLM are configured as API providers in Settings. |
+| **GGUF / llama.cpp** | Built-in GGUF model lifecycle, download from HuggingFace, upload, validate, and serve models locally via the llama.cpp engine. Vision through `llama-server`. Background, single-flight download queue that survives closing the UI. |
+| **MLX** | Inference on Apple Silicon via the MLX framework (`mlx-lm`). Model download from HuggingFace with one click. Seamless chat integration. |
 | **Artifacts** | Persistent structured document storage with versioning, project and conversation association, and soft-delete support. |
 | **Usage Analytics** | Token and request tracking per provider and model. Admin dashboard with usage summaries, per-user breakdowns, and CSV export. |
 | **Self-Hosted Ready** | Native Python service, zero external telemetry, offline-capable. Data in `~/.lmwebui/`. Docker deployment also available. |
@@ -93,15 +95,6 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 - **HuggingFace Integration**: Direct download from HuggingFace repositories with auto-resolved quantization options
 - **Hardware Awareness**: Detects available hardware and helps you choose a compatible engine and model
 - **Seamless Integration**: Use GGUF models directly in the chat interface
-
----
-
-## 🔤 Runtime Terminology
-
-- **GGUF / llama.cpp** — Inference engine: **llama.cpp**. Model format: **GGUF**.
-- **MLX** — Framework: **MLX**. LLM inference: **mlx-lm**. Model format: MLX-compatible.
-- **Diffusion / Image** — Workflow runtime: **ComfyUI**. Models: SDXL, FLUX, etc.
-- LM-WebUI **Runtime Manager** orchestrates these engines and formats in one place.
 
 ---
 
@@ -152,7 +145,7 @@ The development frontend runs on the configured Vite port and proxies API reques
 
 ## 🚢 Deployment
 
-### Native One-line Install (recommended)
+### Native One-line Install
 
 The `install.sh` script sets up a systemd (Linux) or launchd (macOS) service running on port 7070.
 

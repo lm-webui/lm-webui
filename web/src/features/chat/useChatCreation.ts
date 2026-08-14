@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { ChatService, ChatRequest } from "./chatService";
 import { ImageService, ImageRequest } from "@/features/images/imageService";
-import { useChatStore, useAddMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartImageGeneration, useCompleteImageGeneration, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
+import { useChatStore, useAddMessage, useFinalizeMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartImageGeneration, useCompleteImageGeneration, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
 
 // Simple image message formatter - creates text-only content (image will be rendered separately)
@@ -19,6 +19,30 @@ const formatImageMessage = (imageUrl: string): string => {
 const generateMessageId = (prefix: string = 'msg'): string => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 };
+
+// Normalize the backend `sources` payload into the shape MessageContext renders
+// (adds id; counts document/image sources for the "N documents" badge).
+function normalizeSources(raw: any[] = []) {
+  return raw.map((s, i) => ({
+    id: s.id || `src_${i}`,
+    title: s.title || "Source",
+    type: (s.type as string) || "document",
+    snippet: s.snippet || "",
+  }));
+}
+function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_images?: string[] } = {}) {
+  const cu = data.context_used || {};
+  const sources = normalizeSources(data.sources);
+  const docCount = sources.filter(s => s.type === "document" || s.type === "image").length;
+  return {
+    sources,
+    retrievedImages: data.retrieved_images || [],
+    context_used: cu,
+    searchUsed: !!cu.web_search,
+    documentsReferenced: docCount,
+    memoryUsed: !!cu.memory,
+  };
+}
 
 interface UseChatCreationOptions {
   isAuthenticated: boolean;
@@ -44,6 +68,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
 
   // Zustand state management
   const addMessage = useAddMessage();
+  const finalizeMessage = useFinalizeMessage();
   const activeChatId = useActiveChatId();
   const setActiveChat = useSetActiveChat();
   const createNewChat = useCreateNewChat();
@@ -224,6 +249,9 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           search_provider: hookOptions.selectedSearchEngine ?? "duckduckgo",
         };
 
+      // Stream tokens into this assistant message as they arrive.
+      targetIdRef.current = assistantMessageId;
+
       const result = await ChatService.sendMessage(chatRequest, {
         isAuthenticated: hookOptions.isAuthenticated,
         currentSessionId: targetConversationId,
@@ -243,22 +271,36 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         setIsLoading: () => {},
         onChunk: (chunk: string) => {
           if (chunk) receivedContent = true;
-          if (targetIdRef.current) {
-            streamMessageChunk(targetConversationId || result.sessionId, targetIdRef.current, chunk);
+          if (targetIdRef.current && targetConversationId) {
+            streamMessageChunk(targetConversationId, targetIdRef.current, chunk);
           }
         },
-        onStatus: (status: string) => {
-          setSearchStatus(status);
+        onStatus: (stage: string, message: string) => {
+          setSearchStatus(message || stage);
+        },
+        onSources: (data) => {
+          // Attach multimodal context to the streamed message live.
+          if (targetIdRef.current && targetConversationId) {
+            finalizeMessage(targetConversationId, targetIdRef.current, sourcesToFields(data));
+          }
         }
       });
 
-        // Add only assistant message to Zustand store (user message already added)
+        // Streamed tokens already landed in the store via streamMessageChunk — only add the
+        // whole assistant message when nothing streamed (e.g. empty reply). Finalize clears the
+        // loading flag / cursor either way.
         if (targetConversationId) {
-          const assistantMessage = {
-            ...result.assistantMessage,
-            created_at: (result.assistantMessage as any).created_at || new Date().toISOString()
-          };
-          await addMessage(targetConversationId, assistantMessage);
+          if (!receivedContent && targetIdRef.current) {
+            await addMessage(targetConversationId, {
+              ...result.assistantMessage,
+              id: targetIdRef.current,
+              created_at: (result.assistantMessage as any).created_at || new Date().toISOString()
+            });
+          } else {
+            finalizeMessage(targetConversationId, targetIdRef.current, sourcesToFields(
+              result.assistantMessage as any
+            ));
+          }
 
           // Complete conversation creation loading
           completeConversationCreation();

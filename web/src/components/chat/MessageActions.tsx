@@ -1,4 +1,4 @@
-import { Copy, RefreshCw, Edit, Share, Check, ThumbsUp, ThumbsDown } from "lucide-react";
+import { Copy, RefreshCw, Edit, Share, Check, ThumbsUp, ThumbsDown, FolderPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -16,11 +16,13 @@ interface MessageActionsProps {
   onShare?: () => void;
   onLike?: () => void;
   onDislike?: () => void;
+  onAddToProject?: () => void;
   showRegenerate?: boolean;
   showEdit?: boolean;
   showShare?: boolean;
   showLike?: boolean;
   showDislike?: boolean;
+  showAddToProject?: boolean;
 }
 
 export function MessageActions({
@@ -33,18 +35,20 @@ export function MessageActions({
   onShare,
   onLike,
   onDislike,
+  onAddToProject,
   showRegenerate = true,
   showEdit = true,
   showShare = true,
   showLike = true,
   showDislike = true,
+  showAddToProject = true,
 }: MessageActionsProps) {
   const isUser = message.role === "user";
 
   if (isUser) {
     // User messages:
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
         <Button
           size="sm"
           variant="ghost"
@@ -102,6 +106,12 @@ export function MessageActions({
       onClick: onShare,
       className: "hover:text-purple-400",
     } : null,
+    showAddToProject ? {
+      icon: FolderPlus,
+      label: "Add to project",
+      onClick: onAddToProject,
+      className: "hover:text-orange-400",
+    } : null,
     {
       icon: copied ? Check : Copy,
       label: copied ? "Copied!" : "Copy",
@@ -111,7 +121,7 @@ export function MessageActions({
   ].filter((action): action is NonNullable<typeof action> => action !== null);
 
   return (
-    <div className="flex items-center gap-2 ml-2">
+    <div className="flex items-center gap-2 ml-2 opacity-50 hover:opacity-100 transition-opacity">
       {assistantActions.map((action, index) => (
         <Button
           key={index}

@@ -4,6 +4,7 @@ import {
   Eye,
   EyeOff,
   Image,
+  Image as ImageIcon,
   File,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
@@ -113,6 +114,11 @@ interface MessageProps {
       rawResponse?: string;
     generatedImageUrl?: string;
     type?: string;
+    sources?: any[];
+    retrievedImages?: string[];
+    context_used?: any;
+    documentsReferenced?: number;
+    memoryUsed?: boolean;
     fileAttachments?: Array<{
       media_id?: string | number;
       filename?: string;
@@ -125,12 +131,16 @@ interface MessageProps {
   };
   showRawResponse?: boolean;
   isCodingMode?: boolean;
+  onRegenerate?: () => void;
+  onAddToProject?: () => void;
 }
 
 export function Message({
   message,
   showRawResponse = false,
   isCodingMode = false,
+  onRegenerate,
+  onAddToProject,
 }: MessageProps) {
   const isMobile = useIsMobile();
   const [showRaw, setShowRaw] = useState(false);
@@ -316,27 +326,35 @@ export function Message({
                 <ImageLoadingSkeleton />
               )}
 
-              {/* Streaming status indicator */}
+              {/* Slim streaming progress bar — borderless, low opacity */}
               {message.isLoading && message.type !== "image_loading" && (
-                <div className="flex items-center gap-2 mb-3 p-2 bg-primary/5 rounded-lg border border-primary/20">
-                  <div className="flex items-center gap-1.5">
-                    <div className="relative">
-                      <div className="h-2 w-2 rounded-full bg-primary animate-pulse"></div>
-                      <div className="absolute inset-0 h-2 w-2 rounded-full bg-primary/40 animate-ping"></div>
-                    </div>
-                    <span className="text-xs font-medium text-primary">
-                      Streaming response...
-                    </span>
+                <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-primary/10 opacity-40">
+                  <div
+                    className="h-full bg-primary transition-all duration-300"
+                    style={{ width: `${streamingProgress}%` }}
+                  />
+                </div>
+              )}
+
+              {/* Retrieved cross-modal images (Architecture B vision search) */}
+              {message.retrievedImages && message.retrievedImages.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1.5">
+                    <ImageIcon className="h-3.5 w-3.5" />
+                    <span>{message.retrievedImages.length} matching image(s)</span>
                   </div>
-                  <div className="flex-1 h-1.5 bg-primary/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all duration-300"
-                      style={{ width: `${streamingProgress}%` }}
-                    ></div>
+                  <div className="flex gap-2 flex-wrap">
+                    {message.retrievedImages.map((path, i) => (
+                      <span
+                        key={i}
+                        title={path}
+                        className="inline-flex items-center gap-1 text-[.65rem] px-2 py-1 rounded-md bg-zinc-100 dark:bg-zinc-800 text-muted-foreground border border-zinc-200 dark:border-zinc-700"
+                      >
+                        <ImageIcon className="h-3 w-3 shrink-0" />
+                        {path.split("/").pop()}
+                      </span>
+                    ))}
                   </div>
-                  <span className="text-xs text-muted-foreground">
-                    {Math.round(streamingProgress)}%
-                  </span>
                 </div>
               )}
 
@@ -800,10 +818,10 @@ export function Message({
           )}
 
           {/* Model info */}
-          {message.model && !isMobile && (
+          {message.model && (
             <>
               <span>•</span>
-              <span>{message.model}</span>
+              <span className="truncate max-w-[140px]">{message.model}</span>
             </>
           )}
 
@@ -820,7 +838,12 @@ export function Message({
               onDislike={() => {
                 /* TODO: Implement dislike */
               }}
+              {...(onRegenerate ? { onRegenerate } : {})}
+              {...(onAddToProject ? { onAddToProject } : {})}
               showEdit={false}
+              showShare={false}
+              showLike={false}
+              showDislike={false}
             />
           )}
         </div>

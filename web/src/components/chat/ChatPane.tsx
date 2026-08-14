@@ -8,6 +8,7 @@ import { Welcome } from "../Welcome";
 import { useChatStore } from "@/store/chatStore";
 import { FolderKanban } from "lucide-react";
 import { authFetch } from "@/utils/api";
+import { toast } from "sonner";
 
 interface ChatPaneProps {
   conversation: ChatConversation | null;
@@ -28,6 +29,7 @@ interface ChatPaneProps {
   onModelChange?: (model: string) => void;
   availableModels?: string[];
   isLoadingMessages?: boolean;
+  onStop?: () => void;
 }
 
 export default function ChatPane({
@@ -48,10 +50,14 @@ export default function ChatPane({
   onModelChange,
   availableModels,
   isLoadingMessages,
+  onStop,
 }: ChatPaneProps) {
   const [promptTemplate, setPromptTemplate] = React.useState("");
   const [projectName, setProjectName] = useState("");
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [showProjectPicker, setShowProjectPicker] = useState(false);
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const stickToBottomRef = React.useRef(true); // follow streaming unless the user scrolls up
   const { user } = useAuth();
 
   // Look up project name when conversation has a project_id
@@ -65,6 +71,34 @@ export default function ChatPane({
       if (p) setProjectName(p.name);
     }).catch(() => {});
   }, [conversation?.id]);
+
+  const handleRegenerate = () => {
+    if (!conversation) return;
+    const lastUser = [...conversation.messages].reverse().find((m: any) => m.role === "user");
+    if (lastUser) onSend(lastUser.content || "", []);
+  };
+
+  const openProjectPicker = () => {
+    if (projects.length === 0) {
+      authFetch("/api/projects").then((d: any) => setProjects(d.projects || [])).catch(() => {});
+    }
+    setShowProjectPicker((v) => !v);
+  };
+
+  const handleAddToProject = async (projectId: string) => {
+    if (!conversation) return;
+    try {
+      await authFetch(`/api/history/conversation/${conversation.id}/metadata`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata: { project_id: projectId } }),
+      });
+      setShowProjectPicker(false);
+      toast.success("Added to project");
+    } catch {
+      toast.error("Failed to add to project");
+    }
+  };
 
   const ACTION_TEMPLATES: Record<string, string> = {
     "Create image": "Create an image of...",
@@ -80,8 +114,19 @@ export default function ChatPane({
     return onSend(text, files);
   };
 
+  // Follow the stream only when the user hasn't scrolled up; resume when back at the bottom.
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const threshold = 80;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
+
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = scrollRef.current;
+    if (el && stickToBottomRef.current) {
+      el.scrollTop = el.scrollHeight;
+    }
   };
 
   React.useEffect(() => {
@@ -104,6 +149,7 @@ export default function ChatPane({
       {...(onLLMChange ? { onLLMChange } : {})}
       {...(onModelChange ? { onModelChange } : {})}
       {...(availableModels ? { availableModels } : {})}
+      {...(onStop ? { onStop } : {})}
       initialValue={promptTemplate}
     />
   );
@@ -135,7 +181,7 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col relative bg-neutral-200/70 dark:bg-neutral-900/50">
-      <div className="flex-1 space-y-6 overflow-y-auto px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-6 overflow-y-auto px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="mb-8 hidden md:block">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-dark">
@@ -158,6 +204,8 @@ export default function ChatPane({
                   ...(m.model ? { model: m.model } : {}),
                   ...(m.fileAttachments?.length ? { fileAttachments: m.fileAttachments } : {}),
                 }}
+                onRegenerate={handleRegenerate}
+                onAddToProject={openProjectPicker}
               />
             </div>
           ))}
@@ -174,7 +222,7 @@ export default function ChatPane({
             </div>
           )}
 
-          <div ref={messagesEndRef} className="h-4" />
+          <div className="h-4" />
         </div>
       </div>
 
@@ -184,6 +232,23 @@ export default function ChatPane({
             <FolderKanban className="h-3 w-3 shrink-0" />
             <span>Project: <span className="font-medium">{projectName}</span></span>
             <span className="text-zinc-400 hidden sm:inline">· System prompt active</span>
+          </div>
+        </div>
+      )}
+      {showProjectPicker && (
+        <div className="px-4 pb-1">
+          <div className="max-w-3xl mx-auto flex flex-wrap items-center gap-1.5 text-xs">
+            <span className="text-muted-foreground">Add to project:</span>
+            {projects.length === 0 && <span className="text-muted-foreground">No projects</span>}
+            {projects.map((p: any) => (
+              <button
+                key={p.id}
+                onClick={() => handleAddToProject(p.id)}
+                className="px-2 py-1 rounded-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+              >
+                {p.name}
+              </button>
+            ))}
           </div>
         </div>
       )}

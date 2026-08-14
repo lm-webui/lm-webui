@@ -84,7 +84,7 @@ export function Settings({
   const [imageModels, setImageModels] = useState<string[]>([]);
   const [loadingModels, setLoadingModels] = useState(false);
   const [imageProvider, setImageProvider] = useState("openai");
-  const [imageModel, setImageModel] = useState("dall-e-3");
+  const [imageModel, setImageModel] = useState("");
   const [visionModel, setVisionModel] = useState("");
   const [visionModels, setVisionModels] = useState<string[]>([]);
 
@@ -103,7 +103,7 @@ export function Settings({
         setSystemPrompt(settings.systemPrompt || systemPrompt);
         setAutoTitleGeneration(settings.autoTitleGeneration !== false);
         setImageProvider(settings.defaultImageProvider || "openai");
-        setImageModel(settings.defaultImageModel || "dall-e-3");
+        setImageModel(settings.defaultImageModel || "");
         setVisionModel(settings.defaultVisionModel || "");
       } catch (error) {
         console.error("Failed to load settings:", error);
@@ -129,6 +129,21 @@ export function Settings({
             models.forEach((m: string) => all.push(`${prov}:${m}`));
           });
           setImageModels(all);
+          // Default to a real available model when none is saved (like the text default)
+          const first = all[0];
+          if (first) {
+            setImageModel((prev) => {
+              if (prev) return prev;
+              const parts = first.split(":");
+              const prov = parts[0];
+              const model = parts.slice(1).join(":");
+              if (prov && model) {
+                setImageProvider(prov);
+                return model;
+              }
+              return prev;
+            });
+          }
         }).catch(() => {}),
         authFetch("/api/runtimes/vision/status").then((res: any) => {
           setVisionModels((res?.bundles || []).map((b: any) => b.name));

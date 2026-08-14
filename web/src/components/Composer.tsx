@@ -8,6 +8,7 @@ import {
   File,
   Code,
   Paperclip,
+  Square,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,7 @@ interface ComposerProps {
   onModelChange?: (model: string) => void;
   availableModels?: string[];
   initialValue?: string;
+  onStop?: () => void;
 }
 
 export default function Composer({
@@ -52,6 +54,7 @@ export default function Composer({
   onModelChange,
   availableModels,
   initialValue = "",
+  onStop,
 }: ComposerProps) {
   const [value, setValue] = useState(initialValue);
   useEffect(() => { if (initialValue) setValue(initialValue); }, [initialValue]);
@@ -341,23 +344,34 @@ export default function Composer({
                   : availableModels || []
               }
             />
-            <Button
-              onClick={handleSend}
-              disabled={busy || !value.trim()}
-              size="icon"
-              className={cn(
-                "rounded-full h-10 w-10",
-                value.trim()
-                  ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
-                  : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800",
-              )}
-            >
-              {busy ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Send className="h-5 w-5" />
-              )}
-            </Button>
+            {busy && onStop ? (
+              <Button
+                onClick={onStop}
+                size="icon"
+                title="Stop generating"
+                className="rounded-full h-10 w-10 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSend}
+                disabled={busy || !value.trim()}
+                size="icon"
+                className={cn(
+                  "rounded-full h-10 w-10",
+                  value.trim()
+                    ? "bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
+                    : "bg-zinc-100 text-zinc-400 dark:bg-zinc-800",
+                )}
+              >
+                {busy ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <Send className="h-5 w-5" />
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </div>

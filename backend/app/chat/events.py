@@ -59,6 +59,16 @@ class ModelEvent:
         """Create a metadata event"""
         return cls(type="metadata", data=data)
 
+    @classmethod
+    def status(cls, stage: str, message: str) -> 'ModelEvent':
+        """Create a pipeline-stage indicator event (e.g. searching web, retrieving docs)."""
+        return cls(type="status", data={"stage": stage, "message": message})
+
+    @classmethod
+    def sources(cls, data: Dict[str, Any]) -> 'ModelEvent':
+        """Create a structured context event (context_used + sources + retrieved_images)."""
+        return cls(type="sources", data=data)
+
 
 # Event type constants for type safety
 EVENT_TYPES = {

@@ -137,13 +137,88 @@ export async function chatWithModel(req: ChatRequest): Promise<any> {
   return await _chatWithModel(req);
 }
 
-export async function chatWithModelStream(req: ChatRequest, onChunk?: (chunk: string) => void, onStatus?: (status: string) => void): Promise<string> {
-  // Kept for API contract: streaming currently returns the full response
-  // (token streaming is handled over WebSocket, not this REST endpoint).
-  void onChunk;
-  void onStatus;
+export interface StreamCallbacks {
+  onToken?: (token: string) => void;
+  onStatus?: (stage: string, message: string) => void;
+  onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[] }) => void;
+  onDone?: () => void;
+  onError?: (err: Error) => void;
+}
+
+// SSE streaming chat. Reads the ModelEvent stream from /api/chat/stream and dispatches by type.
+export async function streamChat(
+  req: ChatRequest,
+  cb: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
   validateChatRequest(req);
-  return await _chatWithModel(req);
+  const requestWithKey = { ...req, api_key: req.api_key };
+
+  const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(requestWithKey),
+    ...(signal ? { signal } : {}),
+  });
+
+  if (!response.ok || !response.body) {
+    const err = new Error(`Stream request failed: ${response.status}`);
+    cb.onError?.(err);
+    return;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are separated by blank lines; each carries `data: <json>`.
+      let sep = buffer.indexOf('\n\n');
+      while (sep !== -1) {
+        const frame = buffer.slice(0, sep);
+        buffer = buffer.slice(sep + 2);
+        const dataLine = frame.split('\n').find(l => l.startsWith('data: '));
+        if (dataLine) {
+          try {
+            const ev = JSON.parse(dataLine.slice(6));
+            dispatchStreamEvent(ev, cb);
+          } catch {
+            /* skip malformed frame */
+          }
+        }
+        sep = buffer.indexOf('\n\n');
+      }
+    }
+  } catch (err) {
+    if ((err as Error).name !== 'AbortError') cb.onError?.(err as Error);
+  }
+}
+
+function dispatchStreamEvent(ev: any, cb: StreamCallbacks): void {
+  switch (ev.type) {
+    case 'token':
+      if (ev.content) cb.onToken?.(ev.content);
+      break;
+    case 'status':
+      if (ev.data) cb.onStatus?.(ev.data.stage, ev.data.message);
+      break;
+    case 'sources':
+      if (ev.data) cb.onSources?.(ev.data);
+      break;
+    case 'complete':
+      cb.onDone?.();
+      break;
+    case 'error':
+      cb.onError?.(new Error(ev.content || 'Stream error'));
+      break;
+    default:
+      break;
+  }
 }
 
 async function _chatWithModel(req: ChatRequest): Promise<string> {

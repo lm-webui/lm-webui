@@ -82,6 +82,7 @@ export default function ChatArea({
   const {
     searchStatus,
     handleSendMessage: chatCreationHandleSendMessage,
+    handleStopMessage,
   } = useChatCreation({
     isAuthenticated,
     currentSessionId: activeChatId,
@@ -245,6 +246,7 @@ export default function ChatArea({
             onLLMChange={setSelectedLLM}
             onModelChange={setSelectedModel}
             availableModels={allModels}
+            onStop={handleStopMessage}
           />
         )}
         {activeView === "workspace" && <ImageWorkspace />}

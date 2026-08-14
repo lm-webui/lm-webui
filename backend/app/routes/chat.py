@@ -5,12 +5,15 @@ Implements: UI history ≠ LLM context ≠ Memory ≠ RAG
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi.responses import StreamingResponse
 from typing import Optional, List, Dict, Any
 import logging
+import json
 
 from app.security.auth.dependencies import get_current_user
 from app.orchestrator.controller import get_orchestrator
 from app.chat.schemas import ChatRequest
+from app.chat.events import ModelEvent
 from app.chat.service import save_message
 from app.services.formatter import format_llm_response
 
@@ -64,7 +67,7 @@ async def chat_completion(
         # Process Request (Collect Stream)
         full_response = ""
         generated_image_url = None
-        context_used = {} # Placeholder for now
+        sources_payload = {"context_used": {}, "sources": [], "retrieved_images": []}
 
         actual_conversation_id = conversation_id
 
@@ -82,6 +85,8 @@ async def chat_completion(
                     cid = event.content.get("conversation_id")
                     if cid:
                         actual_conversation_id = cid
+            elif event.type == "sources" and event.data:
+                sources_payload = event.data
             elif event.type == "error":
                 error_msg = event.content
                 break
@@ -100,6 +105,9 @@ async def chat_completion(
             "response": full_response,
             "conversation_id": actual_conversation_id,
             "image_url": generated_image_url,
+            "context_used": sources_payload["context_used"],
+            "sources": sources_payload["sources"],
+            "retrieved_images": sources_payload["retrieved_images"],
         }
         
     except ValueError as e:
@@ -108,3 +116,42 @@ async def chat_completion(
     except Exception as e:
         logger.error(f"Generation error: {e}")
         raise HTTPException(500, f"LLM error: {str(e)}")
+
+
+@router.post("/stream")
+async def chat_stream(
+    request: dict,
+    user_id: dict = Depends(get_current_user),
+):
+    """Server-Sent-Events streaming chat. Yields each ModelEvent as an SSE data frame.
+
+    Consumers read `data: {event.to_json()}` lines; event types include status, sources,
+    token, image, error, complete.
+    """
+    message = request.get("message", "")
+    if not message:
+        raise HTTPException(400, "Message is required")
+    user_id_int = user_id["id"]
+
+    chat_req = ChatRequest(
+        message=message,
+        sessionId=request.get("session_id") or "rest-session",
+        model=request.get("model") or "gpt-4.1-mini",
+        provider=request.get("provider", "openai"),
+        conversationId=request.get("conversation_id"),
+        webSearch=request.get("web_search", False),
+        file_references=request.get("file_references", []),
+    )
+
+    orchestrator = get_orchestrator()
+    conversation_id = chat_req.conversationId or "new"
+
+    async def event_stream():
+        try:
+            async for event in orchestrator.process_request(chat_req, user_id_int, conversation_id):
+                yield f"data: {event.to_json()}\n\n"
+        except Exception as exc:
+            logger.error(f"Stream error: {exc}")
+            yield f"data: {ModelEvent.error(str(exc)).to_json()}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

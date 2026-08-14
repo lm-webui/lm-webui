@@ -33,6 +33,60 @@ def _is_followup_question(message: str) -> bool:
     return message.rstrip().endswith("?") or bool(re.search(_FOLLOWUP_QUESTION, message, re.I))
 
 
+def _build_sources_event(ctx) -> ModelEvent:
+    """Flatten collected capability results into a structured `sources` ModelEvent.
+
+    The client uses this to render citations, the Sources panel, context badges, and the
+    retrieved-image strip.
+    """
+    from app.capabilities.results import MultimodalResult, RetrievalResult, SearchResult, VisionResult
+
+    context_used = {"memory": False, "rag": False, "vision": False, "web_search": False, "audio": False}
+    sources: list[dict] = []
+    retrieved_images: list[str] = []
+
+    for r in (ctx.results or []):
+        if isinstance(r, RetrievalResult) and r.chunks:
+            context_used["rag"] = True
+            for chunk in r.chunks[:10]:
+                first = (chunk or "").split("\n")[0]
+                sources.append({"title": first or "Document", "type": "document",
+                                "snippet": chunk, "source": first})
+        elif isinstance(r, MultimodalResult) and (r.text_chunks or r.image_refs):
+            context_used["rag"] = True
+            for chunk in (r.text_chunks or [])[:10]:
+                first = (chunk or "").split("\n")[0]
+                sources.append({"title": first or "Context", "type": "document",
+                                "snippet": chunk, "source": first})
+            for ref in (r.image_refs or []):
+                path = ref.get("media_path") or ref.get("file_id")
+                if path:
+                    retrieved_images.append(path)
+                sources.append({"title": ref.get("caption") or path or "Image", "type": "image",
+                                "snippet": ref.get("caption") or "", "source": path or ""})
+        elif isinstance(r, SearchResult) and r.items:
+            context_used["web_search"] = True
+            for it in r.items[:10]:
+                url = it.get("url") or ""
+                title = it.get("title") or url or "Web result"
+                sources.append({"title": title, "type": "web", "snippet": it.get("snippet") or "", "source": url})
+        elif isinstance(r, VisionResult) and getattr(r, "ready", False):
+            context_used["vision"] = True
+            if r.text:
+                sources.append({"title": "Image description", "type": "vision", "snippet": r.text, "source": ""})
+
+    transcript = getattr(ctx, "transcript", "")
+    if transcript:
+        context_used["audio"] = True
+        sources.append({"title": "Video transcript", "type": "transcript", "snippet": transcript, "source": ""})
+
+    return ModelEvent.sources({
+        "context_used": context_used,
+        "sources": sources,
+        "retrieved_images": retrieved_images,
+    })
+
+
 class OrchestratorController:
     """
     Central controller for handling chat interactions.
@@ -159,7 +213,9 @@ class OrchestratorController:
             )
             # Mark refs as inherited so vision only gates backfilled images (rec-3), not this message's.
             ctx.backfilled_refs = chat_request.file_references is not None and _backfilled
-            await run_capabilities(exec_plan, ctx)
+            # execute_plan is an async generator — forward its live stage events.
+            async for _ev in run_capabilities(exec_plan, ctx):
+                yield _ev
 
             # Vision not ready → surface the concrete reason (not a generic message), then continue
             # so the text question is still answered.
@@ -171,6 +227,10 @@ class OrchestratorController:
                 yield ModelEvent.token(
                     f"⚠️ Vision isn't ready: {reason}\nYour message was answered without image analysis.\n\n"
                 )
+
+            # Surface the multimodal context the capabilities collected, so the client can
+            # render sources/citations/badges/retrieved-images.
+            yield _build_sources_event(ctx)
 
             # Load user inference preferences from DB
             try:

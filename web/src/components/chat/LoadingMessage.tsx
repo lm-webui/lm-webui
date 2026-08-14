@@ -1,18 +1,27 @@
 import React from "react";
-import { Search } from "lucide-react";
+import { Search, FileText, Eye, AudioLines, Sparkles, Globe } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { MessageBubble } from "@/components/chat/MessageBubble";
 import { LoaderDots } from "@/components/ui/loader";
 
 interface LoadingMessageProps {
   showRawResponse?: boolean;
   isStreaming?: boolean;
-  searchStatus?: string;
+  searchStatus?: string; // live pipeline-stage message (e.g. "Searching the web…")
   isSearchEnabled?: boolean;
 }
 
-const STEPS = ["Thinking...", "Refining...", "Generating..."];
+const STEPS = ["Thinking…", "Refining…", "Composing…"];
+
+// Pick a stage icon from the live status message.
+function stageIcon(message: string) {
+  const m = message.toLowerCase();
+  if (m.includes("web") || m.includes("search")) return Search;
+  if (m.includes("retriev") || m.includes("document") || m.includes("attach")) return FileText;
+  if (m.includes("imag") || m.includes("vision") || m.includes("read")) return Eye;
+  if (m.includes("transcrib") || m.includes("video") || m.includes("audio")) return AudioLines;
+  return Sparkles;
+}
 
 export function LoadingMessage({
   showRawResponse = false,
@@ -22,58 +31,40 @@ export function LoadingMessage({
   const isMobile = useIsMobile();
   const [stepIndex, setStepIndex] = React.useState(0);
 
+  // While a live stage is active, track it; otherwise cycle the generic steps.
   React.useEffect(() => {
-    if (isSearchEnabled && searchStatus) return; // don't cycle when search has status
+    if (searchStatus) return;
     const id = setInterval(
       () => setStepIndex((i) => (i + 1) % STEPS.length),
       3000,
     );
     return () => clearInterval(id);
-  }, [isSearchEnabled, searchStatus]);
+  }, [searchStatus]);
 
-  const statusText =
-    isSearchEnabled && searchStatus ? searchStatus : STEPS[stepIndex];
+  const statusText = searchStatus || STEPS[stepIndex];
+  const Icon = stageIcon(statusText ?? "");
 
+  // Gemini-style: a single colorless row — animated three-dot loader, a stage
+  // favicon (Globe while web search is active), and one status text. No redundant
+  // duplication between a "chip" and a "bubble".
   return (
     <div
       className={cn(
-        "group animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
-        "-ml-2 -mr-2 md:-ml-2 md:mr-20",
+        "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
         isMobile ? "max-w-full" : "max-w-4xl",
       )}
     >
-      <div className={cn("min-w-20", isMobile ? "text-[.9rem]" : "text-md")}>
-        {/* Web search badge */}
-        {isSearchEnabled && (
-          <div className="mb-3">
-            <div className="flex gap-1 flex-wrap">
-              <div className="flex items-center gap-1 text-[.6rem] text-cyan-500 bg-cyan-900/5 px-2 py-1 rounded-3xl animate-pulse">
-                <Search className="h-3 w-3" />
-                Web Search
-              </div>
-            </div>
-          </div>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <LoaderDots className="text-muted-foreground" />
+        {isSearchEnabled ? (
+          <Globe className="h-3.5 w-3.5 shrink-0" />
+        ) : (
+          <Icon className="h-3.5 w-3.5 shrink-0" />
         )}
-
-        <MessageBubble role="assistant" isMobile={isMobile} contentLength={50}>
-          <div className="flex items-center gap-3">
-            {/* Three-dot loader */}
-            <div className="flex-shrink-0 flex items-center justify-center w-7 h-7 rounded-full bg-none">
-              <LoaderDots className="text-muted-foreground" />
-            </div>
-
-            {/* Status text */}
-            <div className="flex-1 text-sm text-muted-foreground">
-              {statusText}
-            </div>
-
-            {showRawResponse && (
-              <div className="text-xs text-muted-foreground mt-2 opacity-70">
-                Raw Response Mode Active
-              </div>
-            )}
-          </div>
-        </MessageBubble>
+        <span className="text-xs truncate">{statusText}</span>
+        {showRawResponse && (
+          <span className="text-[.65rem] opacity-70">Raw Response Mode</span>
+        )}
       </div>
     </div>
   );
