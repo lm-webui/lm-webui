@@ -38,6 +38,8 @@ class GenerateRequest(BaseModel):
 class GenerateResponse(BaseModel):
     """Response structure for non-streaming generation."""
     content: str
-    usage: Optional[Dict[str, int]] = None
+    # usage may contain nested detail objects (e.g. prompt_tokens_details={"cached_tokens":0})
+    # from OpenAI-compatible endpoints like llama-server — type as Any so they parse.
+    usage: Optional[Dict[str, Any]] = None
     finish_reason: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None

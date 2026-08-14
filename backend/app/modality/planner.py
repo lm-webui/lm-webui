@@ -127,7 +127,10 @@ def plan(
     # "vision/RAG → websearch → LLM compose"). Vision must be in describe mode so the
     # VL produces a description the text LLM composes with — direct mode would answer
     # alone and drop the web context.
-    if web_search:
+    if web_search and not (p.vision and p.vision_mode == "direct"):
+        # Option C (intent-aware): a direct/simple image question is answered by the VL with
+        # the image directly — web search is pointless there and would force the heavy describe
+        # path. Drop it. Web search combines with RAG/file-context/text everywhere else.
         p.search = True
         if p.vision:
             p.vision_mode = "describe"

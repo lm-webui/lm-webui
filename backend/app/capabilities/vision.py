@@ -210,6 +210,11 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
                 return VisionResult(images=images, provider=ctx.vision_provider, ready=True)
             desc = await _describe(ctx.vision_provider, images)
             ctx.vision_description = desc
+            if not desc:
+                # Describe pass failed (empty) — fall back to direct so the VL still answers
+                # with the image instead of silently dropping image context.
+                ctx.vision_mode = "direct"
+                return VisionResult(images=images, provider=ctx.vision_provider, ready=True)
             return VisionResult(images=images, provider=ctx.vision_provider, ready=True, text=desc)
     except Exception as exc:
         logger.warning("Vision config resolution failed: %s", exc)
