@@ -3,11 +3,22 @@ from __future__ import annotations
 
 from typing import Any, List
 
-from .results import FileResult, RetrievalResult, SearchResult, VisionResult
+from .results import FileResult, MultimodalResult, RetrievalResult, SearchResult, VisionResult
 
 
 def _vision_section(r: VisionResult) -> str:
     return f"Vision description of the attached image:\n{r.text}"
+
+
+def _multimodal_section(r: MultimodalResult) -> str:
+    parts = []
+    if r.text_chunks:
+        parts.append("Retrieved context (text):")
+        parts.extend(f"[{i+1}] {chunk}" for i, chunk in enumerate(r.text_chunks))
+    if r.image_refs:
+        parts.append("Matching images: " + ", ".join(
+            ref.get("media_path", "") for ref in r.image_refs))
+    return "\n\n".join(parts)
 
 
 def _file_section(r: FileResult) -> str:
@@ -45,6 +56,8 @@ def build_messages(
             sections.append(_file_section(r))
         elif isinstance(r, RetrievalResult) and r.chunks:
             sections.append(_retrieval_section(r))
+        elif isinstance(r, MultimodalResult) and (r.text_chunks or r.image_refs):
+            sections.append(_multimodal_section(r))
         elif isinstance(r, SearchResult) and r.items:
             sections.append(_search_section(r))
         elif isinstance(r, VisionResult) and r.text:

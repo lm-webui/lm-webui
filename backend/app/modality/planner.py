@@ -20,6 +20,7 @@ from .intent_classifier import IntentRequest, IntentResult, ProcessingClass, cla
 class ExecutionPlan:
     """What the orchestrator should run for this request (chat path)."""
     retrieve: bool = False      # run RAG retrieval (knowledge search)
+    latent_retrieve: bool = False  # Architecture B: multimodal latent retrieval (BGE + SigLIP)
     file_context: bool = False  # inject direct extracted text of attachments
     search: bool = False        # run web search
     vision: bool = False        # image attachment -> vision model
@@ -48,6 +49,15 @@ def _message_target(message: str) -> tuple[bool, bool]:
     """Return (targets_image, targets_document) from message text hints."""
     m = message or ""
     return bool(_IMG_HINTS.search(m)), bool(_DOC_HINTS.search(m))
+
+
+def _multimodal_enabled() -> bool:
+    """True when Architecture B (multimodal latent retrieval) is the active RAG engine."""
+    try:
+        from app.core.config_manager import get_config
+        return get_config().rag.engine == "multimodal"
+    except Exception:
+        return False
 
 
 def plan(
@@ -101,10 +111,14 @@ def plan(
         p.vision_mode = intent.vision_mode
 
     elif intent.processing_class == ProcessingClass.KNOWLEDGE or has_docs:
-        # Documents (or knowledge scope) → direct file context + retrieval (RAG).
+        # Documents (or knowledge scope) → direct file context + retrieval.
         if has_docs:
             p.file_context = True
-        p.retrieve = True
+        if _multimodal_enabled():
+            # Architecture B — multimodal latent retrieval (BGE deep-text + SigLIP short/vision).
+            p.latent_retrieve = True
+        else:
+            p.retrieve = True
 
     # Honor an explicit web-search toggle alongside RAG/vision (the user asked for
     # "vision/RAG → websearch → LLM compose"). Vision must be in describe mode so the

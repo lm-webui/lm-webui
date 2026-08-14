@@ -2,7 +2,7 @@ import { authFetch } from "../../utils/api";
 
 export class FileService {
   static async uploadFiles(
-    files: FileList,
+    files: FileList | File[],
     currentConversationId: string
   ): Promise<{
     success: boolean;

@@ -61,7 +61,55 @@ class FileProcessor:
             except ImportError:
                 return "[Image — OCR (rapidocr/pillow) not installed]"
 
+        # Spreadsheets — read cell values into a tabular text form (openpyxl/xlrd).
+        if suffix in ('.xlsx', '.xlsm'):
+            return self._extract_xlsx(path)
+        if suffix == '.xls':
+            return self._extract_xls(path)
+
         return "[Unsupported file format]"
+
+    def _extract_xlsx(self, path: Path) -> str:
+        """Read .xlsx cell values into a TSV-like text (openpyxl)."""
+        try:
+            import openpyxl
+        except ImportError:
+            return "[Spreadsheet — openpyxl not installed]"
+        try:
+            wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
+            lines: list[str] = []
+            for ws in wb.worksheets:
+                lines.append(f"--- Sheet: {ws.title} ---")
+                for row in ws.iter_rows(values_only=True):
+                    cells = [str(c) for c in row if c is not None and str(c).strip()]
+                    if cells:
+                        lines.append("\t".join(cells))
+            wb.close()
+            return "\n".join(lines)
+        except Exception as exc:
+            logger.warning("xlsx extraction failed: %s", exc)
+            return "[Spreadsheet — failed to read]"
+
+    def _extract_xls(self, path: Path) -> str:
+        """Read legacy .xls cell values (xlrd)."""
+        try:
+            import xlrd
+        except ImportError:
+            return "[Spreadsheet — xlrd not installed]"
+        try:
+            book = xlrd.open_workbook(str(path))
+            lines: list[str] = []
+            for sheet in book.sheets():
+                lines.append(f"--- Sheet: {sheet.name} ---")
+                for r in range(sheet.nrows):
+                    cells = [str(sheet.cell_value(r, c)) for c in range(sheet.ncols)]
+                    cells = [c for c in cells if c.strip()]
+                    if cells:
+                        lines.append("\t".join(cells))
+            return "\n".join(lines)
+        except Exception as exc:
+            logger.warning("xls extraction failed: %s", exc)
+            return "[Spreadsheet — failed to read]"
 
     def _extract_pdf(self, path: Path) -> str:
         """Extract text from PDF. If the PDF is scanned (no embedded text),

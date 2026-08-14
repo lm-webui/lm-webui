@@ -11,6 +11,7 @@ export const mapToMessage = (msg: any): ChatMessage => {
     generatedImageUrl: msg.generatedImageUrl || msg.metadata?.generatedImageUrl,
     type: msg.type,
     model: msg.model,
+    fileAttachments: msg.fileAttachments || msg.metadata?.attachments || undefined,
   };
 };
 

@@ -99,6 +99,14 @@ class RAGConfig(BaseModel):
     context_token_budget: int = Field(default=2000, ge=100, le=32000, description="Max tokens of RAG context injected into the prompt")
     query_rewrite: bool = Field(default=False, description="Rewrite short/ambiguous queries via LLM before embedding (conversational RAG)")
     top_k_rerank: int = Field(default=5, ge=1, le=20, description="Final items after reranking")
+    engine: str = Field(default="bge", description="Retrieval engine: 'bge' (legacy text) or 'multimodal'")
+    multimodal: "MultimodalConfig" = Field(default_factory=lambda: MultimodalConfig())
+
+class MultimodalConfig(BaseModel):
+    """Architecture B — modality-native multimodal retrieval (SigLIP)."""
+    enabled: bool = Field(default=False, description="Enable multimodal latent retrieval (SigLIP)")
+    vision_model: str = Field(default="google/siglip2-base-patch16-224", description="SigLIP2 vision/text model")
+    short_chunk_words: int = Field(default=50, ge=10, le=200, description="Max words for SigLIP short chunks/captions")
 
 class LLMConfig(BaseModel):
     """LLM configuration"""

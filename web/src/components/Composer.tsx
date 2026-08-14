@@ -5,6 +5,7 @@ import {
   Settings2,
   Globe,
   Image,
+  File,
   Code,
   Paperclip,
   X,
@@ -15,6 +16,7 @@ import { FileService } from "../features/files/fileService";
 import { Popover, PopoverContent, PopoverTrigger, PopoverAnchor } from "./ui/popover";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ModelSelector } from "./models/ModelSelector";
+import { toast } from "sonner";
 
 interface ComposerProps {
   onSend: (text: string, files: any[]) => Promise<boolean>;
@@ -54,7 +56,9 @@ export default function Composer({
   const [value, setValue] = useState(initialValue);
   useEffect(() => { if (initialValue) setValue(initialValue); }, [initialValue]);
   const [isUploading, setIsUploading] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  // Pending files (not yet uploaded) — held locally so abandoned files never hit the server.
+  const [uploadedFiles, setUploadedFiles] = useState<{ file: File; previewUrl?: string }[]>([]);
+  const urlsRef = useRef<string[]>([]); // object URLs to revoke on unmount
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const prevSearchRef = useRef(false);
@@ -101,6 +105,19 @@ export default function Composer({
     }
   }, [value]);
 
+  const clearPendingFiles = () => {
+    setUploadedFiles((prev) => {
+      prev.forEach((u) => { if (u.previewUrl) URL.revokeObjectURL(u.previewUrl); });
+      return [];
+    });
+  };
+
+  // Revoke any object URLs on unmount.
+  useEffect(() => {
+    const urls = urlsRef.current;
+    return () => { urls.forEach((u) => URL.revokeObjectURL(u)); };
+  }, []);
+
   const handleSend = async () => {
     if (!value.trim() || busy) return;
 
@@ -108,39 +125,59 @@ export default function Composer({
     if (isImageMode) {
       ok = await onSend(value, [{ type: "generating_image", prompt: value, provider: selectedLLM, model: selectedModel }]);
     } else {
-      ok = await onSend(value, uploadedFiles);
+      // Defer upload to send-time: upload pending files, then send with their refs.
+      let refs: any[] = [];
+      if (uploadedFiles.length) {
+        setIsUploading(true);
+        try {
+          const result = await FileService.uploadFiles(uploadedFiles.map((u) => u.file), conversationId || "");
+          if (!result.success || !result.results) {
+            toast.error("Upload failed");
+            setIsUploading(false);
+            return;
+          }
+          refs = result.results;
+        } catch (error) {
+          console.error("Upload failed", error);
+          toast.error("Upload failed");
+          setIsUploading(false);
+          return;
+        }
+        setIsUploading(false);
+      }
+      ok = await onSend(value, refs);
     }
 
     // Only clear the prompt on success — on failure, restore it so the user can retry
     if (ok) {
       setValue("");
-      setUploadedFiles([]);
+      clearPendingFiles();
     }
   };
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      setIsUploading(true);
-      try {
-        const result = await FileService.uploadFiles(
-          e.target.files,
-          conversationId || "",
-        );
-        if (result.success && result.results) {
-          const newFiles = result.results;
-          setUploadedFiles((prev) => [...prev, ...newFiles]);
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const pending = Array.from(files).map((file) => {
+        const isImg = file.type.startsWith("image/");
+        if (isImg) {
+          const previewUrl = URL.createObjectURL(file);
+          urlsRef.current.push(previewUrl);
+          return { file, previewUrl };
         }
-      } catch (error) {
-        console.error("Upload failed", error);
-      } finally {
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      }
+        return { file };
+      });
+      setUploadedFiles((prev) => [...prev, ...pending]);
     }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
+    setUploadedFiles((prev) => {
+      const target = prev[index];
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   return (
@@ -150,12 +187,19 @@ export default function Composer({
       <div className="mx-auto flex flex-col rounded-3xl border border-zinc-200 bg-neutral-300 dark:border-zinc-800/50 dark:bg-neutral-900 shadow-inner transition-all duration-200 relative">
         {uploadedFiles.length > 0 && (
           <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
-            {uploadedFiles.map((file, index) => (
+            {uploadedFiles.map(({ file, previewUrl }, index) => (
               <div
                 key={index}
-                className="flex items-center gap-1 bg-zinc-200 dark:bg-zinc-800 rounded-md px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in zoom-in duration-200"
+                className="flex items-center gap-2 bg-zinc-200 dark:bg-zinc-800 rounded-md px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300 animate-in fade-in zoom-in duration-200"
               >
-                <span className="truncate max-w-[150px]">{file.filename}</span>
+                {previewUrl ? (
+                  <img src={previewUrl} alt={file.name} className="h-6 w-6 rounded object-cover" />
+                ) : file.type.startsWith("image/") ? (
+                  <Image className="h-4 w-4 shrink-0 text-zinc-400" />
+                ) : (
+                  <File className="h-4 w-4 shrink-0 text-zinc-400" />
+                )}
+                <span className="truncate max-w-[150px]">{file.name}</span>
                 <button
                   onClick={() => removeFile(index)}
                   className="ml-1 hover:text-red-500 rounded-full p-0.5 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
@@ -164,6 +208,7 @@ export default function Composer({
                 </button>
               </div>
             ))}
+            {isUploading && <Loader2 className="h-4 w-4 animate-spin text-zinc-400 self-center" />}
           </div>
         )}
 

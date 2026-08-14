@@ -25,6 +25,13 @@ class SearchResult:
 
 
 @dataclass
+class MultimodalResult:
+    """Architecture B — retrieved text chunks + matching image refs (cross-modal)."""
+    text_chunks: List[str] = field(default_factory=list)
+    image_refs: List[Any] = field(default_factory=list)  # {media_path, caption, file_id, score}
+
+
+@dataclass
 class VisionResult:
     """Prepared image attachments + the vision provider to use."""
     images: Optional[List[str]] = None

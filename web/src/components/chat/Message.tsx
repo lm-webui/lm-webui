@@ -114,9 +114,12 @@ interface MessageProps {
     generatedImageUrl?: string;
     type?: string;
     fileAttachments?: Array<{
-      media_id: string;
-      filename: string;
-      file_type: string;
+      media_id?: string | number;
+      filename?: string;
+      file_type?: string;
+      content_type?: string;
+      type?: string;
+      mime?: string;
       thumbnail_url?: string;
     }>;
   };
@@ -699,21 +702,33 @@ export function Message({
               {message.fileAttachments &&
                 message.fileAttachments.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {message.fileAttachments.map((file) => (
-                      <div
-                        key={file.media_id}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30"
-                      >
-                        {file.file_type.startsWith("image/") ? (
-                          <Image className="h-4 w-4 text-blue-400" />
-                        ) : (
-                          <File className="h-4 w-4 text-blue-400" />
-                        )}
-                        <span className="text-xs text-blue-300 truncate max-w-32">
-                          {file.filename}
-                        </span>
-                      </div>
-                    ))}
+                    {message.fileAttachments.map((file, idx) => {
+                      const isImage =
+                        (file.content_type || file.mime || file.type || "").startsWith("image/") ||
+                        (file.file_type || "").startsWith("image/");
+                      const thumbSrc =
+                        file.thumbnail_url ||
+                        (isImage && file.media_id != null
+                          ? `${import.meta.env.VITE_BACKEND_URL || ""}/api/upload/media/${file.media_id}`
+                          : undefined);
+                      return (
+                        <div
+                          key={file.media_id ?? idx}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30"
+                        >
+                          {thumbSrc ? (
+                            <img src={thumbSrc} alt={file.filename || ""} className="h-6 w-6 rounded object-cover" />
+                          ) : isImage ? (
+                            <Image className="h-4 w-4 text-blue-400" />
+                          ) : (
+                            <File className="h-4 w-4 text-blue-400" />
+                          )}
+                          <span className="text-xs text-blue-300 truncate max-w-32">
+                            {file.filename}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
             </>

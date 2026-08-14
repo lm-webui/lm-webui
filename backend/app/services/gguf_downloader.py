@@ -203,8 +203,24 @@ class GGUFDownloadManager:
                                     last_notified_progress = progress
                                     last_notified_bytes = downloaded
                     
+                    # Integrity check: a truncated download yields a corrupt GGUF that
+                    # fails to load at runtime. Delete the partial file and fail loudly.
+                    if total_size > 0 and downloaded != total_size:
+                        error_msg = f"Download incomplete: got {downloaded} bytes, expected {total_size}. Partial file deleted."
+                        logger.error(f"{filename}: {error_msg}")
+                        try:
+                            file_path.unlink(missing_ok=True)
+                        except Exception:
+                            pass
+                        self.download_tasks[task_id].update({
+                            "status": "failed",
+                            "error": error_msg
+                        })
+                        await self._notify_websockets(task_id)
+                        return
+
                     logger.info(f"Download completed: {filename}")
-            
+
             # Download completed
             file_size = file_path.stat().st_size
             self.download_tasks[task_id].update({

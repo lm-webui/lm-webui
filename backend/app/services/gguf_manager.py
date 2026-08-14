@@ -137,8 +137,18 @@ def download_model(url: str) -> Dict[str, str]:
                         progress = (downloaded / total_size) * 100 if total_size > 0 else 0
                         logger.info(f"Download progress: {progress:.1f}% ({_format_file_size(downloaded)}/{_format_file_size(total_size)})")
         
+        # Integrity check: a truncated download yields a corrupt GGUF. Delete it and fail.
+        if total_size > 0 and downloaded != total_size:
+            file_path.unlink(missing_ok=True)
+            logger.error(f"Download incomplete for {filename}: {downloaded} bytes, expected {total_size}. Partial file deleted.")
+            return {
+                "status": "error",
+                "filename": filename,
+                "message": f"Download incomplete ({downloaded}/{total_size} bytes) — partial file deleted"
+            }
+
         logger.info(f"Download completed: {filename} ({_format_file_size(file_path.stat().st_size)})")
-        
+
         return {
             "status": "success",
             "filename": filename,

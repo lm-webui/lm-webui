@@ -156,6 +156,7 @@ export default function ChatPane({
                   ...(m.type ? { type: m.type } : {}),
                   ...(m.generatedImageUrl ? { generatedImageUrl: m.generatedImageUrl } : {}),
                   ...(m.model ? { model: m.model } : {}),
+                  ...(m.fileAttachments?.length ? { fileAttachments: m.fileAttachments } : {}),
                 }}
               />
             </div>

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .base import CapabilityContext
-from . import file_context, retrieve, search, vision
+from . import file_context, retrieve, retrieve_multimodal, search, vision
 
 
 async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
@@ -16,6 +16,8 @@ async def execute_plan(plan, ctx: CapabilityContext) -> CapabilityContext:
         ctx.results.append(await file_context.execute(ctx))
     if plan.retrieve:
         ctx.results.append(await retrieve.execute(ctx))
+    if getattr(plan, "latent_retrieve", False):
+        ctx.results.append(await retrieve_multimodal.execute(ctx))
     if plan.vision:
         ctx.vision_mode = getattr(plan, "vision_mode", "direct")
         ctx.results.append(await vision.execute(ctx))

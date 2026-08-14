@@ -9,6 +9,15 @@ export interface ChatMessage {
   generatedImageUrl?: string;
   type?: string;
   model?: string;
+  fileAttachments?: Array<{
+    media_id?: number;
+    filename?: string;
+    file_type?: string;
+    content_type?: string;
+    file_path?: string;
+    type?: string;
+    mime?: string;
+  }>;
 }
 
 export interface ChatConversation {

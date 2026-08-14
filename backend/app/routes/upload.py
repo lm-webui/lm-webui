@@ -472,3 +472,24 @@ async def delete_uploaded_file(filename: str, user_id: dict = Depends(get_curren
 @router.get("/health")
 async def health_check():
     return {"status": "healthy", "ingestion_service": "ready" if ingestion_service else "not_initialized"}
+
+
+@router.get("/media/{media_id}")
+async def get_media(media_id: int, user_id: dict = Depends(get_current_user)):
+    """Serve an uploaded media file (auth-scoped) — used for message attachment thumbnails."""
+    from pathlib import Path
+    from fastapi.responses import FileResponse
+    db = get_db()
+    row = db.execute(
+        "SELECT file_path FROM media_library WHERE id = ? AND user_id = ?",
+        (media_id, user_id["id"]),
+    ).fetchone()
+    if not row or not row[0]:
+        raise NotFoundException(
+            message="Media not found",
+            details={"media_id": media_id, "user_id": user_id["id"]},
+        )
+    path = Path(row[0])
+    if not path.is_file():
+        raise NotFoundException(message="Media file missing on disk", details={"media_id": media_id})
+    return FileResponse(path)

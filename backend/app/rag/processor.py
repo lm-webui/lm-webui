@@ -114,5 +114,106 @@ class RAGProcessor:
 
         count = insert_chunks(records, user_id)
 
+        # Architecture B (multimodal): also ingest into the SigLIP latent tables when
+        # the multimodal engine is enabled. Docs get short SigLIP chunks/captions;
+        # images get a vision row + a text anchor. BGE deep-text indexing above is kept.
+        try:
+            engine = get_config().rag.engine
+        except Exception:
+            engine = "bge"
+        if engine == "multimodal":
+            self._ingest_multimodal(file_path, file_name, text, chunks, conversation_id, user_id)
+
         logger.info("Indexed %d chunks from %s", count, file_name)
         return {"status": "ok", "chunks": count}
+
+    # ── Architecture B: multimodal latent ingestion ─────────────────────────
+
+    _IMAGE_EXT = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.webp'}
+
+    @classmethod
+    def _short_text(cls, text: str, n: int) -> str:
+        """A concise SigLIP unit: first sentence, truncated to n words."""
+        import re
+        text = (text or "").strip()
+        if not text:
+            return ""
+        first = (re.split(r"(?<=[.!?])\s+", text)[0] or text).strip()
+        words = first.split()
+        return first if len(words) <= n else " ".join(words[:n])
+
+    def _ingest_multimodal(
+        self,
+        file_path: str,
+        file_name: str,
+        text: str,
+        chunks: list[dict],
+        conversation_id: str | None,
+        user_id: int,
+    ) -> None:
+        """Add SigLIP short-text rows (docs) / vision + text-anchor rows (images)."""
+        from pathlib import Path
+        from app.core.config_manager import get_config
+        from app.rag.embedder_multimodal import embed_text_multimodal
+        from app.rag.embedder_vision import embed_image
+        from app.rag import vector_store_multimodal as vs
+
+        try:
+            short_n = get_config().rag.multimodal.short_chunk_words
+        except Exception:
+            short_n = 50
+
+        n_vis = n_txt = 0
+        try:
+            if Path(file_path).suffix.lower() in self._IMAGE_EXT:
+                # Vision row for cross-modal retrieval.
+                vec = embed_image([file_path])[0]
+                cap = self._short_text(text, short_n)
+                vs.insert_vision_rows([{
+                    "chunk_id": f"{file_path}_img",
+                    "media_path": file_path,
+                    "vector": vec,
+                    "file_id": file_path,
+                    "user_id": user_id,
+                    "conversation_id": conversation_id,
+                    "payload_text": cap or None,
+                }], user_id)
+                n_vis += 1
+                # Text anchor so the image is also text-retrievable (OCR caption).
+                if cap:
+                    v = embed_text_multimodal([cap])[0]
+                    vs.insert_text_rows([{
+                        "chunk_id": f"{file_path}_imgtxt",
+                        "text": cap,
+                        "vector": v,
+                        "file_id": file_path,
+                        "user_id": user_id,
+                        "conversation_id": conversation_id,
+                        "source_file": file_name,
+                        "media_path": file_path,
+                        "chunk_index": 0,
+                    }], user_id)
+                    n_txt += 1
+            else:
+                # Short SigLIP unit per BGE chunk (first sentence, ≤ short_n words).
+                pairs = [(c, self._short_text(c.get("text", ""), short_n)) for c in chunks]
+                pairs = [(c, s) for c, s in pairs if s]
+                if pairs:
+                    vecs = embed_text_multimodal([s for _, s in pairs])
+                    records = [{
+                        "chunk_id": f"{c['chunk_id']}_siglip",
+                        "text": s,
+                        "vector": vec,
+                        "file_id": c.get("file_id", file_path),
+                        "user_id": user_id,
+                        "conversation_id": c.get("conversation_id", conversation_id),
+                        "source_file": file_name,
+                        "media_path": None,
+                        "chunk_index": c.get("chunk_index"),
+                    } for (c, s), vec in zip(pairs, vecs)]
+                    n_txt += vs.insert_text_rows(records, user_id)
+        except Exception as exc:
+            logger.warning("Multimodal ingest failed for %s: %s", file_path, exc)
+            return
+
+        logger.info("Multimodal ingest: %d vision rows, %d text rows for %s", n_vis, n_txt, file_name)

@@ -25,6 +25,11 @@ rag:
   scope: "user"
   context_token_budget: 2000
   query_rewrite: false
+  engine: "bge"          # "bge" (legacy text) | "multimodal" (Architecture B)
+  multimodal:
+    enabled: false
+    vision_model: "google/siglip2-base-patch16-224"
+    short_chunk_words: 50
 
 vision:
   provider: ""
