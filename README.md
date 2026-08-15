@@ -2,9 +2,7 @@
 
 **LM-WebUI** makes running local AI as easy as installing an app. No more juggling separate apps, model or vendor limitations, or runtime setup headaches. A built-in Runtime Manager manages inference engines and models for you, while chat, vision, image generation, and file context all live in one interface on your own machine. Built for privacy-first and sovereign AI systems.
 
-<p align="center">
-  <img src="./assets/demo.png" width="1080" />
-</p>
+![lm-webui](assets/lm-webui-header.png)
 
 <p align="center">
   <a href="https://github.com/lm-webui/lm-webui/actions">
@@ -34,6 +32,10 @@ Powered by **Smart-Modality™**, an intent-routing system that automatically de
 Run locally when you want, connect cloud APIs when you need, and keep control of your data.
 
 Built open-source for developers, system integrators, and organizations that want **easy local inference, reproducibility, and infrastructure-level control** without the usual setup overhead.
+
+<p align="center">
+  <img src="./assets/demo.png" width="1080" />
+</p>
 
 ---
 
