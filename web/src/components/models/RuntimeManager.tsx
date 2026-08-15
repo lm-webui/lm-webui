@@ -22,6 +22,8 @@ import {
   ChevronDown, Image, Copy, ScanLine, ExternalLink, Download,
   Cpu as ChipIcon, Zap, Eye, AlertTriangle,
 } from "lucide-react";
+import { RiImageAiFill } from "react-icons/ri";
+import { SiHuggingface, SiApple } from "react-icons/si";
 import { toast } from "sonner";
 import { authFetch } from "@/utils/api";
 
@@ -90,6 +92,10 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [detectedExternals, setDetectedExternals] = useState<DetectedExternal[]>([]);
   const [comfyuiConnected, setComfyuiConnected] = useState(false);
   const [comfyuiEndpoint, setComfyuiEndpoint] = useState("http://host.docker.internal:8188");
+  const [comfyDownloadOpen, setComfyDownloadOpen] = useState(false);
+  const [comfyPresets, setComfyPresets] = useState<any[]>([]);
+  const [comfyProgress, setComfyProgress] = useState<Record<string, number>>({});
+  const [comfyDownloading, setComfyDownloading] = useState<string | null>(null);
   const [applyingConfig, setApplyingConfig] = useState(false);
   const [gpuInfo, setGpuInfo] = useState<any>(null);
   const [installingGpu, setInstallingGpu] = useState(false);
@@ -285,6 +291,51 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     setComfyuiConnected(false);
   };
 
+  const openComfyDownload = async () => {
+    setComfyDownloadOpen(true);
+    try {
+      const res = await authFetch("/api/comfyui/presets");
+      setComfyPresets(res?.presets || []);
+    } catch {
+      toast.error("Failed to load diffusion model presets");
+    }
+  };
+
+  const downloadComfyModel = async (preset: any) => {
+    setComfyDownloading(preset.id);
+    setComfyProgress((p) => ({ ...p, [preset.id]: 0 }));
+    try {
+      const res = await authFetch("/api/comfyui/download", {
+        method: "POST",
+        body: JSON.stringify({ model_id: preset.id }),
+      });
+      const { task_id } = res;
+      const poll = setInterval(async () => {
+        try {
+          const s = await authFetch(`/api/models/download/status/${task_id}`);
+          const pct = s.progress || 0;
+          setComfyProgress((p) => ({ ...p, [preset.id]: pct }));
+          if (s.status === "completed" || s.status === "exists") {
+            clearInterval(poll);
+            setComfyDownloading(null);
+            toast.success(s.status === "exists" ? "Model already exists" : "Model downloaded");
+          } else if (s.status === "failed" || s.status === "cancelled") {
+            clearInterval(poll);
+            setComfyDownloading(null);
+            toast.error(s.error || "Download failed");
+          }
+        } catch {
+          clearInterval(poll);
+          setComfyDownloading(null);
+          toast.error("Download failed");
+        }
+      }, 800);
+    } catch (e: any) {
+      setComfyDownloading(null);
+      toast.error(e.message || "Download failed");
+    }
+  };
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
     toast.success("Copied to clipboard");
@@ -390,38 +441,52 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const body = (
     <>
       {inline ? (
-        <div className="flex items-center gap-2">
-          <Server className="h-5 w-5" />
-          <h2 className="text-lg font-semibold">Runtime Manager</h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Server className="h-5 w-5" />
+            <h2 className="text-lg font-semibold">Runtime Manager</h2>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={scanExternals} disabled={scanning}>
+              {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+              {scanning ? "Scanning..." : "Scan Host"}
+            </Button>
+          </div>
         </div>
       ) : (
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Server className="h-5 w-5" />
-            Runtime Manager
-          </DialogTitle>
+          <div className="flex items-center justify-between pr-2">
+            <DialogTitle className="flex items-center gap-2">
+              <Server className="h-5 w-5" />
+              Runtime Manager
+            </DialogTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Refresh
+              </Button>
+              <Button variant="outline" size="sm" onClick={scanExternals} disabled={scanning}>
+                {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+                {scanning ? "Scanning..." : "Scan Host"}
+              </Button>
+            </div>
+          </div>
           <DialogDescription>
-            Manage local inference (GGUF) and connect external runtimes (MLX, ComfyUI).
+            Manage local inference (llama.cpp) and connect external runtimes (MLX, ComfyUI).
             Ollama and vLLM are configured in Settings → API Providers.
           </DialogDescription>
         </DialogHeader>
       )}
-      <div className="flex items-center gap-2 mb-4">
-          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={scanExternals} disabled={scanning}>
-            {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-            {scanning ? "Scanning..." : "Scan Host"}
-          </Button>
-        </div>
 
         <Tabs defaultValue="gguf" className="flex-1 flex flex-col overflow-hidden">
           <TabsList className="grid w-full grid-cols-3 mb-4">
-            <TabsTrigger value="gguf" className="gap-2"><HardDrive className="h-4 w-4" /> GGUF</TabsTrigger>
-            <TabsTrigger value="mlx" className="gap-2"><Cpu className="h-4 w-4" /> MLX</TabsTrigger>
-            <TabsTrigger value="comfyui" className="gap-2"><Image className="h-4 w-4" /> ComfyUI</TabsTrigger>
+            <TabsTrigger value="gguf" className="gap-2"><SiHuggingface className="h-4 w-4" /> llama.cpp</TabsTrigger>
+            <TabsTrigger value="mlx" className="gap-2"><SiApple className="h-4 w-4" /> MLX</TabsTrigger>
+            <TabsTrigger value="comfyui" className="gap-2"><RiImageAiFill className="h-4 w-4" /> Image-Gen</TabsTrigger>
           </TabsList>
 
         <TabsContent value="gguf" className="m-0 overflow-y-auto scrollbar-hide flex-1">
@@ -429,7 +494,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-base">
-                GGUF <span className="font-normal text-muted-foreground">llama.cpp</span>
+                llama.cpp
                 <span className="text-muted-foreground"> · </span>
                 <span className="font-mono text-xs">{ggufBackend}</span>
               </CardTitle>
@@ -616,7 +681,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             {/* ── Models ── */}
             <div className="relative mt-4 mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search GGUF models..." value={ggufQuery}
+              <Input placeholder="Search llama.cpp models..." value={ggufQuery}
                 onChange={(e) => setGgufQuery(e.target.value)} className="pl-9" />
             </div>
             {loadingModels ? (
@@ -683,8 +748,11 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           <TabsContent value="mlx" className="m-0 overflow-y-auto scrollbar-hide flex-1">
         {/* ---------- MLX SECTION ---------- */}
         {mlxStatus?.available === false ? (
-          /* MLX unsupported — hidden on non-Apple */
-          null
+          <div className="flex flex-col items-center justify-center py-10 text-center">
+            <ChipIcon className="h-8 w-8 text-muted-foreground mb-3" />
+            <p className="text-sm font-medium">MLX is only available on Apple Silicon (M-series) devices</p>
+            <p className="text-xs text-muted-foreground mt-1">This device doesn't support MLX models. Use GGUF or Image-Gen instead.</p>
+          </div>
         ) : (
           <Card className={mlxStatus?.mlx_installed ? "border-green-200 dark:border-green-800" : ""}>
             <CardHeader className="pb-3">
@@ -833,7 +901,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Image className="h-5 w-5 text-pink-500" />
-                <CardTitle className="text-base">ComfyUI</CardTitle>
+                <CardTitle className="text-base">Image-Gen</CardTitle>
                 {comfyuiConnected || detectedExternals.find(d => d.type === "comfyui") ? (
                   <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                     <CheckCircle className="h-3 w-3 mr-1" /> Running
@@ -859,7 +927,11 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="h-7 gap-1"
                     onClick={() => window.open(comfyuiEndpoint, "_blank")}>
-                    <ExternalLink className="h-3 w-3" /> Open ComfyUI
+                    <ExternalLink className="h-3 w-3" /> Open Image-Gen
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-7 gap-1"
+                    onClick={openComfyDownload}>
+                    <Download className="h-3 w-3" /> Download model
                   </Button>
                   <Button size="sm" variant="outline" className="h-7 gap-1"
                     onClick={disconnectComfyui}>
@@ -912,6 +984,47 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Diffusion (ComfyUI) checkpoint download */}
+        <Dialog open={comfyDownloadOpen} onOpenChange={setComfyDownloadOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Download Image-Gen model</DialogTitle>
+              <DialogDescription>
+                Downloads a checkpoint into the local ComfyUI models/checkpoints directory.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-2 max-h-72 overflow-y-auto">
+              {comfyPresets.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No presets available.</p>
+              ) : (
+                comfyPresets.map((p) => {
+                  const progress = comfyProgress[p.id];
+                  const isActive = comfyDownloading === p.id;
+                  const done = progress !== undefined && progress >= 100;
+                  return (
+                    <div key={p.id} className="flex items-center justify-between gap-2 rounded-lg border p-3">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium truncate">{p.name}</div>
+                        <div className="text-xs text-muted-foreground">{p.filename} · {p.size}</div>
+                        {isActive && (
+                          <div className="mt-1 h-1.5 w-full rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                            <div className="h-full rounded-full bg-zinc-500 transition-all" style={{ width: `${Math.max(progress || 0, 2)}%` }} />
+                          </div>
+                        )}
+                      </div>
+                      <Button size="sm" variant="outline" className="shrink-0 gap-1"
+                        onClick={() => downloadComfyModel(p)} disabled={comfyDownloading !== null}>
+                        {isActive ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
+                        {isActive ? `${Math.round(progress || 0)}%` : done ? "Done" : "Download"}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
     </>
   );
 

@@ -27,7 +27,7 @@ class ComfyUIProvider(BaseProvider):
     """Provider for local ComfyUI image generation."""
 
     def __init__(self):
-        super().__init__("comfyui", "ComfyUI")
+        super().__init__("comfyui", "Image-Gen")
         self._api_base = COMFYUI_BASE
 
     async def list_models(self, api_key: Optional[str] = None) -> List[ModelMetadata]:

@@ -63,7 +63,7 @@ export const PROVIDERS: Record<string, Provider> = {
     placeholder: "http://localhost:1234", categories: ["api"],
   },
   comfyui: {
-    id: "comfyui", name: "ComfyUI", icon: RiImageAiFill, categories: ["image"],
+    id: "comfyui", name: "Image-Gen", icon: RiImageAiFill, categories: ["image"],
   },
 };
 

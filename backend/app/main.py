@@ -35,7 +35,7 @@ import yaml
 from enum import Enum
 from pathlib import Path
 from app.middleware.context_middleware import attach_context_middleware
-from app.routes import auth, api_keys, chat, context, history, sessions, settings, system, download, hardware, upload, models_api, gguf, image_generation, websocket, runtimes, mlx, projects, admin, usage, orgs, api_tokens, artifacts
+from app.routes import auth, api_keys, chat, context, history, sessions, settings, system, download, hardware, upload, models_api, gguf, image_generation, websocket, runtimes, mlx, projects, admin, usage, orgs, api_tokens, artifacts, comfyui
 from app.database import init_db
 import os
 from dotenv import load_dotenv
@@ -253,6 +253,7 @@ app.include_router(usage.router)
 app.include_router(orgs.router)
 app.include_router(api_tokens.router)
 app.include_router(artifacts.router)
+app.include_router(comfyui.router)
 
 # Serve generated images/documents/exports so chat + gallery <img> URLs
 # (e.g. /generated/images/<file>) resolve for both API and local diffusion pipelines.
