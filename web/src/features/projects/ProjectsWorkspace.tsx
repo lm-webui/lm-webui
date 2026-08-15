@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,9 +20,15 @@ interface ProjectConversation {
   message_count: number;
 }
 
+interface ProjectsWorkspaceProps {
+  onOpenConversation: (conversationId: string) => Promise<void>;
+  onNewConversation: (projectId: string) => Promise<void>;
+  projectComposer?: ReactNode;
+}
+
 type View = "list" | "detail";
 
-export default function ProjectsWorkspace() {
+export default function ProjectsWorkspace({ onOpenConversation, onNewConversation, projectComposer }: ProjectsWorkspaceProps) {
   const [view, setView] = useState<View>("list");
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -31,6 +37,7 @@ export default function ProjectsWorkspace() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [formName, setFormName] = useState("");
   const [formPrompt, setFormPrompt] = useState("");
+  const [showNewConversation, setShowNewConversation] = useState(false);
 
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
 
@@ -46,6 +53,22 @@ export default function ProjectsWorkspace() {
   useEffect(() => {
     fetchProjects();
   }, []);
+
+  useEffect(() => {
+    const refresh = () => { void fetchProjects(); };
+    window.addEventListener("projects-changed", refresh);
+    return () => window.removeEventListener("projects-changed", refresh);
+  }, []);
+
+  useEffect(() => {
+    const refreshConversations = (event: Event) => {
+      const projectId = (event as CustomEvent<{ projectId?: string }>).detail?.projectId;
+      const project = selectedProject;
+      if (project && project.id === projectId) void openProject(project);
+    };
+    window.addEventListener("project-conversation-changed", refreshConversations);
+    return () => window.removeEventListener("project-conversation-changed", refreshConversations);
+  }, [selectedProject]);
 
   const openProject = async (project: Project) => {
     setSelectedProject(project);
@@ -69,6 +92,7 @@ export default function ProjectsWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: formName, system_prompt: formPrompt }),
       });
+      window.dispatchEvent(new CustomEvent("projects-changed"));
       toast.success("Project created");
       setFormName("");
       setFormPrompt("");
@@ -91,6 +115,7 @@ export default function ProjectsWorkspace() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: formName, system_prompt: formPrompt }),
       });
+      window.dispatchEvent(new CustomEvent("projects-changed"));
       toast.success("Project updated");
       setEditingProject(null);
       setFormName("");
@@ -108,6 +133,7 @@ export default function ProjectsWorkspace() {
     if (!window.confirm("Delete this project? Conversations will remain but won't use its prompt.")) return;
     try {
       await authFetch(`${BASE}/api/projects/${projectId}`, { method: "DELETE" });
+      window.dispatchEvent(new CustomEvent("projects-changed"));
       toast.success("Project deleted");
       if (selectedProject?.id === projectId) {
         setSelectedProject(null);
@@ -133,15 +159,20 @@ export default function ProjectsWorkspace() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-6">
-      <div className="max-w-3xl mx-auto w-full space-y-6">
+    <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
+      <div className="mx-auto w-full space-y-6">
         {view === "detail" && selectedProject && (
-          <div className="flex items-center gap-2 mb-2">
-            <Button variant="ghost" size="icon" onClick={() => { setView("list"); setSelectedProject(null); }}>
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h2 className="text-lg font-semibold">{selectedProject.name}</h2>
-          </div>
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex min-w-0 items-center gap-2">
+              <Button aria-label="Back to projects" variant="ghost" size="icon" onClick={() => { setView("list"); setSelectedProject(null); setShowNewConversation(false); }}>
+                <ArrowLeft aria-hidden="true" className="h-4 w-4" />
+              </Button>
+              <h2 className="truncate text-lg font-semibold">{selectedProject.name}</h2>
+              </div>
+              <Button size="sm" onClick={() => { setShowNewConversation(true); void onNewConversation(selectedProject.id); }}>
+                <Plus className="mr-1 h-4 w-4" /> New Conversation
+              </Button>
+            </div>
         )}
 
         {view === "list" && (
@@ -149,7 +180,7 @@ export default function ProjectsWorkspace() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FolderKanban className="h-5 w-5 text-muted-foreground" />
-                <h2 className="text-lg font-semibold">Projects</h2>
+                <h2 className="text-2xl font-semibold">Projects</h2>
               </div>
               <Button size="sm" onClick={() => { setShowForm(true); setEditingProject(null); setFormName(""); setFormPrompt(""); }}>
                 <Plus className="h-4 w-4 mr-1" /> New Project
@@ -161,12 +192,12 @@ export default function ProjectsWorkspace() {
                 <CardHeader className="pb-3"><CardTitle className="text-base">New Project</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Project Name</Label>
-                    <Input placeholder="e.g., Code Review" value={formName} onChange={(e) => setFormName(e.target.value)} />
+                    <Label htmlFor="new-project-name">Project Name</Label>
+                    <Input id="new-project-name" name="name" placeholder="e.g., Code Review…" value={formName} onChange={(e) => setFormName(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>System Prompt</Label>
-                    <textarea placeholder="You are a senior code reviewer..." value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} rows={4} className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"></textarea>
+                    <Label htmlFor="new-project-instructions">Project Instructions</Label>
+                    <textarea id="new-project-instructions" name="system_prompt" placeholder="You are a senior code reviewer…" value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} rows={4} className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={cancelForm}>Cancel</Button>
@@ -181,12 +212,12 @@ export default function ProjectsWorkspace() {
                 <CardHeader className="pb-3"><CardTitle className="text-base">Edit Project</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label>Project Name</Label>
-                    <Input value={formName} onChange={(e) => setFormName(e.target.value)} />
+                    <Label htmlFor="edit-project-name">Project Name</Label>
+                    <Input id="edit-project-name" name="name" value={formName} onChange={(e) => setFormName(e.target.value)} />
                   </div>
                   <div className="space-y-2">
-                    <Label>System Prompt</Label>
-                    <textarea value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} rows={4} className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"></textarea>
+                    <Label htmlFor="edit-project-instructions">Project Instructions</Label>
+                    <textarea id="edit-project-instructions" name="system_prompt" value={formPrompt} onChange={(e) => setFormPrompt(e.target.value)} rows={4} className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
                   </div>
                   <div className="flex gap-2 justify-end">
                     <Button variant="outline" size="sm" onClick={cancelForm}>Cancel</Button>
@@ -204,7 +235,7 @@ export default function ProjectsWorkspace() {
                   <p className="text-xs mt-1">Create a project to set custom instructions for your conversations.</p>
                 </div>
               ) : projects.map((project) => (
-                <Card key={project.id} className="cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => openProject(project)}>
+                <Card key={project.id} role="button" tabIndex={0} className="cursor-pointer hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => openProject(project)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openProject(project); } }}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 flex-1">
@@ -215,11 +246,11 @@ export default function ProjectsWorkspace() {
                         </div>
                       </div>
                       <div className="flex items-center gap-1 ml-4 shrink-0" onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(project)}>
-                          <Pencil className="h-4 w-4" />
+                        <Button aria-label={`Edit ${project.name}`} variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(project)}>
+                          <Pencil aria-hidden="true" className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => handleDelete(project.id)}>
-                          <Trash2 className="h-4 w-4" />
+                        <Button aria-label={`Delete ${project.name}`} variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-700" onClick={() => handleDelete(project.id)}>
+                          <Trash2 aria-hidden="true" className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -234,32 +265,24 @@ export default function ProjectsWorkspace() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-sm">{selectedProject.name}</CardTitle>
+                <CardTitle className="text-sm">Project Instructions</CardTitle>
                 <CardDescription className="line-clamp-3">{selectedProject.system_prompt}</CardDescription>
               </CardHeader>
-              <CardContent>
-                <Button size="sm" onClick={() => {
-                  const newChatId = `conv_${Date.now()}`;
-                  window.dispatchEvent(new CustomEvent("project-new-chat", {
-                    detail: { projectId: selectedProject.id, chatId: newChatId },
-                  }));
-                }}>
-                  <Plus className="h-4 w-4 mr-1" /> New Conversation
-                </Button>
-              </CardContent>
             </Card>
+
+            {showNewConversation && projectComposer}
 
             <div className="space-y-2">
               {conversations.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No conversations yet in this project.</p>
               ) : conversations.map((conv) => (
-                <div key={conv.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent/50 transition-colors cursor-pointer">
+                <button type="button" key={conv.id} onClick={() => onOpenConversation(conv.id)} className="flex w-full items-center justify-between p-3 rounded-lg border text-left hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{conv.title}</div>
                     <div className="text-xs text-muted-foreground">{conv.message_count} messages</div>
                   </div>
                   <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0 ml-2" />
-                </div>
+                </button>
               ))}
             </div>
           </div>

@@ -171,8 +171,11 @@ export default function ImageWorkspace() {
   };
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-6">
-      <h2 className="text-2xl font-bold mb-6 text-zinc-800 dark:text-zinc-100">Studio</h2>
+    <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
+      <div className="flex items-center gap-2 pb-6">
+        <Sparkles className="h-5 w-5 text-muted-foreground" />
+        <h2 className="text-2xl font-semibold">Image Studio</h2>
+      </div>
 
       <div className="mb-3">
         <label className="mb-1 block text-xs font-medium text-zinc-500">Prompt</label>

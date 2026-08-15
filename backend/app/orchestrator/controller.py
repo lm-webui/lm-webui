@@ -78,7 +78,12 @@ def _build_sources_event(ctx) -> ModelEvent:
     transcript = getattr(ctx, "transcript", "")
     if transcript:
         context_used["audio"] = True
-        sources.append({"title": "Video transcript", "type": "transcript", "snippet": transcript, "source": ""})
+        sources.append({
+            "title": getattr(ctx, "transcript_title", "") or "Video transcript",
+            "type": "transcript",
+            "snippet": transcript,
+            "source": getattr(ctx, "transcript_url", "") or "",
+        })
 
     return ModelEvent.sources({
         "context_used": context_used,
@@ -289,8 +294,8 @@ class OrchestratorController:
                         "assistant",
                         f"Generated image: {chat_request.message[:80]}",
                         metadata={"generatedImageUrl": gen.image_url},
-                        model=model_id,
-                        provider=provider_id,
+                        model=gen.model or model_id,
+                        provider=gen.provider or provider_id,
                     )
                 else:
                     yield ModelEvent.error("Image generation failed. Check your image provider.")

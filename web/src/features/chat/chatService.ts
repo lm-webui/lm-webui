@@ -16,6 +16,7 @@ export interface ChatRequest {
   file_references?: any[]; // File references for RAG
   web_search?: boolean; // Enable web search
   search_provider?: string; // Search provider to use
+  is_image_mode?: boolean; // Force image generation (smart-modality)
 }
 
 export interface Message {
@@ -72,6 +73,7 @@ export class ChatService {
       onChunk?: (chunk: string) => void;
       onStatus?: (stage: string, message: string) => void;
       onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[] }) => void;
+      onImage?: (imageUrl: string) => void;
     }
   ): Promise<{
     userMessage: Message;
@@ -212,6 +214,7 @@ export class ChatService {
         file_references: request.file_references || [],
         web_search: isSearchEnabled ?? false,
         search_provider: selectedSearchEngine ?? "duckduckgo",
+        is_image_mode: request.is_image_mode ?? false,
       }, {
         onToken: (token) => {
           processedResponse += token;
@@ -222,6 +225,7 @@ export class ChatService {
           sourcesPayload = data;
           options.onSources?.(data);
         },
+        onImage: (url) => options.onImage?.(url),
         onError: (err) => { streamError = err; },
       }, signal);
 

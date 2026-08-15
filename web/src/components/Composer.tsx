@@ -2,13 +2,14 @@ import { useRef, useState, useEffect } from "react";
 import {
   Send,
   Loader2,
-  Settings2,
+  Plus,
   Globe,
   Image,
   File,
   Code,
   Paperclip,
   Square,
+  AudioLines,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -68,29 +69,6 @@ export default function Composer({
   const [modelOpen, setModelOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  // Image mode switching — save text model, load image model, restore on exit
-  const prevModelRef = useRef("");
-  const prevLLMRef = useRef("");
-  useEffect(() => {
-    if (isImageMode) {
-      prevModelRef.current = selectedModel || "";
-      prevLLMRef.current = selectedLLM || "";
-      import("@/utils/api").then(({ fetchSettings }) => {
-        fetchSettings().then((s: any) => {
-          const prov = s.defaultImageProvider || "";
-          const modelName = s.defaultImageModel || "";
-          if (prov && modelName) {
-            onLLMChange?.(prov);
-            onModelChange?.(modelName);
-          }
-        }).catch(() => {});
-      });
-    } else if (prevModelRef.current) {
-      onLLMChange?.(prevLLMRef.current);
-      onModelChange?.(prevModelRef.current);
-    }
-  }, [isImageMode]);
-
   // Image mode disables web search — save/restore state
   useEffect(() => {
     if (isImageMode) {
@@ -126,7 +104,8 @@ export default function Composer({
 
     let ok = false;
     if (isImageMode) {
-      ok = await onSend(value, [{ type: "generating_image", prompt: value, provider: selectedLLM, model: selectedModel }]);
+      // Marker only — the backend smart-modality (default image provider) handles generation.
+      ok = await onSend(value, [{ type: "generating_image", prompt: value }]);
     } else {
       // Defer upload to send-time: upload pending files, then send with their refs.
       let refs: any[] = [];
@@ -199,6 +178,8 @@ export default function Composer({
                   <img src={previewUrl} alt={file.name} className="h-6 w-6 rounded object-cover" />
                 ) : file.type.startsWith("image/") ? (
                   <Image className="h-4 w-4 shrink-0 text-zinc-400" />
+                ) : file.type.startsWith("audio/") ? (
+                  <AudioLines className="h-4 w-4 shrink-0 text-zinc-400" />
                 ) : (
                   <File className="h-4 w-4 shrink-0 text-zinc-400" />
                 )}
@@ -215,6 +196,14 @@ export default function Composer({
           </div>
         )}
 
+        {isImageMode && (
+          <div className="px-4 pt-2">
+            <span className="inline-flex items-center gap-1 text-[.7rem] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              <Image className="h-3 w-3" />
+              Create image
+            </span>
+          </div>
+        )}
         <div className="flex-1 px-3 pt-2 ml-1 md:px-4 md:pt-4">
           <textarea
             ref={inputRef}
@@ -241,21 +230,7 @@ export default function Composer({
               ref={fileInputRef}
               onChange={handleFileSelect}
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full text-zinc-500 hover:text-zinc-600 dark:hover:text-zinc-200"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploading || busy}
-            >
-              {isUploading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <Paperclip className="h-5 w-5" />
-              )}
-            </Button>
-
-            {/* Tools popover */}
+            {/* Unified "+" menu: upload + tool toggles (frontier style) */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -263,7 +238,7 @@ export default function Composer({
                   size="icon"
                   className="rounded-full text-zinc-500 mx-3 h-8 w-8"
                 >
-                  <Settings2 className="h-5 w-5" />
+                  <Plus className="h-5 w-5" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent
@@ -272,6 +247,16 @@ export default function Composer({
                 className="w-56 p-2 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900 border-zinc-300/50 dark:border-zinc-800/50"
               >
                 <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => { fileInputRef.current?.click(); }}
+                    disabled={isUploading || busy}
+                    className="flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    <span className="flex items-center gap-2">
+                      <Paperclip className="h-4 w-4" /> Upload files
+                    </span>
+                    {isUploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  </button>
                   <button
                     onClick={() =>
                       !isImageMode && setIsSearchEnabled(!isSearchEnabled)

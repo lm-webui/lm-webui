@@ -61,6 +61,8 @@ async def execute(ctx: CapabilityContext) -> TranscriptResult:
             if not text.strip():
                 return TranscriptResult()
             ctx.transcript = text
+            ctx.transcript_title = title
+            ctx.transcript_url = url
             return TranscriptResult(text=text, title=title, url=url)
     except Exception as exc:
         logger.warning("YouTube transcription failed: %s", exc)

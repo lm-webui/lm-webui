@@ -16,6 +16,7 @@ import {
   MoreHorizontal,
   FileText,
   Server,
+  Sparkles,
   Settings as SettingsIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,8 @@ import {
   DropdownMenuSubContent,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "./ui/dialog";
 import { toast } from "sonner";
 import { useChatStore, useIsLoadingMessages } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -75,7 +78,7 @@ function ConversationItem({
   isLoadingMessages?: Record<string, boolean>;
   projects?: any[];
   onAssignProject?: (conversationId: string, projectId: string) => void;
-  onCreateProject?: (conversationId: string, name: string) => void;
+  onCreateProject?: (conversationId: string) => void;
   projectName?: string;
   onClose?: () => void;
   onCreateDocument?: (conversationId: string, title: string) => void;
@@ -187,10 +190,7 @@ function ConversationItem({
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => {
-                    const name = prompt("Project name:");
-                    if (name) onCreateProject?.(conversation.id, name);
-                  }}>
+                  <DropdownMenuItem onClick={() => onCreateProject?.(conversation.id)}>
                     <Plus className="h-3.5 w-3.5 mr-2" /> New Project
                   </DropdownMenuItem>
                 </DropdownMenuSubContent>
@@ -248,11 +248,21 @@ export default function Sidebar({
 
   const [searchQuery, setSearchQuery] = useState("");
   const [projects, setProjects] = useState<any[]>([]);
+  const [newProjectConversationId, setNewProjectConversationId] = useState<string | null>(null);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectInstructions, setNewProjectInstructions] = useState("You are a helpful assistant.");
+  const [newProjectError, setNewProjectError] = useState("");
+  const [isCreatingProject, setIsCreatingProject] = useState(false);
   const isLoadingMessages = useIsLoadingMessages();
 
   // Fetch projects for "Add to Project" menu + project name badges
   useEffect(() => {
-    authFetch("/api/projects").then((d: any) => setProjects(d.projects || [])).catch(() => {});
+    const refreshProjects = () => {
+      authFetch("/api/projects").then((d: any) => setProjects(d.projects || [])).catch(() => {});
+    };
+    refreshProjects();
+    window.addEventListener("projects-changed", refreshProjects);
+    return () => window.removeEventListener("projects-changed", refreshProjects);
   }, []);
   const projectNames: Record<string, string> = {};
   projects.forEach((p: any) => { projectNames[p.id] = p.name; });
@@ -315,19 +325,45 @@ export default function Sidebar({
     } catch { toast.error("Failed to create document"); }
   };
 
-  const handleCreateProject = async (conversationId: string, name: string) => {
+  const openCreateProject = (conversationId: string) => {
+    setNewProjectConversationId(conversationId);
+    setNewProjectName("");
+    setNewProjectInstructions("You are a helpful assistant.");
+    setNewProjectError("");
+  };
+
+  const closeCreateProject = () => {
+    if (isCreatingProject) return;
+    setNewProjectConversationId(null);
+    setNewProjectName("");
+    setNewProjectInstructions("You are a helpful assistant.");
+    setNewProjectError("");
+  };
+
+  const handleCreateProject = async () => {
+    if (!newProjectConversationId) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      setNewProjectError("Enter a project name.");
+      return;
+    }
+    setIsCreatingProject(true);
     try {
       const data = await authFetch("/api/projects", {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, system_prompt: "You are a helpful assistant." }),
+        body: JSON.stringify({ name, system_prompt: newProjectInstructions.trim() || "You are a helpful assistant." }),
       });
       if (data && !data.error) {
         setProjects(prev => [...prev, { id: data.id, name, system_prompt: data.system_prompt, conversation_count: 0 }]);
-        await handleAssignProject(conversationId, data.id);
+        window.dispatchEvent(new CustomEvent("projects-changed"));
+        await handleAssignProject(newProjectConversationId, data.id);
+        setIsCreatingProject(false);
+        closeCreateProject();
         toast.success("Project created and conversation assigned");
       } else toast.error("Failed to create project");
-    } catch { toast.error("Failed to create project"); }
+    } catch { toast.error("Failed to create project. Check your connection and try again."); }
+    finally { setIsCreatingProject(false); }
   };
 
   if (sidebarCollapsed) {
@@ -373,7 +409,7 @@ export default function Sidebar({
             title="Studio"
             onClick={() => onViewChange?.("workspace")}
           >
-            <Palette className="h-5 w-5 text-zinc-500" />
+            <Sparkles className="h-5 w-5 text-zinc-500" />
           </Button>
           <Button
             variant="ghost"
@@ -497,7 +533,7 @@ export default function Sidebar({
               className="w-full justify-start gap-3 px-4 h-10 rounded-full font-normal text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
               onClick={() => onViewChange?.("workspace")}
             >
-              <Palette className="h-4 w-4" />
+              <Sparkles className="h-4 w-4" />
               <span>Studio</span>
             </Button>
             <Button
@@ -532,7 +568,7 @@ export default function Sidebar({
                     isLoadingMessages={isLoadingMessages}
                     projects={projects}
                     onAssignProject={handleAssignProject}
-                    onCreateProject={handleCreateProject}
+                    onCreateProject={openCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
                     onClose={onClose}
                     onCreateDocument={handleCreateDocument}
@@ -562,7 +598,7 @@ export default function Sidebar({
                   isLoadingMessages={isLoadingMessages}
                     projects={projects}
                     onAssignProject={handleAssignProject}
-                    onCreateProject={handleCreateProject}
+                    onCreateProject={openCreateProject}
                     projectName={projectNames[rawConversations[c.id]?.metadata?.project_id || ''] || ''}
                     onClose={onClose}
                     onCreateDocument={handleCreateDocument}
@@ -573,7 +609,47 @@ export default function Sidebar({
         </nav>
 
         <div className="mt-auto border-t px-4 py-3 mb-1 border-neutral-400/30 dark:border-neutral-800/50">
-          <ProfilePopover />
+      <ProfilePopover />
+      <Dialog open={Boolean(newProjectConversationId)} onOpenChange={(open) => { if (!open) closeCreateProject(); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Project</DialogTitle>
+            <DialogDescription>Create a project and add this conversation to it.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={(event) => { event.preventDefault(); void handleCreateProject(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-new-project-name">Project Name</Label>
+              <Input
+                id="sidebar-new-project-name"
+                name="name"
+                autoComplete="off"
+                autoFocus
+                value={newProjectName}
+                onChange={(event) => { setNewProjectName(event.target.value); setNewProjectError(""); }}
+                aria-invalid={Boolean(newProjectError)}
+                aria-describedby={newProjectError ? "sidebar-new-project-error" : undefined}
+                placeholder="e.g., Code Review…"
+              />
+              {newProjectError && <p id="sidebar-new-project-error" className="text-sm text-destructive" role="alert">{newProjectError}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sidebar-new-project-instructions">Project Instructions</Label>
+              <textarea
+                id="sidebar-new-project-instructions"
+                name="system_prompt"
+                value={newProjectInstructions}
+                onChange={(event) => setNewProjectInstructions(event.target.value)}
+                rows={4}
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeCreateProject} disabled={isCreatingProject}>Cancel</Button>
+              <Button type="submit" disabled={isCreatingProject}>{isCreatingProject ? "Creating…" : "Create Project"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
         </div>
       </aside>
     </>

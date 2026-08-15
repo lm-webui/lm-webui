@@ -2,6 +2,7 @@
 Projects Routes — CRUD for project workspaces with custom system prompts.
 """
 import uuid
+import json
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from app.database import get_db
@@ -99,6 +100,17 @@ async def delete_project(project_id: str, user_id: dict = Depends(get_current_us
     ).fetchone()
     if not existing:
         raise HTTPException(404, "Project not found")
+    conversations = db.execute(
+        "SELECT id, metadata FROM conversations WHERE user_id = ? AND json_extract(metadata, '$.project_id') = ?",
+        (user_id["id"], project_id),
+    ).fetchall()
+    for conversation_id, metadata in conversations:
+        values = json.loads(metadata or "{}")
+        values.pop("project_id", None)
+        db.execute(
+            "UPDATE conversations SET metadata = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(values), datetime.now(), conversation_id),
+        )
     db.execute("DELETE FROM projects WHERE id = ?", (project_id,))
     db.commit()
     return {"message": "Project deleted"}
@@ -108,6 +120,12 @@ async def delete_project(project_id: str, user_id: dict = Depends(get_current_us
 async def list_project_conversations(project_id: str, user_id: dict = Depends(get_current_user)):
     """List conversations belonging to a project."""
     db = get_db()
+    project = db.execute(
+        "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+        (project_id, user_id["id"]),
+    ).fetchone()
+    if not project:
+        raise HTTPException(404, "Project not found")
     convs = db.execute(
         "SELECT id, title, created_at, updated_at, message_count FROM conversations WHERE user_id = ? AND json_extract(metadata, '$.project_id') = ? ORDER BY updated_at DESC",
         (user_id["id"], project_id),

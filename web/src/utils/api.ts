@@ -117,6 +117,7 @@ interface ChatRequest {
   file_references?: any[];
   web_search?: boolean;
   search_provider?: string;
+  is_image_mode?: boolean;
 }
 
 // Validate ChatRequest before sending
@@ -141,6 +142,7 @@ export interface StreamCallbacks {
   onToken?: (token: string) => void;
   onStatus?: (stage: string, message: string) => void;
   onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[] }) => void;
+  onImage?: (imageUrl: string) => void;
   onDone?: () => void;
   onError?: (err: Error) => void;
 }
@@ -209,6 +211,9 @@ function dispatchStreamEvent(ev: any, cb: StreamCallbacks): void {
       break;
     case 'sources':
       if (ev.data) cb.onSources?.(ev.data);
+      break;
+    case 'image':
+      if (ev.data?.image_url) cb.onImage?.(ev.data.image_url);
       break;
     case 'complete':
       cb.onDone?.();

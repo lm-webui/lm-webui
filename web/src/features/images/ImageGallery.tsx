@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, Download, RefreshCw, Image } from "lucide-react";
+import { Loader2, Trash2, Download, RefreshCw, Image, FolderKanban, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -69,10 +69,12 @@ export default function ImageGallery() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-6">
+    <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-zinc-800 dark:text-zinc-100">Gallery</h2>
-        <Button size="sm" variant="outline" className="rounded-xl gap-1" onClick={fetchImages}>
+        <div className="flex items-center gap-2 pb-6">
+          <LayoutGrid className="h-5 w-5 text-muted-foreground" />
+          <h2 className="text-2xl font-semibold">Image Studio</h2>
+        </div>        <Button size="sm" variant="outline" className="rounded-xl gap-1" onClick={fetchImages}>
           <RefreshCw className="h-4 w-4" /> Refresh
         </Button>
       </div>

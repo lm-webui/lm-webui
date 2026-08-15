@@ -35,6 +35,8 @@ class CapabilityContext:
     vision_error: str = ""       # actionable reason vision isn't ready (if any)
     backfilled_refs: bool = False  # file refs were inherited from conversation history, not this message
     transcript: str = ""         # linked-video transcript (YouTube summary path)
+    transcript_title: str = ""   # source video title (for surfacing the transcript card)
+    transcript_url: str = ""     # source video URL (for linking)
 
 
 def get_user_api_key(user_id: int, provider_id: str) -> str | None:

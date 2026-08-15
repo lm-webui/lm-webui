@@ -92,7 +92,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
   const currentConversationId = activeChatId || options?.currentConversationId || "";
   const currentSessionId = activeChatId || options?.currentSessionId || "";
 
-  const handleSendMessage = useCallback(async (message: string, fileReferences: any[] = []): Promise<boolean> => {
+  const handleSendMessage = useCallback(async (message: string, fileReferences: any[] = [], imageMode: boolean = false): Promise<boolean> => {
     if (!message.trim()) return false;
 
     const streamMessageChunk = useChatStore.getState().streamMessageChunk;
@@ -159,8 +159,9 @@ export function useChatCreation(options?: UseChatCreationOptions) {
 
     const currentInput = message;
 
-    // Set loading state based on message type
-    if (hookOptions.isImageMode) {
+    // Set loading state based on message type (the explicit imageMode flag routes via the
+    // normal chat pipeline → conversation loading, not the legacy image-generation loader).
+    if (hookOptions.isImageMode && !imageMode) {
       startImageGeneration(targetConversationId);
     } else {
       startConversationCreation();
@@ -174,9 +175,10 @@ export function useChatCreation(options?: UseChatCreationOptions) {
 
     let sent = true;
     let receivedContent = false;
+    let receivedImageUrl = "";
     try {
     // Check if image mode is enabled and route to image generation
-    if (hookOptions.isImageMode) {
+    if (hookOptions.isImageMode && !imageMode) {
       // Route to image generation API
       const imageRequest: ImageRequest = {
         message: currentInput,
@@ -247,6 +249,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           file_references: fileReferences,
           web_search: hookOptions.isSearchEnabled ?? false,
           search_provider: hookOptions.selectedSearchEngine ?? "duckduckgo",
+          is_image_mode: imageMode,
         };
 
       // Stream tokens into this assistant message as they arrive.
@@ -283,6 +286,13 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           if (targetIdRef.current && targetConversationId) {
             finalizeMessage(targetConversationId, targetIdRef.current, sourcesToFields(data));
           }
+        },
+        onImage: (url) => {
+          receivedImageUrl = url;
+          // Set the generated image on the active assistant message so it renders in-chat.
+          if (targetIdRef.current && targetConversationId) {
+            finalizeMessage(targetConversationId, targetIdRef.current, { generatedImageUrl: url });
+          }
         }
       });
 
@@ -294,6 +304,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
             await addMessage(targetConversationId, {
               ...result.assistantMessage,
               id: targetIdRef.current,
+              ...(receivedImageUrl ? { generatedImageUrl: receivedImageUrl } : {}),
               created_at: (result.assistantMessage as any).created_at || new Date().toISOString()
             });
           } else {
@@ -333,7 +344,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       }
     } finally {
       // Ensure loading states are cleared
-      if (hookOptions.isImageMode) {
+      if (hookOptions.isImageMode && !imageMode) {
         completeImageGeneration(currentConversationId);
       } else {
         completeConversationCreation();

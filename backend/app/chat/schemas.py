@@ -22,6 +22,7 @@ class ChatRequest:
     webSearch: Optional[bool] = False
     searchProvider: Optional[str] = "duckduckgo"
     projectId: Optional[str] = None
+    isImageMode: Optional[bool] = False
     
     def __post_init__(self):
         """Generate job_id for tracking"""

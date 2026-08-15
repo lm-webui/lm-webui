@@ -247,7 +247,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     setLoading(true);
     await Promise.all([fetchRuntimes(), fetchModels(), fetchMlxInfo(), fetchGpuInfo(), fetchVisionInfo(), fetchGgufHealth()]);
     setLoading(false);
-    toast.success("Refreshed");
+    toast.success("Runtime status refreshed");
   };
 
   const fetchGpuInfo = async () => {
@@ -444,16 +444,19 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Server className="h-5 w-5" />
-            <h2 className="text-lg font-semibold">Runtime Manager</h2>
+            <div>
+              <h2 className="text-lg font-semibold">Runtime Manager</h2>
+              <p className="text-xs text-muted-foreground">Configure engines, models, hardware, and image runtimes.</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-              Refresh
+              {loading ? "Refreshing…" : "Refresh"}
             </Button>
             <Button variant="outline" size="sm" onClick={scanExternals} disabled={scanning}>
               {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
-              {scanning ? "Scanning..." : "Scan Host"}
+              {scanning ? "Scanning…" : "Scan Host"}
             </Button>
           </div>
         </div>
@@ -486,7 +489,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="gguf" className="gap-2"><SiHuggingface className="h-4 w-4" /> llama.cpp</TabsTrigger>
             <TabsTrigger value="mlx" className="gap-2"><SiApple className="h-4 w-4" /> MLX</TabsTrigger>
-            <TabsTrigger value="comfyui" className="gap-2"><RiImageAiFill className="h-4 w-4" /> Image-Gen</TabsTrigger>
+            <TabsTrigger value="comfyui" className="gap-2"><RiImageAiFill className="h-4 w-4" /> Image Generation</TabsTrigger>
           </TabsList>
 
         <TabsContent value="gguf" className="m-0 overflow-y-auto scrollbar-hide flex-1">
@@ -681,7 +684,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             {/* ── Models ── */}
             <div className="relative mt-4 mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search llama.cpp models..." value={ggufQuery}
+              <Input aria-label="Search llama.cpp models" placeholder="Search llama.cpp models…" value={ggufQuery}
                 onChange={(e) => setGgufQuery(e.target.value)} className="pl-9" />
             </div>
             {loadingModels ? (
@@ -856,7 +859,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                     <div className="mt-4">
                       <div className="relative mb-3">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Search MLX models..." value={mlxQuery}
+                        <Input aria-label="Search MLX models" placeholder="Search MLX models…" value={mlxQuery}
                           onChange={(e) => setMlxQuery(e.target.value)} className="pl-9" />
                       </div>
                       {mlxRows.length === 0 ? (
@@ -941,8 +944,9 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Input value={comfyuiEndpoint} onChange={(e) => setComfyuiEndpoint(e.target.value)}
+                  <div className="flex items-center gap-2 mb-2">
+                  <Label htmlFor="comfyui-endpoint" className="sr-only">ComfyUI endpoint</Label>
+                  <Input id="comfyui-endpoint" name="endpoint" type="url" value={comfyuiEndpoint} onChange={(e) => setComfyuiEndpoint(e.target.value)}
                     placeholder="http://host.docker.internal:8188" className="flex-1" />
                   <Button size="sm" onClick={connectComfyui}>Connect</Button>
                 </div>

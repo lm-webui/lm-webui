@@ -4,8 +4,7 @@ import { useChatStore, useIsLoadingMessages } from "@/store/chatStore";
 import { mapToConversation } from "@/utils/chatUtils";
 import { useChatCreation } from "@/features/chat/useChatCreation";
 import { toast } from "sonner";
-import { generateChatTitle, detectMessageIntent } from "@/utils/chatUtils";
-import { generateImage } from "@/utils/api";
+import { detectMessageIntent } from "@/utils/chatUtils";
 
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
@@ -51,27 +50,24 @@ export default function ChatArea({
 
 
 
-  // Listen for project new-chat events from ProjectsWorkspace
-  useEffect(() => {
-    const handler = (e: any) => {
-      const { projectId, chatId } = e.detail;
-      if (!projectId || !chatId) return;
-      useChatStore.getState().createNewChat();
-      const store = useChatStore.getState();
-      const activeId = store.activeChatId;
-      if (activeId) {
-        store.updateConversation(activeId, { metadata: { project_id: projectId } });
-        setActiveChat(activeId);
-        setActiveView("chat");
-      }
-    };
-    window.addEventListener("project-new-chat", handler);
-    return () => window.removeEventListener("project-new-chat", handler);
-  }, []);
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<"chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
+
+  const openConversation = async (conversationId: string) => {
+    setActiveChat(conversationId);
+    setActiveView("chat");
+    const store = useChatStore.getState();
+    if (store.conversations[conversationId]?.messages.length === 0) {
+      await store.loadMessagesForConversation(conversationId);
+    }
+  };
+
+  const openProjectConversation = async (projectId: string) => {
+    const id = useChatStore.getState().createNewChat();
+    useChatStore.getState().updateConversation(id, { metadata: { project_id: projectId } });
+    setActiveChat(id);
+  };
 
   // "Open in Image Studio" from a chat message -> switch to the Studio view.
   useEffect(() => {
@@ -112,60 +108,14 @@ export default function ChatArea({
 
 
     const genFile = files.find((f: any) => f.type === "generating_image");
-    if (genFile && activeChatId) {
-      const prompt = genFile.prompt || content;
-      const now = Date.now();
-      await useChatStore.getState().addMessage(activeChatId, { id: `user_${now}`, role: "user" as const, content: prompt, timestamp: new Date(), created_at: new Date().toISOString() });
-      // activeChatId may have changed after backend sync — read fresh
-      const currentChatId = useChatStore.getState().activeChatId || activeChatId;
-      // Show skeleton immediately — bypass addMessage to avoid backend sync delay
-      const skeletonId = `sk_${now}`;
-      const skMsg = { id: skeletonId, role: "assistant" as const, content: "", timestamp: new Date(), created_at: new Date().toISOString(), type: "image_loading" };
-      const skConv = useChatStore.getState().conversations[currentChatId];
-      if (skConv) {
-        useChatStore.getState().updateConversation(currentChatId, { messages: [...skConv.messages, skMsg] });
-      }
-      try {
-        const imageUrl = await generateImage({
-          provider: genFile.provider || selectedLLM,
-          model: genFile.model || selectedModel,
-          prompt,
-          params: { size: "1024x1024" },
-          conversation_id: currentChatId,
-        } as any);
-        if (imageUrl) {
-          const store = useChatStore.getState();
-          const conv = store.conversations[currentChatId];
-          if (conv) {
-            store.updateConversation(currentChatId, { messages: conv.messages.map((m: any) => m.id === skeletonId ? { ...m, type: undefined, generatedImageUrl: imageUrl } : m) });
-            // Update title if still default — re-read fresh from store (conv is stale)
-            const updatedConv = useChatStore.getState().conversations[currentChatId];
-            if (updatedConv && updatedConv.title === 'New Chat') {
-              const title = generateChatTitle(updatedConv.messages);
-              if (title !== 'New Chat') {
-                store.updateConversationTitle(currentChatId, title).catch(() => {});
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Image gen failed:", e);
-        toast.error("Image generation failed. Please try again.");
-        // Remove the stuck skeleton
-        const store = useChatStore.getState();
-        const conv = store.conversations[currentChatId];
-        if (conv) {
-          store.updateConversation(currentChatId, {
-            messages: conv.messages.filter((m: any) => m.id !== skeletonId),
-          });
-        }
-        return false;
-      }
-      return true;
+    if (genFile) {
+      // Route through smart-modality (image_mode flag): the backend generates via the default
+      // image provider and streams back an "image" event that renders in-chat + Gallery.
+      return await chatCreationHandleSendMessage(genFile.prompt || content, [], true);
     }
 
     try {
-      const ok = await chatCreationHandleSendMessage(content, files);
+      const ok = await chatCreationHandleSendMessage(content, files, false);
       return ok;
     } catch (e) {
       console.error("Message send failed:", e);
@@ -189,6 +139,31 @@ export default function ChatArea({
       toast.error("Failed to create new chat. Please refresh the page and try again.");
     }
   };
+
+  const projectComposer = activeView === "projects" && activeChatId && modernConversation ? (
+    <ChatPane
+      conversation={modernConversation}
+      onSend={handleSendMessage}
+      isLoadingMessages={!!isLoadingMessages[activeChatId]}
+      isLoading={isLoading}
+      searchStatus={searchStatus}
+      isThinking={false}
+      onPauseThinking={() => {}}
+      isSearchEnabled={isSearchEnabled}
+      setIsSearchEnabled={setIsSearchEnabled}
+      isImageMode={isImageMode}
+      setIsImageMode={setIsImageMode}
+      isCodingMode={isCodingMode}
+      setIsCodingMode={setIsCodingMode}
+      selectedModel={selectedModel}
+      selectedLLM={selectedLLM}
+      onLLMChange={setSelectedLLM}
+      onModelChange={setSelectedModel}
+      availableModels={allModels}
+      onStop={handleStopMessage}
+      showWelcome={false}
+    />
+  ) : undefined;
 
   return (
     <div className="h-screen w-full bg-stone-100/50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 flex overflow-hidden">
@@ -251,7 +226,7 @@ export default function ChatArea({
         )}
         {activeView === "workspace" && <ImageWorkspace />}
         {activeView === "gallery" && <ImageGallery />}
-        {activeView === "projects" && <ProjectsWorkspace />}
+        {activeView === "projects" && <ProjectsWorkspace onOpenConversation={openConversation} onNewConversation={openProjectConversation} projectComposer={projectComposer} />}
         {activeView === "agent" && <AgentWorkspace />}
         {activeView === "runtime" && (
           <RuntimeManager

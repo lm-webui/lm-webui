@@ -30,6 +30,7 @@ interface ChatPaneProps {
   availableModels?: string[];
   isLoadingMessages?: boolean;
   onStop?: () => void;
+  showWelcome?: boolean;
 }
 
 export default function ChatPane({
@@ -51,6 +52,7 @@ export default function ChatPane({
   availableModels,
   isLoadingMessages,
   onStop,
+  showWelcome = true,
 }: ChatPaneProps) {
   const [promptTemplate, setPromptTemplate] = React.useState("");
   const [projectName, setProjectName] = useState("");
@@ -94,9 +96,26 @@ export default function ChatPane({
         body: JSON.stringify({ metadata: { project_id: projectId } }),
       });
       setShowProjectPicker(false);
+      const project = projects.find((item) => item.id === projectId);
+      setProjectName(project?.name || "");
       toast.success("Added to project");
     } catch {
       toast.error("Failed to add to project");
+    }
+  };
+
+  const handleRemoveFromProject = async () => {
+    if (!conversation) return;
+    try {
+      await authFetch(`/api/history/conversation/${conversation.id}/metadata`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ metadata: { project_id: null } }),
+      });
+      setProjectName("");
+      toast.success("Removed from project");
+    } catch {
+      toast.error("Failed to remove from project");
     }
   };
 
@@ -176,7 +195,11 @@ export default function ChatPane({
   }
 
   if (!conversation || conversation.messages.length === 0) {
-    return <Welcome user={user} onAction={handleAction}>{composer}</Welcome>;
+    return showWelcome ? <Welcome user={user} onAction={handleAction}>{composer}</Welcome> : (
+      <div className="flex h-full min-h-0 flex-1 flex-col justify-end bg-neutral-200/70 px-4 pb-4 dark:bg-neutral-900/50 sm:px-8">
+        <div className="mx-auto w-full max-w-3xl">{composer}</div>
+      </div>
+    );
   }
 
   return (
@@ -206,6 +229,7 @@ export default function ChatPane({
                 }}
                 onRegenerate={handleRegenerate}
                 onAddToProject={openProjectPicker}
+                onTranscribe={(prompt) => onSend(prompt, [])}
               />
             </div>
           ))}
@@ -232,6 +256,7 @@ export default function ChatPane({
             <FolderKanban className="h-3 w-3 shrink-0" />
             <span>Project: <span className="font-medium">{projectName}</span></span>
             <span className="text-zinc-400 hidden sm:inline">· System prompt active</span>
+            <button type="button" onClick={handleRemoveFromProject} className="ml-auto rounded px-2 py-1 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Remove</button>
           </div>
         </div>
       )}

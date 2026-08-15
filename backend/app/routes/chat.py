@@ -56,6 +56,7 @@ async def chat_completion(
             conversationId=request.get("conversation_id"),
             webSearch=request.get("web_search", False),
             file_references=request.get("file_references", []),
+            isImageMode=request.get("is_image_mode", False),
         )
         
         # Determine Conversation ID (or let orchestrator handle it, but we need it for response)

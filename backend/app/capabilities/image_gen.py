@@ -64,7 +64,7 @@ async def execute(ctx: CapabilityContext) -> ImageGenResult:
         result = await handler(req)
         image_url = result.get("image_url") if isinstance(result, dict) else None
         if image_url:
-            return ImageGenResult(image_url=image_url)
+            return ImageGenResult(image_url=image_url, provider=provider, model=model)
         logger.warning("Image generation returned no URL: %s", result)
     except Exception as exc:
         logger.warning("Image generation failed: %s", exc)

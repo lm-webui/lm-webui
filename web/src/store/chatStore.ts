@@ -407,6 +407,11 @@ export const useChatStore = create<ChatStore>()(
           
           // Force sidebar refresh after adding message
           get().incrementSidebarVersion();
+          if (conversation?.metadata?.project_id && typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent("project-conversation-changed", {
+              detail: { projectId: conversation.metadata.project_id },
+            }));
+          }
           
           return backendConversationId;
           

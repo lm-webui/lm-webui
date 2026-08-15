@@ -82,6 +82,11 @@ def plan(
     has_images = any(_is_image(r) for r in (file_references or []))
     has_docs = _has_docs(file_references or [])
 
+    # User's explicit image-mode intent overrides classification → force image generation.
+    if image_mode:
+        p.diffusion = True
+        return p
+
     if intent.processing_class == ProcessingClass.GENERATE:
         p.diffusion = True
         return p  # image generation takes over

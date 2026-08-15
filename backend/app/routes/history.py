@@ -163,13 +163,31 @@ async def update_conversation_metadata(
     if not conv:
         raise HTTPException(404, "Conversation not found")
 
-    metadata = json.dumps(request.get("metadata", {}))
+    metadata = request.get("metadata", {})
+    current = db.execute(
+        "SELECT metadata FROM conversations WHERE id = ? AND user_id = ?",
+        (conversation_id, user_id["id"]),
+    ).fetchone()
+    current_metadata = json.loads(current[0] or "{}") if current else {}
+    current_metadata.update(metadata)
+    metadata = current_metadata
+    project_id = metadata.get("project_id")
+    if project_id:
+        project = db.execute(
+            "SELECT id FROM projects WHERE id = ? AND user_id = ?",
+            (project_id, user_id["id"]),
+        ).fetchone()
+        if not project:
+            raise HTTPException(404, "Project not found")
+    elif "project_id" in metadata:
+        metadata["project_id"] = None
+    metadata_json = json.dumps(metadata)
     db.execute(
         "UPDATE conversations SET metadata = ?, updated_at = ? WHERE id = ?",
-        (metadata, datetime.now(), conversation_id),
+        (metadata_json, datetime.now(), conversation_id),
     )
     db.commit()
-    return {"message": "Metadata updated"}
+    return {"message": "Metadata updated", "metadata": metadata}
 
 @router.post("/conversation/{conversation_id}/generate-title")
 async def generate_conversation_title(

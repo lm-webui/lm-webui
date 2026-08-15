@@ -7,11 +7,11 @@ import { Card, CardContent } from "@/components/ui/card";
  */
 export default function AgentWorkspace() {
   return (
-    <div className="flex h-full flex-col overflow-y-auto p-6">
-      <div className="max-w-3xl mx-auto w-full space-y-6">
+    <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
+      <div className="mx-auto w-full space-y-6">
         <div className="flex items-center gap-2">
           <Bot className="h-5 w-5 text-muted-foreground" />
-          <h2 className="text-lg font-semibold">Agent</h2>
+          <h2 className="text-2xl font-semibold">Agent Hub</h2>
         </div>
 
         <Card>

@@ -2,7 +2,7 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Brain, FileText, Search, Clock } from "lucide-react";
+import { ChevronDown, ChevronUp, Brain, FileText, Search, Clock, AudioLines, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface MessageContextProps {
@@ -10,13 +10,15 @@ interface MessageContextProps {
     id: string;
     role: "user" | "assistant";
     searchUsed?: boolean;
-      memoryUsed?: boolean;
+    memoryUsed?: boolean;
     documentsReferenced?: number;
+    context_used?: { audio?: boolean; memory?: boolean; rag?: boolean; web_search?: boolean };
     sources?: Array<{
       id: string;
       title: string;
-      type: "document" | "memory" | "web";
+      type: "document" | "memory" | "web" | "image" | "vision" | "transcript";
       snippet?: string;
+      source?: string;
       page?: number;
       date?: Date;
     }>;
@@ -63,6 +65,16 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
       label: "Web search",
       variant: "outline" as const,
       className: "border-green-800 text-green-300",
+    });
+  }
+
+  // Transcribed audio/video
+  if (message.context_used?.audio) {
+    contextBadges.push({
+      icon: AudioLines,
+      label: "Transcribed audio",
+      variant: "outline" as const,
+      className: "border-cyan-800 text-cyan-300",
     });
   }
 
@@ -131,42 +143,74 @@ if (contextBadges.length === 0 && (!message.sources || message.sources.length ==
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-2 mt-2">
             {message.sources.map((source, index) => (
-              <div
-                key={source.id}
-                className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg border border-border/50"
-              >
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-medium truncate">{source.title}</span>
-                    <Badge variant="secondary" className="text-xs">
-                      {source.type}
-                    </Badge>
-                  </div>
-                  {source.page && (
-                    <div className="text-xs text-muted-foreground">
-                      Page {source.page}
-                    </div>
-                  )}
-                  {source.date && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Clock className="h-3 w-3" />
-                      {source.date.toLocaleDateString()}
-                    </div>
-                  )}
-                  {source.snippet && (
-                    <div className="text-xs text-muted-foreground mt-2 line-clamp-2">
-                      {source.snippet}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <TranscriptOrSource key={source.id} source={source} index={index} />
             ))}
           </CollapsibleContent>
         </Collapsible>
       )}
+    </div>
+  );
+}
+
+// Render one source row — transcripts get a distinct card (icon + title + link + collapsible
+// snippet); everything else uses the generic numbered row.
+function TranscriptOrSource({ source, index }: {
+  source: { id: string; title: string; type: string; snippet?: string; source?: string; page?: number; date?: Date };
+  index: number;
+}) {
+  if (source.type === "transcript") {
+    return (
+      <div className="p-3 bg-cyan-500/5 rounded-lg border border-cyan-500/20">
+        <div className="flex items-center gap-2 mb-1">
+          <AudioLines className="h-4 w-4 shrink-0 text-cyan-600 dark:text-cyan-400" />
+          <span className="text-sm font-medium truncate">{source.title}</span>
+          <Badge variant="secondary" className="text-xs">transcript</Badge>
+        </div>
+        {source.source && (
+          <a
+            href={source.source}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline"
+          >
+            View source <ExternalLink className="h-3 w-3" />
+          </a>
+        )}
+        {source.snippet && (
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <button className="mt-2 text-xs text-muted-foreground hover:text-foreground">
+                {source.snippet.length > 400 ? "Show transcript" : "Transcript"}
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed line-clamp-[8]">{source.snippet}</p>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-start gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
+      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+        {index + 1}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-sm font-medium truncate">{source.title}</span>
+          <Badge variant="secondary" className="text-xs">{source.type}</Badge>
+        </div>
+        {source.page && <div className="text-xs text-muted-foreground">Page {source.page}</div>}
+        {source.date && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" /> {source.date.toLocaleDateString()}
+          </div>
+        )}
+        {source.snippet && (
+          <div className="text-xs text-muted-foreground mt-2 line-clamp-2">{source.snippet}</div>
+        )}
+      </div>
     </div>
   );
 }

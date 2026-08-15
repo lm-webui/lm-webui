@@ -44,6 +44,8 @@ class VisionResult:
 class ImageGenResult:
     """Generated image URL (image-generation intent)."""
     image_url: str = ""
+    provider: str = ""  # actual image provider (openai/google/comfyui)
+    model: str = ""     # actual image model
 
 
 @dataclass

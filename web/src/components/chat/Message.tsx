@@ -6,6 +6,7 @@ import {
   Image,
   Image as ImageIcon,
   File,
+  AudioLines,
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -133,6 +134,7 @@ interface MessageProps {
   isCodingMode?: boolean;
   onRegenerate?: () => void;
   onAddToProject?: () => void;
+  onTranscribe?: (prompt: string) => void;
 }
 
 export function Message({
@@ -141,6 +143,7 @@ export function Message({
   isCodingMode = false,
   onRegenerate,
   onAddToProject,
+  onTranscribe,
 }: MessageProps) {
   const isMobile = useIsMobile();
   const [showRaw, setShowRaw] = useState(false);
@@ -724,11 +727,40 @@ export function Message({
                       const isImage =
                         (file.content_type || file.mime || file.type || "").startsWith("image/") ||
                         (file.file_type || "").startsWith("image/");
-                      const thumbSrc =
-                        file.thumbnail_url ||
-                        (isImage && file.media_id != null
+                      const isAudio =
+                        (file.content_type || file.mime || file.type || "").startsWith("audio/") ||
+                        (file.file_type || "").startsWith("audio/");
+                      const mediaUrl =
+                        file.media_id != null
                           ? `${import.meta.env.VITE_BACKEND_URL || ""}/api/upload/media/${file.media_id}`
-                          : undefined);
+                          : undefined;
+                      const thumbSrc = file.thumbnail_url || (isImage ? mediaUrl : undefined);
+                      if (isAudio) {
+                        return (
+                          <div
+                            key={file.media_id ?? idx}
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30 max-w-full"
+                          >
+                            <AudioLines className="h-4 w-4 text-blue-400 shrink-0" />
+                            <span className="text-xs text-blue-300 truncate max-w-32">{file.filename}</span>
+                            {mediaUrl && (
+                              <audio controls preload="metadata" className="h-8 w-40">
+                                <source src={mediaUrl} />
+                              </audio>
+                            )}
+                            {onTranscribe && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[.65rem] px-2 gap-1 text-blue-300 hover:text-blue-100"
+                                onClick={() => onTranscribe("Transcribe this voice note into notes")}
+                              >
+                                <AudioLines className="h-3 w-3" /> Transcribe
+                              </Button>
+                            )}
+                          </div>
+                        );
+                      }
                       return (
                         <div
                           key={file.media_id ?? idx}
