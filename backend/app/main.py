@@ -254,6 +254,10 @@ app.include_router(orgs.router)
 app.include_router(api_tokens.router)
 app.include_router(artifacts.router)
 
+# Serve generated images/documents/exports so chat + gallery <img> URLs
+# (e.g. /generated/images/<file>) resolve for both API and local diffusion pipelines.
+app.mount("/generated", StaticFiles(directory=str(MEDIA_DIR / "generated")), name="generated")
+
 # Serve the active Vite build in the single production container. API routes
 # are registered first so /api/* is never shadowed by the SPA fallback.
 # SPA catch-all — serve index.html for any non-API path (React Router handles the rest).
