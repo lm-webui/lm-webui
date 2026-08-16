@@ -14,7 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, SlidersHorizontal, Cpu } from "lucide-react";
 import { SettingsSearch } from "./SettingsSearch";
 import { ApiKeysTab } from "./ApiKeysTab";
 import { ModelsTab } from "./ModelsTab";
@@ -219,7 +219,7 @@ export function Settings({
             defaultValue="inference"
             className="w-full flex flex-col overflow-hidden min-h-0 flex-1"
           >
-            <TabsList className="grid w-full grid-cols-4 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs sm:text-sm shrink-0">
+            <TabsList className={`grid w-full ${user?.role === "admin" ? "grid-cols-4" : "grid-cols-3"} rounded-lg bg-zinc-100 dark:bg-zinc-800 text-xs sm:text-sm shrink-0`}>
               <TabsTrigger value="inference" className="rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700">Inference</TabsTrigger>
               <TabsTrigger value="provider" className="rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700">Provider</TabsTrigger>
               <TabsTrigger value="models" className="rounded-md data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-700">Models</TabsTrigger>
@@ -230,7 +230,7 @@ export function Settings({
 
               <TabsContent value="inference" className="space-y-4 m-0">
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Generation Parameters</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" /> Generation Parameters</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="temperature" className="text-sm sm:text-base">Temperature: {temperature[0]}</Label>
@@ -255,7 +255,7 @@ export function Settings({
                 </Card>
 
                 <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base">Default Models</CardTitle></CardHeader>
+                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Cpu className="h-4 w-4" /> SmartModality Config</CardTitle></CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Label className="text-sm">Default Text Model</Label>

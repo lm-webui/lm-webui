@@ -137,8 +137,10 @@ export const useChatStore = create<ChatStore>()(
                 role: (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'user',
                 content: msg.content || '',
                 created_at: msg.created_at || msg.timestamp || new Date().toISOString(),
-                // Restore persisted attachments so the bubble shows them after reload.
+                model: msg.model || msg.metadata?.model,
+                // Restore persisted attachments + generated image so the bubble shows them after reload.
                 fileAttachments: msg.metadata?.attachments || undefined,
+                generatedImageUrl: msg.metadata?.generatedImageUrl || undefined,
               }));
 
               set(state => ({

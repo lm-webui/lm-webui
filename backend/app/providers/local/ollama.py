@@ -25,15 +25,11 @@ class OllamaProvider(OpenAIProvider):
         )
 
     async def list_models(self, api_key: Optional[str] = None) -> List[ModelMetadata]:
-        """List models via OpenAI-compatible /v1/models (Ollama 0.3.5+),
-        falling back to /api/tags for older versions."""
-        # Try OpenAI-compatible endpoint first
-        try:
-            return await super().list_models(api_key)
-        except Exception:
-            pass
+        """List ALL Ollama models via /api/tags.
 
-        # Fallback: /api/tags (older Ollama versions)
+        Note: must NOT reuse OpenAIProvider.list_models — that filters to gpt/o1/o3,
+        which drops every Ollama model name.
+        """
         base = self._api_base.rstrip("/v1") if self._api_base else "http://localhost:11434"
         session = await self.get_session()
         if not session:
@@ -55,5 +51,5 @@ class OllamaProvider(OpenAIProvider):
                         ))
                 return models
         except (aiohttp.ClientError, Exception) as e:
-            logger.warning(f"Ollama model list fallback failed: {e}")
+            logger.warning(f"Ollama model list failed: {e}")
             return []

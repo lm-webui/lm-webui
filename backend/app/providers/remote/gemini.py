@@ -30,7 +30,10 @@ class GeminiProvider(BaseProvider):
 
             def _list():
                 models = []
-                for m in client.models.list():
+                resp = client.models.list()
+                # google-genai may return an object with .models, or a directly iterable list.
+                items = resp.models if hasattr(resp, "models") else list(resp)
+                for m in items:
                     name = m.name.split("/")[-1] if "/" in m.name else m.name
                     if "gemini" in name.lower():
                         models.append(ModelMetadata(

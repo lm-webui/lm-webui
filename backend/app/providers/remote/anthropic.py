@@ -9,6 +9,15 @@ from ..schemas import ModelMetadata
 
 logger = logging.getLogger(__name__)
 
+# Anthropic has no public model-listing endpoint — these are the supported Claude models.
+_ANTHROPIC_MODELS = [
+    "claude-opus-4-1",
+    "claude-sonnet-4-5",
+    "claude-3-7-sonnet",
+    "claude-3-5-sonnet",
+    "claude-3-5-haiku",
+]
+
 class AnthropicProvider(BaseProvider):
     """Provider for Anthropic (Claude) API. Uses x-api-key auth header."""
 
@@ -16,22 +25,8 @@ class AnthropicProvider(BaseProvider):
         super().__init__(provider_id, name, api_base)
 
     async def list_models(self, api_key: str = None) -> List[ModelMetadata]:
-        session = await self.get_session()
-        key = self._decrypt_api_key(api_key)
-        if not key:
-            return []
-        try:
-            async with session.get(
-                f"{self._api_base}/models",
-                headers={"x-api-key": key, "anthropic-version": "2023-06-01"}
-            ) as resp:
-                if resp.status != 200:
-                    return []
-                data = await resp.json()
-                return [
-                    ModelMetadata(id=m["id"], name=m["id"], provider=self.id, context_window=128000)
-                    for m in data.get("data", []) if "claude" in m.get("id", "")
-                ]
-        except Exception as e:
-            logger.error(f"Failed to list models for {self.id}: {e}")
-            return []
+        # Anthropic exposes no public model-listing API — use the static model set.
+        return [
+            ModelMetadata(id=mid, name=mid, provider=self.id, context_window=200000)
+            for mid in _ANTHROPIC_MODELS
+        ]

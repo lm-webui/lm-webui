@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Wifi, Eye, EyeOff } from "lucide-react";
+import { Wifi, Eye, EyeOff, Boxes } from "lucide-react";
 import { PROVIDERS } from "@/utils/modelProviders";
 
 interface ModelInfo {
@@ -175,7 +175,7 @@ export function ModelsTab() {
     <div className="space-y-6">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base -mt-2">Model Management</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Boxes className="h-4 w-4" /> Model Management</CardTitle>
           <CardDescription>
             Control which models appear in the model selector. Toggle visibility for each model.
           </CardDescription>
