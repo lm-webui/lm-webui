@@ -18,6 +18,7 @@ ALL_PERMISSIONS = [
     "projects.manage",
     "audit.view",
     "runtime.view", "runtime.configure", "runtime.install", "runtime.control",
+    "agents.run",  # admin-only: runs host CLI agents (claude/codex/opencode/hermes)
 ]
 
 DEFAULT_USER_PERMISSIONS = [

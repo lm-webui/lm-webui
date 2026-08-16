@@ -322,7 +322,7 @@ export function ApiKeysTab() {
               </div>
 
               {/* Provider Status and Controls */}
-              <div className="space-y-3 p-4 border border-zinc-200 dark:border-zinc-700 rounded-3xl">
+              <div className="space-y-3 p-4 rounded-3xl bg-gradient-to-r from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 border-neutral-200 dark:border-neutral-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {currentProvider && <currentProvider.icon className="h-5 w-5" />}

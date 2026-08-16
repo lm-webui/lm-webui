@@ -66,7 +66,7 @@ export function InferenceTab({
     <>
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" /> Generation Parameters</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-2 px-8">
           <div className="space-y-2">
             <Label htmlFor="temperature" className="text-sm sm:text-base">Temperature: {temperature[0]}</Label>
             <Slider id="temperature" min={0} max={2} step={0.1} value={temperature} onValueChange={setTemperature} className="w-full" />
@@ -90,8 +90,8 @@ export function InferenceTab({
       </Card>
 
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Cpu className="h-4 w-4" /> SmartModality Config</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+        <CardHeader className="pb-3"><CardTitle className="text-lg flex items-center gap-2 -mt-6"><Cpu className="h-4 w-4" /> SmartModality Config</CardTitle></CardHeader>
+        <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4 p-8 mx-6 my-1 rounded-3xl bg-gradient-to-r from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 border-neutral-200 dark:border-neutral-700">
           <div className="space-y-2">
             <Label className="text-sm">Default Text Model</Label>
             <Select value={selectedLLM ? `${selectedLLM}:${selectedModel}` : ""} onValueChange={(v) => {

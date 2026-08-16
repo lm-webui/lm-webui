@@ -184,7 +184,6 @@ export function ModelsTab() {
           <div className="space-y-4">
             {/* Provider Selection */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">AI Provider</label>
               <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                 <SelectTrigger>
                   <SelectValue />
@@ -207,9 +206,9 @@ export function ModelsTab() {
             </div>
 
             {/* Model Visibility Toggles */}
-            <div className="space-y-3 p-4 border border-zinc-200 dark:border-zinc-700 rounded-3xl">
+            <div className="space-y-3 p-4 rounded-3xl bg-gradient-to-r from-neutral-50 to-neutral-100 dark:from-neutral-900 dark:to-neutral-800 border-neutral-200 dark:border-neutral-700">
               <div className="space-y-2">
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                <div className="space-y-2 max-h-60 md:max-h-80 lg:max-h-96 overflow-y-auto">
                   {currentProviderData && currentProviderData.models.length > 0 ? (
                     currentProviderData.models.map((model: ModelInfo) => {
                       const modelId = `${selectedProvider}:${model.id}`;
@@ -218,7 +217,7 @@ export function ModelsTab() {
                       return (
                         <div
                           key={modelId}
-                          className="flex items-center justify-between p-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/50"
+                          className="flex items-center justify-between p-2 rounded-xl border-zinc-200 dark:border-zinc-950 bg-zinc-50/50 dark:bg-zinc-900/50"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="font-medium text-sm truncate ml-2">
