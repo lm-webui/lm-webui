@@ -81,10 +81,18 @@ export function SettingsSearch() {
     }
   };
 
-  // Load the saved SearXNG URL for the current user.
+  // Load the saved engine default + SearXNG URL for the current user.
   useEffect(() => {
-    fetchSettings().then((s: any) => setSearxngUrl(s.searxngUrl || "")).catch(() => {});
+    fetchSettings().then((s: any) => {
+      setSearxngUrl(s.searxngUrl || "");
+      if (s.selectedSearchEngine) setSelectedProvider(s.selectedSearchEngine);
+    }).catch(() => {});
   }, []);
+
+  const handleEngineChange = (id: string) => {
+    setSelectedProvider(id);
+    updateSettings({ selectedSearchEngine: id }).catch(() => {});
+  };
 
   const handleSaveSearxngUrl = async () => {
     try {
@@ -163,7 +171,7 @@ export function SettingsSearch() {
           Search Provider
         </CardTitle>
         <CardDescription>
-          Configure API keys for search providers. DuckDuckGo works without configuration.
+          Configure API keys for search providers.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -173,7 +181,7 @@ export function SettingsSearch() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-sm font-medium">Search Engine</Label>
-              <Select value={selectedProvider} onValueChange={setSelectedProvider}>
+              <Select value={selectedProvider} onValueChange={handleEngineChange}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

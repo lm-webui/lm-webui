@@ -9,7 +9,6 @@ import {
   Trash2,
   Check,
   LayoutGrid,
-  Palette,
   FolderKanban,
   Bot,
   Loader2,

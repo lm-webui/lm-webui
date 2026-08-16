@@ -159,7 +159,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
   };
 
   return (
-    <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
+    <div className="flex h-full flex-col bg-neutral-900 overflow-y-auto py-6 px-12">
       <div className="mx-auto w-full space-y-6">
         {view === "detail" && selectedProject && (
             <div className="flex items-center justify-between gap-3 mb-2">

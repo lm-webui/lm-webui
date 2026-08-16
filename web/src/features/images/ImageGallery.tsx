@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, Download, RefreshCw, Image, FolderKanban, LayoutGrid } from "lucide-react";
+import { Loader2, Trash2, Download, RefreshCw, Image, LayoutGrid } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 

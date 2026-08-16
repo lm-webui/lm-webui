@@ -1,5 +1,5 @@
 /**
- * ModelDownloadModal — resolve a HuggingFace repo and download GGUF or MLX models.
+ * ModelDownloader — resolve a HuggingFace repo and download GGUF or MLX models.
  * GGUF (text + vision) downloads run through the global DownloadsProvider so they
  * survive modal/runtime close and resync on reopen. MLX stays a simple inline download.
  */
@@ -19,7 +19,7 @@ interface Props {
   variant?: "text" | "vision";
 }
 
-export default function ModelDownloadModal({ open, onOpenChange, modelType, variant = "text" }: Props) {
+export default function ModelDownloader({ open, onOpenChange, modelType, variant = "text" }: Props) {
   const [repoInput, setRepoInput] = useState("");
   const [resolving, setResolving] = useState(false);
   const [repoInfo, setRepoInfo] = useState<any>(null);

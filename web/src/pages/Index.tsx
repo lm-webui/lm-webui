@@ -209,7 +209,6 @@ export default function IndexEnhanced() {
       isLoading={isLoading}
       setIsLoading={uiSetIsLoading}
       selectedSearchEngine={selectedSearchEngine}
-      onSearchEngineChange={setSelectedSearchEngine}
     />
   );
 }

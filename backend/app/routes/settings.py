@@ -116,8 +116,14 @@ async def get_settings(user_id: dict = Depends(get_current_user)):
 
 @router.put("")
 @router.post("")
-async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_current_user)):
-    """Update user settings"""
+async def update_settings(payload: dict, user_id: dict = Depends(get_current_user)):
+    """Update user settings.
+
+    Merges only the provided keys into the stored settings_json so partial
+    updates (e.g. SettingsSearch changing just selectedSearchEngine) don't wipe
+    the user's other settings (image model, system prompt, searxngUrl, ...).
+    """
+    import json
     db = get_db()
 
     # Check if user exists
@@ -125,48 +131,36 @@ async def update_settings(settings: SettingsUpdate, user_id: dict = Depends(get_
     if not user:
         raise HTTPException(404, "User not found")
 
-    # Update basic settings in users table
-    db.execute(
-        "UPDATE users SET theme = ?, language = ?, auto_refresh = ?, max_tokens = ? WHERE id = ?",
-        (settings.theme, settings.language, settings.auto_refresh, settings.max_tokens, user_id["id"])
-    )
+    # Update basic settings in users table — only when provided (no resetting to defaults)
+    basic = {k: payload[k] for k in ("theme", "language", "auto_refresh", "max_tokens") if k in payload}
+    if basic:
+        cols = ", ".join(f"{k} = ?" for k in basic)
+        db.execute(f"UPDATE users SET {cols} WHERE id = ?", (*basic.values(), user_id["id"]))
 
-    # Update extended settings in user_settings table
-    import json
-    extended_settings = {
-        "openAIKey": settings.openAIKey,
-        "ollamaEndpoint": settings.ollamaEndpoint,
-        "lmStudioEndpoint": settings.lmStudioEndpoint,
-        "xaiKey": settings.xaiKey,
-        "anthropicKey": settings.anthropicKey,
-        "geminiKey": settings.geminiKey,
-        "deepSeekKey": settings.deepSeekKey,
-        "selectedLLM": settings.selectedLLM,
-        "streamingEnabled": settings.streamingEnabled,
-        "temperature": settings.temperature,
-        "topP": settings.topP,
-        "systemPrompt": settings.systemPrompt,
-        "selectedSearchEngine": settings.selectedSearchEngine,
-        "searxngUrl": settings.searxngUrl or "",
-        "selectedModel": settings.selectedModel,
-        "defaultImageProvider": settings.defaultImageProvider,
-        "defaultImageModel": settings.defaultImageModel,
-        "defaultVisionModel": settings.defaultVisionModel,
-        "showRawResponse": settings.showRawResponse,
-        "autoTitleGeneration": settings.autoTitleGeneration,
-        "codeFormatting": settings.codeFormatting,
-        "markdownRendering": settings.markdownRendering
+    # Extended settings — merge only provided keys into existing settings_json
+    row = db.execute(
+        "SELECT settings_json FROM user_settings WHERE user_id = ?", (user_id["id"],)
+    ).fetchone()
+    ext = json.loads(row[0]) if row and row[0] else {}
+    KNOWN = {
+        "openAIKey", "ollamaEndpoint", "lmStudioEndpoint", "xaiKey", "anthropicKey",
+        "geminiKey", "deepSeekKey", "selectedLLM", "streamingEnabled", "temperature",
+        "topP", "systemPrompt", "selectedSearchEngine", "searxngUrl", "selectedModel",
+        "defaultImageProvider", "defaultImageModel", "defaultVisionModel",
+        "showRawResponse", "autoTitleGeneration", "codeFormatting", "markdownRendering",
     }
+    for k, v in payload.items():
+        if k in KNOWN:
+            ext[k] = v
 
-    # Insert or update extended settings
     db.execute(
         "INSERT OR REPLACE INTO user_settings (user_id, settings_json) VALUES (?, ?)",
-        (user_id["id"], json.dumps(extended_settings))
+        (user_id["id"], json.dumps(ext)),
     )
 
     db.commit()
 
-    return {"message": "Settings updated", "settings": settings.dict()}
+    return {"message": "Settings updated"}
 
 class VisionModelUpdate(BaseModel):
     model: str = ""

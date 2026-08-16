@@ -13,7 +13,7 @@ import ImageWorkspace from "@/features/images/ImageWorkspace";
 import ImageGallery from "@/features/images/ImageGallery";
 import ProjectsWorkspace from "@/features/projects/ProjectsWorkspace";
 import AgentWorkspace from "@/features/agents/AgentWorkspace";
-import RuntimeManager from "../components/models/RuntimeManager";
+import RuntimeManager from "../components/runtime/RuntimeManager";
 import { Settings } from "../components/settings/Settings";
 import ArtifactDrawer from "@/features/artifacts/ArtifactDrawer";
 
@@ -38,7 +38,6 @@ export default function ChatArea({
   isCodingMode,
   setIsCodingMode,
   selectedSearchEngine,
-  onSearchEngineChange,
 }: any) {
   const isMobile = useIsMobile();
 
@@ -166,7 +165,7 @@ export default function ChatArea({
   ) : undefined;
 
   return (
-    <div className="h-screen w-full bg-stone-100/50 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 flex overflow-hidden">
+    <div className="h-screen w-full bg-background text-zinc-900  dark:text-zinc-100 flex overflow-hidden">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -197,8 +196,6 @@ export default function ChatArea({
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
           availableModels={allModels}
-          selectedSearchEngine={selectedSearchEngine}
-          onSearchEngineChange={onSearchEngineChange}
           onViewChange={(v) => setActiveView(v as "chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
         />
         {activeView === "chat" && (

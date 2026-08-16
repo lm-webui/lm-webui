@@ -166,7 +166,7 @@ export default function Composer({
     <div className="border-none backdrop-blur-sm bg-transparent pt-2">
       <Popover open={modelOpen} onOpenChange={setModelOpen}>
       <PopoverAnchor asChild>
-      <div className="mx-auto flex flex-col rounded-3xl border border-zinc-200 bg-neutral-300 dark:border-zinc-800/50 dark:bg-neutral-900 shadow-inner transition-all duration-200 relative">
+      <div className="mx-auto flex flex-col rounded-3xl border border-zinc-400/40 bg-transparent dark:border-zinc-800/90 shadow-inner transition-all duration-200 relative">
         {uploadedFiles.length > 0 && (
           <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
             {uploadedFiles.map(({ file, previewUrl }, index) => (

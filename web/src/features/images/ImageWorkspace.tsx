@@ -3,8 +3,11 @@ import { Button } from "@/components/ui/button";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, Loader2, Wifi, WifiOff } from "lucide-react";
+import { Sparkles, Loader2, Wifi, WifiOff, Download } from "lucide-react";
 import { generateImage, fetchSettings, updateSettings } from "@/utils/api";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { PROVIDERS } from "@/utils/modelProviders";
 import { toast } from "sonner";
 
@@ -118,8 +121,7 @@ export default function ImageWorkspace() {
     if (models.length) setModel(models[0]!);
     const sizes = (SIZE_PRESETS[p] || SIZE_PRESETS.openai)!;
     if (sizes.length) setSize(sizes[0]!.value);
-    if (p === "google") setQuality("auto");
-    else setQuality("auto");
+    setQuality("auto");
   };
 
   // Once providers load, set initial model if not already set
@@ -170,6 +172,13 @@ export default function ImageWorkspace() {
     }
   };
 
+  const handleDownload = (url: string) => {
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = url.split("/").pop() || "image.png";
+    link.click();
+  };
+
   return (
     <div className="flex h-full flex-col bg-background overflow-y-auto py-6 px-12">
       <div className="flex items-center gap-2 pb-6">
@@ -177,33 +186,32 @@ export default function ImageWorkspace() {
         <h2 className="text-2xl font-semibold">Image Studio</h2>
       </div>
 
-      <div className="mb-3">
-        <label className="mb-1 block text-xs font-medium text-zinc-500">Prompt</label>
+      <div className="mb-3 space-y-1.5">
+        <Label>Prompt</Label>
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe the image..."
-          className="w-full resize-none rounded-xl border border-zinc-200 bg-neutral-100 p-4 text-sm outline-none focus:outline-none dark:border-zinc-700 dark:bg-neutral-800 dark:text-zinc-100"
+          className="flex w-full resize-none rounded-2xl border border-input bg-background shadow-inner p-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           rows={3} />
       </div>
 
       {provider === "local" && (
-        <div className="mb-4">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Negative prompt</label>
-          <input value={negative} onChange={(e) => setNegative(e.target.value)}
-            placeholder="What to avoid..."
-            className="w-full rounded-xl border border-zinc-200 bg-neutral-100 px-4 py-2 text-sm outline-none focus:outline-none dark:border-zinc-700 dark:bg-neutral-800 dark:text-zinc-100" />
+        <div className="mb-4 space-y-1.5">
+          <Label>Negative prompt</Label>
+          <Input value={negative} onChange={(e) => setNegative(e.target.value)}
+            placeholder="What to avoid..." className="rounded-2xl" />
         </div>
       )}
 
       <div className="mb-6 flex flex-wrap gap-3">
         <div className="flex-1 min-w-[150px]">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Provider</label>
+          <Label className="mb-1">Provider</Label>
           {loading ? (
-            <div className="h-10 rounded-xl border border-zinc-200 dark:border-zinc-700 flex items-center px-3 text-sm text-zinc-400">
+            <div className="h-10 rounded-2xl border border-zinc-200 dark:border-zinc-700 flex items-center px-3 text-sm text-zinc-400">
               <Loader2 className="h-3 w-3 animate-spin mr-2" /> Loading...
             </div>
           ) : (
             <Select value={provider} onValueChange={handleProviderChange}>
-              <SelectTrigger className="rounded-xl">
+              <SelectTrigger className="rounded-2xl">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -224,9 +232,9 @@ export default function ImageWorkspace() {
         </div>
 
         <div className="flex-1 min-w-[150px]">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Model</label>
+          <Label className="mb-1">Model</Label>
           <Select value={model} onValueChange={setModel}>
-            <SelectTrigger className="rounded-xl">
+            <SelectTrigger className="rounded-2xl">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -238,9 +246,9 @@ export default function ImageWorkspace() {
         </div>
 
         <div className="w-32">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Size</label>
+          <Label className="mb-1">Size</Label>
           <Select value={size} onValueChange={setSize}>
-            <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="auto">Auto</SelectItem>
               {(SIZE_PRESETS[provider] || SIZE_PRESETS.openai)!.map((opt) => (
@@ -252,9 +260,9 @@ export default function ImageWorkspace() {
 
         {provider === "openai" && (
           <div className="w-24">
-            <label className="mb-1 block text-xs font-medium text-zinc-500">Quality</label>
+            <Label className="mb-1">Quality</Label>
             <Select value={quality} onValueChange={setQuality}>
-              <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="auto">Auto</SelectItem>
                 <SelectItem value="high">High</SelectItem>
@@ -266,9 +274,9 @@ export default function ImageWorkspace() {
         )}
 
         <div className="w-16">
-          <label className="mb-1 block text-xs font-medium text-zinc-500">Batch</label>
+          <Label className="mb-1">Batch</Label>
           <Select value={String(batch)} onValueChange={(v) => setBatch(Number(v))}>
-            <SelectTrigger className="rounded-xl"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="rounded-2xl"><SelectValue /></SelectTrigger>
             <SelectContent>
               {[1, 2, 3, 4].map((n) => (
                 <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
@@ -280,22 +288,28 @@ export default function ImageWorkspace() {
         {provider === "local" && (
           <>
             <div className="w-20">
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Steps</label>
-              <input type="number" min={1} max={100} value={steps}
-                onChange={(e) => setSteps(Number(e.target.value))}
-                className="w-full rounded-lg border border-zinc-200 bg-neutral-100 px-2 py-2 text-sm text-center outline-none focus:outline-none dark:border-zinc-700 dark:bg-neutral-800 dark:text-zinc-100" />
+              <Label className="mb-1">Steps</Label>
+              <Input type="number" min={1} max={100} value={steps}
+                onChange={(e) => setSteps(Number(e.target.value))} className="text-center" />
             </div>
             <div className="w-20">
-              <label className="mb-1 block text-xs font-medium text-zinc-500">Seed</label>
-              <input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))}
-                className="w-full rounded-lg border border-zinc-200 bg-neutral-100 px-2 py-2 text-sm text-center outline-none focus:outline-none dark:border-zinc-700 dark:bg-neutral-800 dark:text-zinc-100" />
+              <Label className="mb-1">Seed</Label>
+              <Input type="number" value={seed} onChange={(e) => setSeed(Number(e.target.value))} className="text-center" />
             </div>
           </>
         )}
       </div>
 
+      {providers[provider] && !providers[provider].connected && (
+        <Badge variant="outline" className="mb-4 self-start text-amber-600 dark:text-amber-400 border-amber-500/30">
+          {provider === "local"
+            ? "ComfyUI isn't running — install/start it in Runtime Manager."
+            : `${providers[provider].label} isn't configured — add a key in Settings → Provider.`}
+        </Badge>
+      )}
+
       <Button onClick={handleGenerate} disabled={generating || !prompt.trim()}
-        className="mb-8 self-start rounded-full px-6">
+        className="mb-8 self-end rounded-full px-6">
         {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
         {generating ? "Generating..." : "Generate"}
       </Button>
@@ -309,8 +323,13 @@ export default function ImageWorkspace() {
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {results.map((url, i) => (
-            <div key={i} className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
+            <div key={i} className="group relative overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700">
               <img src={url} alt="" className="w-full object-cover" />
+              <Button size="icon" variant="secondary"
+                onClick={() => handleDownload(url)}
+                className="absolute top-2 right-2 h-8 w-8 opacity-0 transition-opacity group-hover:opacity-100">
+                <Download className="h-4 w-4" />
+              </Button>
             </div>
           ))}
         </div>

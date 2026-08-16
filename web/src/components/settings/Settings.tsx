@@ -9,17 +9,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Slider } from "@/components/ui/slider";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Settings as SettingsIcon, SlidersHorizontal, Cpu } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
 import { SettingsSearch } from "./SettingsSearch";
 import { ApiKeysTab } from "./ApiKeysTab";
 import { ModelsTab } from "./ModelsTab";
+import { InferenceTab } from "./InferenceTab";
 import { RuntimeTab } from "./RuntimeTab";
-import RuntimeManager from "@/components/models/RuntimeManager";
+import RuntimeManager from "@/components/runtime/RuntimeManager";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface SettingsProps {
@@ -27,8 +24,6 @@ interface SettingsProps {
   onLLMChange: (value: string) => void;
   variant?: "icon" | "button";
   trigger?: React.ReactNode;
-  selectedSearchEngine?: string;
-  onSearchEngineChange?: (value: string) => void;
   availableModels?: string[];
   selectedModel?: string;
   onModelChange?: (value: string) => void;
@@ -44,8 +39,6 @@ export function Settings({
   selectedLLM,
   onLLMChange,
   variant = "icon",
-  selectedSearchEngine = "duckduckgo",
-  onSearchEngineChange = () => {},
   selectedModel = "",
   onModelChange = () => {},
   trigger,
@@ -59,20 +52,6 @@ export function Settings({
   const [isOpen, setIsOpen] = useState(false);
   const [runtimeManagerOpen, setRuntimeManagerOpen] = useState(false);
   const { user } = useAuth();
-
-  // Local state for search engine to ensure persistence works correctly
-  const [localSearchEngine, setLocalSearchEngine] =
-    useState(selectedSearchEngine);
-
-  // Sync local state when prop updates
-  useEffect(() => {
-    setLocalSearchEngine(selectedSearchEngine);
-  }, [selectedSearchEngine]);
-
-  const handleSearchEngineChange = (value: string) => {
-    setLocalSearchEngine(value);
-    onSearchEngineChange(value);
-  };
 
   // Enhanced settings
   const [temperature, setTemperature] = useState([0.7]);
@@ -90,6 +69,7 @@ export function Settings({
   const [imageModel, setImageModel] = useState("");
   const [visionModel, setVisionModel] = useState("");
   const [visionModels, setVisionModels] = useState<string[]>([]);
+  const [localSearchEngine, setLocalSearchEngine] = useState("duckduckgo");
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -108,6 +88,7 @@ export function Settings({
         setImageProvider(settings.defaultImageProvider || "openai");
         setImageModel(settings.defaultImageModel || "");
         setVisionModel(settings.defaultVisionModel || "");
+        setLocalSearchEngine(settings.selectedSearchEngine || "duckduckgo");
       } catch (error) {
         console.error("Failed to load settings:", error);
       }
@@ -166,8 +147,8 @@ export function Settings({
       max_tokens: maxTokens[0],
       topP: topP[0],
       systemPrompt,
-      selectedSearchEngine: localSearchEngine,
       selectedModel,
+      selectedSearchEngine: localSearchEngine,
       defaultImageProvider: imageProvider,
       defaultImageModel: imageModel,
       defaultVisionModel: visionModel,
@@ -229,97 +210,32 @@ export function Settings({
             <div className="flex-1 overflow-y-auto scrollbar-hide min-h-0 mt-3 space-y-4">
 
               <TabsContent value="inference" className="space-y-4 m-0">
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><SlidersHorizontal className="h-4 w-4" /> Generation Parameters</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="temperature" className="text-sm sm:text-base">Temperature: {temperature[0]}</Label>
-                      <Slider id="temperature" min={0} max={2} step={0.1} value={temperature} onValueChange={setTemperature} className="w-full" />
-                      <div className="text-xs sm:text-sm text-muted-foreground">Controls randomness in responses (0 = deterministic, 2 = very creative)</div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="max-tokens" className="text-sm sm:text-base">Max Tokens: {maxTokens[0]}</Label>
-                      <Slider id="max-tokens" min={100} max={8000} step={100} value={maxTokens} onValueChange={setMaxTokens} className="w-full" />
-                      <div className="text-xs sm:text-sm text-muted-foreground">Maximum length of the response</div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="top-p" className="text-sm sm:text-base">Top P: {topP[0]}</Label>
-                      <Slider id="top-p" min={0} max={1} step={0.1} value={topP} onValueChange={setTopP} className="w-full" />
-                      <div className="text-xs sm:text-sm text-muted-foreground">Controls diversity of responses (nucleus sampling)</div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="system-prompt" className="text-sm sm:text-base">System Prompt</Label>
-                      <textarea id="system-prompt" className="flex min-h-[80px] sm:min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" placeholder="You are a helpful AI assistant..." value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><Cpu className="h-4 w-4" /> SmartModality Config</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label className="text-sm">Default Text Model</Label>
-                      <Select value={selectedLLM ? `${selectedLLM}:${selectedModel}` : ""} onValueChange={(v) => {
-                        const [prov, ...rest] = v.split(":");
-                        const modelName = rest.join(":");
-                        if (prov && modelName) { onLLMChange(prov); onModelChange(modelName); }
-                      }}>
-                        <SelectTrigger><SelectValue placeholder={loadingModels ? "Loading..." : allTextModels.length === 0 ? "No default saved" : "Select a model"} /></SelectTrigger>
-                        <SelectContent>
-                          {allTextModels.length === 0 && !loadingModels ? (
-                            <div className="px-2 py-4 text-xs text-muted-foreground text-center">No default saved</div>
-                          ) : (
-                            allTextModels.map((m) => (
-                              <SelectItem key={m} value={m}>{m}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm">Default Image Model</Label>
-                      <Select value={imageProvider ? `${imageProvider}:${imageModel}` : ""} onValueChange={(v) => { const [prov, ...rest] = v.split(":"); const m = rest.join(":"); if (prov && m) { setImageProvider(prov); setImageModel(m); } }}>
-                        <SelectTrigger><SelectValue placeholder={loadingModels ? "Loading..." : imageModels.length === 0 ? "No default saved" : "Select image model"} /></SelectTrigger>
-                        <SelectContent>
-                          {imageModels.length === 0 && !loadingModels ? (
-                            <div className="px-2 py-4 text-xs text-muted-foreground text-center">No default saved</div>
-                          ) : (
-                            imageModels.map((m) => (
-                              <SelectItem key={m} value={m}>{m}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm">Default Vision Model</Label>
-                      <Select value={visionModel} onValueChange={setVisionModel}>
-                        <SelectTrigger><SelectValue placeholder={loadingModels ? "Loading..." : visionModels.length === 0 ? "No vision model installed" : "Select vision model"} /></SelectTrigger>
-                        <SelectContent>
-                          {visionModels.length === 0 && !loadingModels ? (
-                            <div className="px-2 py-4 text-xs text-muted-foreground text-center">No vision model installed — download one from Runtime Manager → GGUF</div>
-                          ) : (
-                            visionModels.map((m) => (
-                              <SelectItem key={m} value={m}>{m}</SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-sm">Default Web Search</Label>
-                      <Select value={localSearchEngine} onValueChange={handleSearchEngineChange}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="duckduckgo">DuckDuckGo</SelectItem>
-                          <SelectItem value="searxng">SearXNG</SelectItem>
-                          <SelectItem value="google_search">Google Search</SelectItem>
-                          <SelectItem value="perplexity">Perplexity</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </CardContent>
-                </Card>
+                <InferenceTab
+                  temperature={temperature}
+                  setTemperature={setTemperature}
+                  maxTokens={maxTokens}
+                  setMaxTokens={setMaxTokens}
+                  topP={topP}
+                  setTopP={setTopP}
+                  systemPrompt={systemPrompt}
+                  setSystemPrompt={setSystemPrompt}
+                  selectedLLM={selectedLLM}
+                  onLLMChange={onLLMChange}
+                  selectedModel={selectedModel}
+                  onModelChange={onModelChange}
+                  loadingModels={loadingModels}
+                  allTextModels={allTextModels}
+                  imageProvider={imageProvider}
+                  setImageProvider={setImageProvider}
+                  imageModel={imageModel}
+                  setImageModel={setImageModel}
+                  imageModels={imageModels}
+                  visionModel={visionModel}
+                  setVisionModel={setVisionModel}
+                  visionModels={visionModels}
+                  localSearchEngine={localSearchEngine}
+                  setLocalSearchEngine={setLocalSearchEngine}
+                />
               </TabsContent>
 
               <TabsContent value="provider" className="space-y-4 m-0">

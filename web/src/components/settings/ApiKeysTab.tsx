@@ -277,13 +277,13 @@ export function ApiKeysTab() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-4">
           <CardTitle className="text-base flex items-center gap-2">
             <Key className="h-4 w-4" />
             API Key Management
           </CardTitle>
           <CardDescription>
-            Configure API keys for cloud AI providers. For local runtimes (Ollama, GGUF, MLX), go to Runtime Manager.
+            Configure API keys for cloud AI providers.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -295,9 +295,6 @@ export function ApiKeysTab() {
             <div className="space-y-4">
               {/* Provider Selection */}
               <div className="space-y-2">
-                <Label htmlFor="provider-select" className="text-sm font-medium">
-                  AI Provider
-                </Label>
                 <Select value={selectedProvider} onValueChange={setSelectedProvider}>
                   <SelectTrigger>
                     <SelectValue />

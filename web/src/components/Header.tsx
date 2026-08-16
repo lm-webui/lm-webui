@@ -1,8 +1,8 @@
-import { Settings as SettingsIcon, Server, MessageSquarePlus, MoreVertical } from "lucide-react";
+import { Settings as SettingsIcon, Server, MoreVertical } from "lucide-react";
 import { VscChatSparkle } from "react-icons/vsc";
 import { HiOutlineMenuAlt4 } from "react-icons/hi";
 import { Button } from "./ui/button";
-import { HardwareStatus } from "./orchestrator/HardwareStatus";
+import { HardwareStatus } from "./runtime/HardwareStatus";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface HeaderProps {
