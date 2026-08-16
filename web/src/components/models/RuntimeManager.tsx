@@ -442,20 +442,20 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     <>
       {inline ? (
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Server className="h-5 w-5" />
             <div>
               <h2 className="text-lg font-semibold">Runtime Manager</h2>
-              <p className="text-xs text-muted-foreground">Configure engines, models, hardware, and image runtimes.</p>
+              <p className="text-xs text-muted-foreground">Configure inference engines, AI models, and hardware acceleration.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
               {loading ? "Refreshing…" : "Refresh"}
             </Button>
             <Button variant="outline" size="sm" onClick={scanExternals} disabled={scanning}>
-              {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4" />}
+              {scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <ScanLine className="h-4 w-4 mr-2" />}
               {scanning ? "Scanning…" : "Scan Host"}
             </Button>
           </div>
@@ -489,7 +489,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           <TabsList className="grid w-full grid-cols-3 mb-4">
             <TabsTrigger value="gguf" className="gap-2"><SiHuggingface className="h-4 w-4" /> llama.cpp</TabsTrigger>
             <TabsTrigger value="mlx" className="gap-2"><SiApple className="h-4 w-4" /> MLX</TabsTrigger>
-            <TabsTrigger value="comfyui" className="gap-2"><RiImageAiFill className="h-4 w-4" /> Image Generation</TabsTrigger>
+            <TabsTrigger value="comfyui" className="gap-2"><RiImageAiFill className="h-4 w-4" /> Image-Gen</TabsTrigger>
           </TabsList>
 
         <TabsContent value="gguf" className="m-0 overflow-y-auto scrollbar-hide flex-1">
@@ -508,7 +508,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             </div>
           </CardHeader>
           <CardContent>
-            {/* ── Capabilities ── */}
+            {/* Capabilities */}
             <div className="rounded-xl border p-3">
               <Label className="text-xs font-medium mb-2 block">Capabilities</Label>
               <div className="space-y-1.5">
@@ -533,7 +533,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
               </div>
             </div>
 
-            {/* ── Engine Configuration ── */}
+            {/* Engine Configuration */}
             <Collapsible className="mt-4">
               <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
                 <ChevronDown className="h-4 w-4" />
@@ -651,7 +651,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
               </CollapsibleContent>
             </Collapsible>
 
-            {/* ── Runtime Details ── */}
+            {/* Runtime Details */}
             <Collapsible className="mt-2">
               <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
                 <ChevronDown className="h-4 w-4" />
@@ -681,7 +681,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
               </CollapsibleContent>
             </Collapsible>
 
-            {/* ── Models ── */}
+            {/* Models */}
             <div className="relative mt-4 mb-3">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input aria-label="Search llama.cpp models" placeholder="Search llama.cpp models…" value={ggufQuery}
@@ -749,7 +749,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         </TabsContent>
 
           <TabsContent value="mlx" className="m-0 overflow-y-auto scrollbar-hide flex-1">
-        {/* ---------- MLX SECTION ---------- */}
+        {/* MLX SECTION */}
         {mlxStatus?.available === false ? (
           <div className="flex flex-col items-center justify-center py-10 text-center">
             <ChipIcon className="h-8 w-8 text-muted-foreground mb-3" />
@@ -779,7 +779,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                 <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
               ) : (
                 <>
-                  {/* ── Capabilities ── */}
+                  {/* Capabilities */}
                   <div className="rounded-xl border p-3">
                     <Label className="text-xs font-medium mb-2 block">Capabilities</Label>
                     <div className="space-y-1.5">
@@ -795,7 +795,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                     </div>
                   </div>
 
-                  {/* ── Not installed callout ── */}
+                  {/* Not installed callout */}
                   {!mlxStatus?.mlx_installed && (
                     <div className="mt-4 rounded-xl border border-amber-200 dark:border-amber-800/40 p-3 space-y-3">
                       <p className="text-sm text-muted-foreground">
@@ -824,7 +824,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                     </div>
                   )}
 
-                  {/* ── Runtime Details ── */}
+                  {/* Runtime Details */}
                   <Collapsible className="mt-4">
                     <CollapsibleTrigger className="flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors w-full py-2">
                       <ChevronDown className="h-4 w-4" />
@@ -854,7 +854,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
                     </CollapsibleContent>
                   </Collapsible>
 
-                  {/* ── Models ── */}
+                  {/* Models */}
                   {mlxStatus?.mlx_installed && (
                     <div className="mt-4">
                       <div className="relative mb-3">
@@ -898,7 +898,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           </TabsContent>
 
           <TabsContent value="comfyui" className="m-0 overflow-y-auto scrollbar-hide flex-1">
-        {/* ---------- COMFYUI SECTION ---------- */}
+        {/* IMAGE-GEN SECTION */}
         <Card className={comfyuiConnected ? "border-green-200 dark:border-green-800" : ""}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
@@ -989,7 +989,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
           </TabsContent>
         </Tabs>
 
-        {/* Diffusion (ComfyUI) checkpoint download */}
+        {/* Image-gen UI checkpoint download */}
         <Dialog open={comfyDownloadOpen} onOpenChange={setComfyDownloadOpen}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>

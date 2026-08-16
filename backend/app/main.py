@@ -257,6 +257,8 @@ app.include_router(comfyui.router)
 
 # Serve generated images/documents/exports so chat + gallery <img> URLs
 # (e.g. /generated/images/<file>) resolve for both API and local diffusion pipelines.
+# Ensure the dir exists at import time — StaticFiles requires it, and in CI/tests no install created it yet.
+(MEDIA_DIR / "generated").mkdir(parents=True, exist_ok=True)
 app.mount("/generated", StaticFiles(directory=str(MEDIA_DIR / "generated")), name="generated")
 
 # Serve the active Vite build in the single production container. API routes

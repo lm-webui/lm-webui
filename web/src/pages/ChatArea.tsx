@@ -244,6 +244,7 @@ export default function ChatArea({
             availableModels={allModels}
             selectedModel={selectedModel}
             onModelChange={setSelectedModel}
+            onOpenRuntimeManager={() => setActiveView("runtime")}
           />
         )}
       </main>

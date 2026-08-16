@@ -19,6 +19,7 @@ import {
   Sparkles,
   Settings as SettingsIcon,
 } from "lucide-react";
+import { VscChatSparkle } from "react-icons/vsc";
 import { cn } from "@/lib/utils";
 import { authFetch } from "@/utils/api";
 import { ChatConversation } from "@/types/chat-ui";
@@ -385,7 +386,7 @@ export default function Sidebar({
             onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
             title="New chat"
           >
-            <Plus className="h-5 w-5" />
+            <VscChatSparkle className="h-5 w-5" />
           </Button>
           <Button
             variant="ghost"
@@ -506,7 +507,7 @@ export default function Sidebar({
             className="h-9 w-9 shrink-0 rounded-full shadow-inner bg-stone-100/50 dark:bg-zinc-800/50"
             onClick={() => { if (window.innerWidth < 768) onClose?.(); createNewChat(); }}
           >
-            <Plus className="h-4 w-4" />
+            <VscChatSparkle className="h-4 w-4" />
           </Button>
         </div>
 

@@ -11,9 +11,9 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
-  ChevronRight,
   Server
 } from "lucide-react";
+import { RiImageAiFill } from "react-icons/ri";
 import { toast } from "sonner";
 
 interface Runtime {
@@ -88,7 +88,7 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
       case "mlx":
         return <Cpu className="h-5 w-5 text-purple-500" />;
       case "comfyui":
-        return <Monitor className="h-5 w-5 text-pink-500" />;
+        return <RiImageAiFill className="h-5 w-5 text-pink-500" />;
       default:
         return <Cpu className="h-5 w-5" />;
     }
@@ -143,16 +143,7 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2"><CardTitle className="text-sm">Model Availability</CardTitle></CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          {[["Text", modelCounts.text], ["Vision", modelCounts.vision], ["MLX", modelCounts.mlx]].map(([label, count]) => (
-            <div key={label} className="rounded-lg border bg-muted/30 px-3 py-2"><div className="text-xs text-muted-foreground">{label} models</div><div className="mt-1 text-lg font-semibold tabular-nums">{count}</div></div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Runtime List */}
+      {/* Runtime List (model availability is shown inline per runtime — no duplicate card) */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -184,20 +175,14 @@ export function RuntimeTab({ onOpenRuntimeManager }: RuntimeTabProps) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    <span className="text-xs font-medium text-foreground whitespace-nowrap">
+                      {runtime.type === "gguf" && `${modelCounts.text} text · ${modelCounts.vision} vision`}
+                      {runtime.type === "mlx" && `${modelCounts.mlx} models`}
+                      {runtime.type === "comfyui" && (runtime.installed ? "Managed in Image Gen" : "Connect to check")}
+                      {!(["gguf", "mlx", "comfyui"] as string[]).includes(runtime.type) && "See Manager"}
+                    </span>
                     {getStatusBadge(runtime)}
-                    <Button aria-label={`Manage ${runtime.name}`} size="sm" variant="ghost" className="h-7" onClick={() => onOpenRuntimeManager?.()}>
-                      <ChevronRight aria-hidden="true" className="h-3 w-3" />
-                    </Button>
                   </div>
-                </div>
-                <div className="mt-2 flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                  <span>Model availability</span>
-                  <span className="font-medium text-foreground">
-                    {runtime.type === "gguf" && `${modelCounts.text} text · ${modelCounts.vision} vision`}
-                    {runtime.type === "mlx" && `${modelCounts.mlx} models`}
-                    {runtime.type === "comfyui" && (runtime.installed ? "Managed in Image Generation" : "Connect to check availability")}
-                    {!(["gguf", "mlx", "comfyui"] as string[]).includes(runtime.type) && "See Runtime Manager"}
-                  </span>
                 </div>
               </CardContent>
             </Card>

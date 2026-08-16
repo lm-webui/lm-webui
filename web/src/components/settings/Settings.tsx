@@ -36,6 +36,8 @@ interface SettingsProps {
   onRawResponseToggle?: (value: boolean) => void;
   /** When true, renders the settings tabs inline as a page instead of a Dialog modal. */
   inline?: boolean;
+  /** Navigate to the full Runtime Manager page (instead of the inline modal). */
+  onOpenRuntimeManager?: () => void;
 }
 
 export function Settings({
@@ -48,6 +50,7 @@ export function Settings({
   onModelChange = () => {},
   trigger,
   inline = false,
+  onOpenRuntimeManager,
 }: SettingsProps) {
   const [openAIKey, setOpenAIKey] = useState("");
   const [ollamaEndpoint, setOllamaEndpoint] = useState("http://localhost:11434");
@@ -330,7 +333,7 @@ export function Settings({
               </TabsContent>
 
               {user?.role === "admin" && <TabsContent value="runtime" className="space-y-4 h-full">
-                <RuntimeTab onOpenRuntimeManager={() => setRuntimeManagerOpen(true)} />
+                <RuntimeTab onOpenRuntimeManager={onOpenRuntimeManager || (() => setRuntimeManagerOpen(true))} />
               </TabsContent>}
             </div>
           </Tabs>

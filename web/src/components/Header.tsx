@@ -1,4 +1,5 @@
 import { Settings as SettingsIcon, Server, MessageSquarePlus, MoreVertical } from "lucide-react";
+import { VscChatSparkle } from "react-icons/vsc";
 import { HiOutlineMenuAlt4 } from "react-icons/hi";
 import { Button } from "./ui/button";
 import { HardwareStatus } from "./orchestrator/HardwareStatus";
@@ -51,7 +52,7 @@ export default function Header({
           className="md:hidden"
           title="New chat"
         >
-          <MessageSquarePlus className="h-5 w-5" />
+          <VscChatSparkle className="h-5 w-5" />
         </Button>
         <Button
           variant="ghost"
