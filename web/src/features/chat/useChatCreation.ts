@@ -28,9 +28,10 @@ function normalizeSources(raw: any[] = []) {
     title: s.title || "Source",
     type: (s.type as string) || "document",
     snippet: s.snippet || "",
+    source: s.source || "",
   }));
 }
-function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_images?: string[] } = {}) {
+function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_images?: string[]; search_query?: string } = {}) {
   const cu = data.context_used || {};
   const sources = normalizeSources(data.sources);
   const docCount = sources.filter(s => s.type === "document" || s.type === "image").length;
@@ -39,6 +40,7 @@ function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_
     retrievedImages: data.retrieved_images || [],
     context_used: cu,
     searchUsed: !!cu.web_search,
+    searchQuery: data.search_query || "",
     documentsReferenced: docCount,
     memoryUsed: !!cu.memory,
   };
@@ -273,6 +275,11 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         setMessages: () => {},
         setIsLoading: () => {},
         onChunk: (chunk: string) => {
+          if (chunk && !receivedContent) {
+            receivedContent = true;
+            // Tokens have started — stop showing the search shimmer.
+            setSearchStatus("");
+          }
           if (chunk) receivedContent = true;
           if (targetIdRef.current && targetConversationId) {
             streamMessageChunk(targetConversationId, targetIdRef.current, chunk);

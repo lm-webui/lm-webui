@@ -4,12 +4,14 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ChevronDown, ChevronUp, Brain, FileText, Search, Clock, AudioLines, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchTool, type SearchResult } from "@/components/ui/search-tool";
 
 interface MessageContextProps {
   message: {
     id: string;
     role: "user" | "assistant";
     searchUsed?: boolean;
+    searchQuery?: string;
     memoryUsed?: boolean;
     documentsReferenced?: number;
     context_used?: { audio?: boolean; memory?: boolean; rag?: boolean; web_search?: boolean };
@@ -35,6 +37,12 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
   const [showSources, setShowSources] = React.useState(false);
 
   if (message.role !== "assistant") return null;
+
+  // Web results render as the dedicated SearchTool widget; everything else stays in the
+  // generic Sources panel so web sources aren't duplicated.
+  const webSources = (message.sources || []).filter(s => s.type === "web");
+  const otherSources = (message.sources || []).filter(s => s.type !== "web");
+  const webResults: SearchResult[] = webSources.map(s => ({ title: s.title, source: s.source || "" }));
 
   const contextBadges = [];
 
@@ -78,7 +86,7 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
     });
   }
 
-if (contextBadges.length === 0 && (!message.sources || message.sources.length === 0)) {
+if (contextBadges.length === 0 && otherSources.length === 0 && webResults.length === 0) {
     return null;
   }
 
@@ -102,6 +110,15 @@ if (contextBadges.length === 0 && (!message.sources || message.sources.length ==
             </Badge>
           ))}
         </div>
+      )}
+
+      {/* Web search results */}
+      {webResults.length > 0 && (
+        <SearchTool
+          query={message.searchQuery || ""}
+          results={webResults}
+          defaultOpen
+        />
       )}
 
       {/* Citations inline support */}
@@ -132,17 +149,17 @@ if (contextBadges.length === 0 && (!message.sources || message.sources.length ==
         </div>
       )}
 
-      {/* Sources section */}
-      {message.sources && message.sources.length > 0 && (
+      {/* Sources section (non-web: documents, images, vision, transcripts) */}
+      {otherSources.length > 0 && (
         <Collapsible open={showSources} onOpenChange={setShowSources}>
           <CollapsibleTrigger asChild>
             <button className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
               {showSources ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              Sources ({message.sources.length})
+              Sources ({otherSources.length})
             </button>
           </CollapsibleTrigger>
           <CollapsibleContent className="space-y-2 mt-2">
-            {message.sources.map((source, index) => (
+            {otherSources.map((source, index) => (
               <TranscriptOrSource key={source.id} source={source} index={index} />
             ))}
           </CollapsibleContent>
@@ -209,6 +226,17 @@ function TranscriptOrSource({ source, index }: {
         )}
         {source.snippet && (
           <div className="text-xs text-muted-foreground mt-2 line-clamp-2">{source.snippet}</div>
+        )}
+        {source.source && (
+          <a
+            href={source.source}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="mt-2 inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            Open source <ExternalLink className="h-3 w-3" />
+          </a>
         )}
       </div>
     </div>

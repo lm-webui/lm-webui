@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Download,
   Eye,
@@ -27,6 +27,7 @@ import { MessageContext } from "./MessageContext";
 import { CitationParser } from "@/components/rag/CitationParser";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import ImageLoadingSkeleton from "@/components/chat/ImageLoadingSkeleton";
+import { ShimmerBar, ShimmerText } from "@/components/ui/shimmer";
 import { CODE_LANGUAGE_PATTERNS } from "@/utils/chatUtils";
 
 // Tool list processor for consistent formatting
@@ -116,6 +117,8 @@ interface MessageProps {
     generatedImageUrl?: string;
     type?: string;
     sources?: any[];
+    searchQuery?: string;
+    citations?: Array<{ id: string; sourceId: string; text: string }>;
     retrievedImages?: string[];
     context_used?: any;
     documentsReferenced?: number;
@@ -155,47 +158,18 @@ export function Message({
     Record<string, boolean>
   >({});
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [streamingProgress, setStreamingProgress] = useState(0);
   const [lastStreamUpdate, setLastStreamUpdate] = useState<number | null>(null);
   const [isStreamingActive, setIsStreamingActive] = useState(false);
-  const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
 
-  // Monitor streaming activity
+  // Monitor streaming activity (feeds the stall detector below)
   useEffect(() => {
     if (message.isLoading) {
       setIsStreamingActive(true);
       setLastStreamUpdate(Date.now());
-
-      // Start progress simulation for visual feedback
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-
-      progressIntervalRef.current = setInterval(() => {
-        setStreamingProgress((prev) => {
-          // Simulate progress up to 95% while streaming
-          if (prev < 95) {
-            return prev + Math.random() * 5;
-          }
-          return prev;
-        });
-      }, 500);
     } else {
       setIsStreamingActive(false);
-      setStreamingProgress(100);
-
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-        progressIntervalRef.current = null;
-      }
     }
-
-    return () => {
-      if (progressIntervalRef.current) {
-        clearInterval(progressIntervalRef.current);
-      }
-    };
   }, [message.isLoading]);
 
   // Check for streaming timeout
@@ -329,13 +303,10 @@ export function Message({
                 <ImageLoadingSkeleton />
               )}
 
-              {/* Slim streaming progress bar — borderless, low opacity */}
+              {/* Shimmering streaming indicator — indeterminate, no fake progress */}
               {message.isLoading && message.type !== "image_loading" && (
-                <div className="mb-3 h-1 w-full overflow-hidden rounded-full bg-primary/10 opacity-40">
-                  <div
-                    className="h-full bg-primary transition-all duration-300"
-                    style={{ width: `${streamingProgress}%` }}
-                  />
+                <div className="mb-3">
+                  <ShimmerBar />
                 </div>
               )}
 
@@ -844,8 +815,9 @@ export function Message({
           {/* Streaming status indicator */}
           {message.isLoading && (
             <div className="flex items-center gap-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></div>
-              <span className="text-xs text-primary">Streaming</span>
+              <span className="text-xs text-primary">
+                <ShimmerText>Streaming</ShimmerText>
+              </span>
             </div>
           )}
 

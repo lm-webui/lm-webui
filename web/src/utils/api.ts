@@ -147,27 +147,23 @@ export interface StreamCallbacks {
   onError?: (err: Error) => void;
 }
 
-// SSE streaming chat. Reads the ModelEvent stream from /api/chat/stream and dispatches by type.
-export async function streamChat(
-  req: ChatRequest,
-  cb: StreamCallbacks,
+// Shared SSE reader: POST `body` to `url`, parse `data: <json>` frames, dispatch each by type.
+async function readSSE(
+  url: string,
+  body: any,
+  dispatch: (ev: any) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  validateChatRequest(req);
-  const requestWithKey = { ...req, api_key: req.api_key };
-
-  const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+  const response = await fetch(`${API_BASE_URL}${url}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify(requestWithKey),
+    body: JSON.stringify(body),
     ...(signal ? { signal } : {}),
   });
 
   if (!response.ok || !response.body) {
-    const err = new Error(`Stream request failed: ${response.status}`);
-    cb.onError?.(err);
-    return;
+    throw new Error(`Stream request failed: ${response.status}`);
   }
 
   const reader = response.body.getReader();
@@ -187,8 +183,7 @@ export async function streamChat(
         const dataLine = frame.split('\n').find(l => l.startsWith('data: '));
         if (dataLine) {
           try {
-            const ev = JSON.parse(dataLine.slice(6));
-            dispatchStreamEvent(ev, cb);
+            dispatch(JSON.parse(dataLine.slice(6)));
           } catch {
             /* skip malformed frame */
           }
@@ -197,7 +192,22 @@ export async function streamChat(
       }
     }
   } catch (err) {
-    if ((err as Error).name !== 'AbortError') cb.onError?.(err as Error);
+    if ((err as Error).name !== 'AbortError') throw err;
+  }
+}
+
+// SSE streaming chat. Reads the ModelEvent stream from /api/chat/stream and dispatches by type.
+export async function streamChat(
+  req: ChatRequest,
+  cb: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  validateChatRequest(req);
+  const requestWithKey = { ...req, api_key: req.api_key };
+  try {
+    await readSSE('/api/chat/stream', requestWithKey, (ev) => dispatchStreamEvent(ev, cb), signal);
+  } catch (err) {
+    cb.onError?.(err as Error);
   }
 }
 
@@ -224,6 +234,65 @@ function dispatchStreamEvent(ev: any, cb: StreamCallbacks): void {
     default:
       break;
   }
+}
+
+export interface AgentStreamCallbacks {
+  onOutput?: (line: string) => void;
+  onPrompt?: (prompt: { prompt_id: string; tool: string; input: any }) => void;
+  onRun?: (run: any) => void;
+  onError?: (err: Error) => void;
+}
+
+// SSE chat with a host CLI agent (Agent Hub). Frames: output, prompt, run, complete, error.
+export async function streamAgent(
+  agent: string,
+  body: { message: string; session_id?: string },
+  cb: AgentStreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  try {
+    await readSSE(`/api/agents/${agent}/chat/stream`, body, (ev) => {
+      switch (ev.type) {
+        case 'output':
+          if (ev.content) cb.onOutput?.(ev.content);
+          break;
+        case 'prompt':
+          if (ev.data) cb.onPrompt?.(ev.data);
+          break;
+        case 'run':
+          if (ev.data) cb.onRun?.(ev.data);
+          break;
+        case 'error':
+          cb.onError?.(new Error(ev.content || 'Agent run failed'));
+          break;
+        default:
+          break;
+      }
+    }, signal);
+  } catch (err) {
+    cb.onError?.(err as Error);
+  }
+}
+
+// Answer an interactive tool-use permission ask (approve/deny) for a live agent session.
+export async function answerAgent(agent: string, sid: string, promptId: string, approve: boolean): Promise<void> {
+  await authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions/${sid}/answer`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt_id: promptId, approve }),
+  });
+}
+
+// Read/write an agent's config/skill/memory files.
+export async function getAgentFiles(agent: string): Promise<{ dir: string; files: any[] }> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/files`);
+}
+export async function saveAgentFile(agent: string, name: string, content: string): Promise<{ path: string }> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/files/${name}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
 }
 
 async function _chatWithModel(req: ChatRequest): Promise<string> {

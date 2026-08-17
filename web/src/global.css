@@ -90,6 +90,36 @@
   animation: shimmer 2s infinite;
 }
 
+/* Shared chat-loading shimmer: text (background-clip) + indeterminate bar.
+   The SearchTool "Searching…" label and the chat streaming indicators all use these. */
+@keyframes shimmer-text {
+  from { background-position: 100% center; }
+  to { background-position: 0% center; }
+}
+.shimmer-text {
+  display: inline-flex;
+  align-items: center;
+  height: 1rem;
+  background-size: 250% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  background-image: linear-gradient(90deg, #a3a3a3 0%, #a3a3a3 40%, #525252 50%, #a3a3a3 60%, #a3a3a3 100%);
+  background-repeat: no-repeat;
+  animation: shimmer-text 1.2s linear infinite;
+}
+
+@keyframes shimmer-bar {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.shimmer-bar {
+  background-image: linear-gradient(90deg, var(--muted, #d4d4d8) 0%, var(--primary, #6b7280) 50%, var(--muted, #d4d4d8) 100%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation: shimmer-bar 1.5s linear infinite;
+}
+
 /* Invisible scrollbar for tab content */
 .scrollbar-hide {
   -ms-overflow-style: none;

@@ -44,6 +44,7 @@ def _build_sources_event(ctx) -> ModelEvent:
     context_used = {"memory": False, "rag": False, "vision": False, "web_search": False, "audio": False}
     sources: list[dict] = []
     retrieved_images: list[str] = []
+    search_query = ""
 
     for r in (ctx.results or []):
         if isinstance(r, RetrievalResult) and r.chunks:
@@ -66,6 +67,7 @@ def _build_sources_event(ctx) -> ModelEvent:
                                 "snippet": ref.get("caption") or "", "source": path or ""})
         elif isinstance(r, SearchResult) and r.items:
             context_used["web_search"] = True
+            search_query = r.query
             for it in r.items[:10]:
                 url = it.get("url") or ""
                 title = it.get("title") or url or "Web result"
@@ -89,6 +91,7 @@ def _build_sources_event(ctx) -> ModelEvent:
         "context_used": context_used,
         "sources": sources,
         "retrieved_images": retrieved_images,
+        "search_query": search_query,
     })
 
 

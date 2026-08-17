@@ -22,6 +22,7 @@ class RetrievalResult:
 class SearchResult:
     """Web search results."""
     items: List[Any] = field(default_factory=list)
+    query: str = ""
 
 
 @dataclass

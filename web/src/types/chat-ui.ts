@@ -18,6 +18,15 @@ export interface ChatMessage {
     type?: string;
     mime?: string;
   }>;
+  // Multimodal context attached by finalizeMessage (RAG/vision/web-search/transcript).
+  searchUsed?: boolean;
+  sources?: any[];
+  retrievedImages?: string[];
+  context_used?: any;
+  documentsReferenced?: number;
+  memoryUsed?: boolean;
+  searchQuery?: string;
+  citations?: any[];
 }
 
 export interface ChatConversation {

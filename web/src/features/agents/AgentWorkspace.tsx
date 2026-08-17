@@ -1,63 +1,62 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Bot, Cpu, Terminal, Sparkles, Loader2, Copy, Check, RefreshCw,
-  PanelRightClose, PanelRightOpen, Workflow,
+  Bot, Loader2, Copy, Check, RefreshCw, ShieldQuestion, X,
+  PanelRightClose, PanelRightOpen, Activity, CircleDot, Clock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch } from "@/utils/api";
+import { authFetch, streamAgent, answerAgent } from "@/utils/api";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { AgentCommandMenu } from "./AgentCommandMenu";
+import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
+import AgentFiles from "./AgentFiles";
 import { cn } from "@/lib/utils";
 
-interface AgentInfo { id: string; installed: boolean; version?: string; path?: string; }
 interface Block { type: string; content: string; }
-interface Msg { role: "user" | "agent"; blocks?: Block[]; content?: string; }
-interface Profile { config: Record<string, any>; memory: string; skill: string; install_cmd: string; }
-
-// ponytail: no logo assets exist for the host CLIs; use distinct icons + brand colors.
-const AGENT_META: Record<string, { icon: typeof Bot; color: string }> = {
-  claude: { icon: Bot, color: "text-orange-500" },
-  codex: { icon: Cpu, color: "text-emerald-500" },
-  opencode: { icon: Terminal, color: "text-sky-500" },
-  hermes: { icon: Sparkles, color: "text-fuchsia-500" },
-};
-const AGENT_IDS = ["claude", "codex", "opencode", "hermes"];
-
+interface AgentPrompt { prompt_id: string; tool: string; input: any; }
+interface Msg {
+  role: "user" | "agent";
+  blocks?: Block[];
+  content?: string;
+  id?: string;
+  streaming?: boolean;
+  prompts?: AgentPrompt[];
+}
 export default function AgentWorkspace() {
+  const isMobile = useIsMobile();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [agent, setAgent] = useState("");
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [railOpen, setRailOpen] = useState(true);
+  // ponytail: rail collapses by default on mobile (init from width to avoid a flash).
+  const [railOpen, setRailOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
+
+  // Collapse the rail if the viewport shrinks to mobile (covers resize/rotation too).
+  useEffect(() => { if (isMobile) setRailOpen(false); }, [isMobile]);
 
   const refresh = async () => {
     try { const d: any = await authFetch("/api/agents"); setAgents(d.agents || []); } catch {}
   };
   useEffect(() => { refresh(); }, []);
 
-  // Load the selected agent's profile whenever it changes (or rail opens).
-  useEffect(() => {
-    if (!agent) { setProfile(null); return; }
-    authFetch(`/api/agents/${agent}/profile`).then(setProfile).catch(() => setProfile(null));
-  }, [agent, railOpen]);
-
   const active = agents.find((a) => a.id === agent);
   const ActiveIcon = AGENT_META[agent]?.icon ?? Bot;
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full bg-background relative">
       <Tabs defaultValue="chat" className="flex-1 min-w-0 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/50 px-4 h-12 shrink-0">
           <div className="flex items-center gap-2">
             <ActiveIcon className={cn("h-4 w-4", AGENT_META[agent]?.color)} />
-            <span className="text-sm font-semibold">Agent Hub</span>
+            <span className="text-sm font-semibold hidden sm:inline">Agent Hub</span>
           </div>
           <div className="flex-1 flex justify-center">
             <TabsList>
               <TabsTrigger value="chat">Chat</TabsTrigger>
-              <TabsTrigger value="graph">Graph</TabsTrigger>
+              <TabsTrigger value="activity">Activity</TabsTrigger>
               <TabsTrigger value="manage">Manage</TabsTrigger>
+              <TabsTrigger value="files">Files</TabsTrigger>
             </TabsList>
           </div>
           <Button variant="ghost" size="icon" onClick={() => setRailOpen((v) => !v)} title="Toggle info rail">
@@ -68,20 +67,78 @@ export default function AgentWorkspace() {
         <TabsContent value="chat" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           <ChatTab agents={agents} agent={agent} onSelect={setAgent} />
         </TabsContent>
-        <TabsContent value="graph" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
-          <GraphTab agents={agents} />
+        <TabsContent value="activity" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+          <ActivityTab agents={agents} agent={agent} onSelect={setAgent} />
         </TabsContent>
         <TabsContent value="manage" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           <ManageTab agents={agents} agent={agent} onSelect={setAgent} onRefresh={refresh} />
         </TabsContent>
       </Tabs>
 
-      {/* Collapsible right rail */}
+      {/* Collapsible right rail — overlay drawer on mobile, in-flow column on desktop */}
+      {railOpen && isMobile && (
+        <div className="absolute inset-0 z-20 bg-black/30" onClick={() => setRailOpen(false)} />
+      )}
       {railOpen && (
-        <aside className="w-72 shrink-0 border-l border-border/50 flex flex-col min-h-0">
-          <ProfileRail agent={agent} active={active} profile={profile} />
+        <aside className={cn(
+          "w-72 shrink-0 border-l border-border/50 flex flex-col min-h-0",
+          isMobile && "absolute inset-y-0 right-0 z-30 bg-background shadow-xl",
+        )}>
+          <ProfileRail agent={agent} active={active} />
         </aside>
       )}
+    </div>
+  );
+}
+
+/* ------------------------- Shared agent selector ------------------------- */
+// ponytail: one selector reused by Chat (new session) + Activity (view runs).
+function AgentSelector({ agents, agent, onSelect, size = "md" }: {
+  agents: AgentInfo[]; agent: string; onSelect: (id: string) => void; size?: "sm" | "md";
+}) {
+  return (
+    <div className="flex items-center gap-1.5 overflow-x-auto flex-wrap">
+      {AGENT_IDS.map((id) => {
+        const meta = AGENT_META[id]!;
+        const Icon = meta.icon;
+        const installed = agents.find((a) => a.id === id)?.installed;
+        return (
+          <button key={id} onClick={() => onSelect(id)}
+            className={cn(
+              "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5",
+              size === "sm" ? "text-[.7rem]" : "text-xs",
+              agent === id ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted/50",
+            )}
+            title={`${id}${installed ? "" : " (not installed)"}`}>
+            <Icon className={cn("h-4 w-4", meta.color)} />
+            <span className="capitalize">{id}</span>
+            {!installed && <span className="text-[.6rem] text-zinc-400">offline</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---------------------- Interactive permission prompt --------------------- */
+function PromptCard({ prompt, onAnswer }: { prompt: AgentPrompt; onAnswer: (approve: boolean) => void }) {
+  return (
+    <div className="mt-2 p-2 rounded-lg border border-amber-500/30 bg-amber-500/5 space-y-1.5">
+      <div className="text-xs font-medium flex items-center gap-1.5">
+        <ShieldQuestion className="h-3.5 w-3.5 text-amber-500" />
+        {prompt.tool} wants to run
+      </div>
+      <pre className="text-[.65rem] whitespace-pre-wrap font-mono text-muted-foreground max-h-32 overflow-auto">
+        {JSON.stringify(prompt.input, null, 2)}
+      </pre>
+      <div className="flex gap-1.5">
+        <Button size="sm" className="h-7 text-xs gap-1" onClick={() => onAnswer(true)}>
+          <Check className="h-3 w-3" /> Approve
+        </Button>
+        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => onAnswer(false)}>
+          <X className="h-3 w-3" /> Deny
+        </Button>
+      </div>
     </div>
   );
 }
@@ -94,33 +151,63 @@ function ChatTab({ agents, agent, onSelect }: {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sessionModel, setSessionModel] = useState("");
+  const [sessionSkill, setSessionSkill] = useState("");
 
   const selectAgent = async (id: string) => {
     onSelect(id);
     setMessages([]);
+    setSessionModel("");
+    setSessionSkill("");
     try {
       const r: any = await authFetch(`/api/agents/${id}/sessions`, { method: "POST" });
       setSessionId(r.session_id);
     } catch { setSessionId(""); }
   };
 
+  const compactSession = async () => {
+    if (!sessionId) return;
+    try { await authFetch(`/api/agents/${agent}/sessions/${sessionId}/compact`, { method: "POST" }); } catch {}
+    setMessages([]);
+  };
+
+  const handleCommand = (id: string, value?: string) => {
+    if (id === "new") selectAgent(agent);
+    else if (id === "clear") setMessages([]);
+    else if (id === "compact") compactSession();
+    else if (id === "model" && value) setSessionModel(value);
+    else if (id === "skill" && value) setSessionSkill(value);
+  };
+
   const send = async () => {
     const text = input.trim();
     if (!text || !agent || busy) return;
-    if (text === "/new") { await selectAgent(agent); setInput(""); return; }
     setBusy(true);
-    setMessages((m) => [...m, { role: "user", content: text }]);
     setInput("");
-    try {
-      const r: any = await authFetch(`/api/agents/${agent}/chat`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: text, session_id: sessionId || undefined }),
-      });
-      if (r.session_id) setSessionId(r.session_id);
-      setMessages((m) => [...m, { role: "agent", blocks: r.blocks || [] }]);
-    } catch (e: any) {
-      setMessages((m) => [...m, { role: "agent", content: e?.message || "Agent call failed" }]);
-    } finally { setBusy(false); }
+    const msgId = `a${Date.now()}`;
+    setMessages((m) => [...m, { role: "user", content: text }, { role: "agent", id: msgId, content: "", streaming: true, prompts: [] }]);
+
+    const patch = (fn: (msg: Msg) => Msg) =>
+      setMessages((m) => m.map((msg) => (msg.id === msgId ? fn(msg) : msg)));
+
+    let acc = "";
+    await streamAgent(agent, {
+      message: text,
+      ...(sessionId ? { session_id: sessionId } : {}),
+      ...(sessionModel ? { model: sessionModel } : {}),
+      ...(sessionSkill ? { skill: sessionSkill } : {}),
+    }, {
+      onOutput: (line) => {
+        acc += line;
+        patch((msg) => ({ ...msg, content: acc, streaming: true }));
+      },
+      onPrompt: (p) => {
+        patch((msg) => ({ ...msg, prompts: [...(msg.prompts || []), p], streaming: false }));
+      },
+      onRun: () => patch((msg) => ({ ...msg, streaming: false })),
+      onError: (err) => patch((msg) => ({ ...msg, content: acc || err.message || "Agent run failed", streaming: false })),
+    });
+    setBusy(false);
   };
 
   return (
@@ -132,50 +219,37 @@ function ChatTab({ agents, agent, onSelect }: {
             <p className="text-sm">Chat with {agent || "an agent"} — type a message or a /command</p>
           </div>
         ) : messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+          <div key={m.id ?? i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
             <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${m.role === "user" ? "bg-primary/10" : "bg-muted/40"}`}>
-              {m.blocks
-                ? m.blocks.map((b, j) => (
-                    <pre key={j} className="whitespace-pre-wrap font-sans text-sm">{b.content}</pre>
-                  ))
-                : <div className="whitespace-pre-wrap">{m.content}</div>}
+              {m.streaming && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                  <Loader2 className="h-3 w-3 animate-spin" /> {agent} is working…
+                </div>
+              )}
+              <div className="whitespace-pre-wrap">{m.content || (m.streaming ? "" : "")}</div>
+              {m.prompts && m.prompts.map((p) => (
+                <PromptCard key={p.prompt_id} prompt={p} onAnswer={(approve) => answerAgent(agent, sessionId, p.prompt_id, approve)} />
+              ))}
             </div>
           </div>
         ))}
-        {busy && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" /> {agent} is working…
-          </div>
-        )}
       </div>
 
       <div className="border-t p-3 space-y-2">
-        {/* Agent logo row — each logo starts a new session with that agent */}
-        <div className="flex items-center gap-2 overflow-x-auto">
-          {AGENT_IDS.map((id) => {
-            const meta = AGENT_META[id]!;
-            const Icon = meta.icon;
-            const installed = agents.find((a) => a.id === id)?.installed;
-            return (
-              <button key={id} onClick={() => selectAgent(id)}
-                className={cn(
-                  "flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs",
-                  agent === id ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:bg-muted/50",
-                )}
-                title={`${id}${installed ? "" : " (not installed)"}`}>
-                <Icon className={cn("h-4 w-4", meta.color)} />
-                <span className="capitalize">{id}</span>
-                {!installed && <span className="text-[.6rem] text-zinc-400">offline</span>}
-              </button>
-            );
-          })}
-        </div>
+        {/* Agent selector — each agent starts a new session with it */}
+        <AgentSelector agents={agents} agent={agent} onSelect={selectAgent} />
 
         <div className="flex gap-2">
-          <input value={input} onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && send()}
+          <AgentCommandMenu
+            agent={agent}
+            value={input}
+            onChange={setInput}
+            agents={agents}
+            onPickAgent={(id) => selectAgent(id)}
+            onCommand={handleCommand}
+            onSubmit={send}
             placeholder={`Message ${agent}… or /command`}
-            className="flex-1 rounded-xl border border-input bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+          />
           <Button onClick={send} disabled={busy || !input.trim()}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
           </Button>
@@ -185,77 +259,118 @@ function ChatTab({ agents, agent, onSelect }: {
   );
 }
 
-/* ------------------------------ Graph tab ------------------------------- */
-function GraphTab({ agents }: { agents: AgentInfo[] }) {
-  // ponytail: visual node board, no real scheduler/edge engine. Drag to arrange.
-  const [pos, setPos] = useState<Record<string, { x: number; y: number }>>({
-    claude: { x: 60, y: 40 }, codex: { x: 320, y: 40 },
-    opencode: { x: 60, y: 200 }, hermes: { x: 320, y: 200 },
-  });
-  const drag = useRef<{ id: string; dx: number; dy: number } | null>(null);
+/* ---------------------------- Activity tab ------------------------------ */
+// ponytail: live run (SSE) + run history for the selected agent. We render our spawned
+// process, not the agent's internal sub-agents; tokens are a chars/4 estimate.
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!active) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(id);
+  }, [active]);
+  return now;
+}
+
+function RunCard({ run }: { run: any }) {
+  const [open, setOpen] = useState(false);
+  const dur = run.ended_at && run.started_at
+    ? Math.max(0, Math.round((new Date(run.ended_at).getTime() - new Date(run.started_at).getTime()) / 1000))
+    : null;
+  return (
+    <div className="rounded-xl border border-border/60">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 p-3 text-left hover:bg-muted/40">
+        <CircleDot className={cn("h-3.5 w-3.5 shrink-0",
+          run.status === "done" ? "text-emerald-500" : run.status === "failed" ? "text-red-500" : "text-muted-foreground")} />
+        <span className="text-xs font-medium capitalize">{run.status}</span>
+        {dur !== null && <span className="text-[.65rem] text-muted-foreground flex items-center gap-1"><Clock className="h-3 w-3" />{dur}s</span>}
+        {run.exit_code != null && run.exit_code !== 0 && <span className="text-[.65rem] text-red-500">exit {run.exit_code}</span>}
+        <span className="ml-auto text-[.65rem] text-muted-foreground">~{run.tokens} tok</span>
+      </button>
+      {open && run.output && (
+        <pre className="px-3 pb-3 text-xs whitespace-pre-wrap font-mono text-muted-foreground max-h-64 overflow-y-auto">{run.output}</pre>
+      )}
+    </div>
+  );
+}
+
+function ActivityTab({ agents, agent, onSelect }: {
+  agents: AgentInfo[]; agent: string; onSelect: (id: string) => void;
+}) {
+  const [runs, setRuns] = useState<any[]>([]);
+  const [live, setLive] = useState<{ text: string; startedAt: number; tokens: number } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [input, setInput] = useState("");
+  const [error, setError] = useState("");
+  const abortRef = useRef<AbortController | null>(null);
+  const now = useNow(!!live);
+
+  const loadRuns = async (a: string) => {
+    if (!a) { setRuns([]); return; }
+    try { const d: any = await authFetch(`/api/agents/${a}/runs`); setRuns(d.runs || []); } catch { setRuns([]); }
+  };
+  useEffect(() => { loadRuns(agent); }, [agent]);
+
+  const runNow = async () => {
+    const text = input.trim();
+    if (!text || !agent || busy) return;
+    setBusy(true);
+    setInput("");
+    setError("");
+    const startedAt = Date.now();
+    setLive({ text: "", startedAt, tokens: 0 });
+    const ctl = new AbortController();
+    abortRef.current = ctl;
+    let acc = "";
+    await streamAgent(agent, { message: text }, {
+      onOutput: (line) => { acc += line; setLive({ text: acc, startedAt, tokens: Math.floor(acc.length / 4) }); },
+      onRun: (run) => { setLive(null); setRuns((r) => [run, ...r.filter((x) => x.run_id !== run.run_id)]); },
+      onError: (err) => { setLive(null); setError(err.message || "Agent run failed"); },
+    }, ctl.signal);
+    setBusy(false);
+    abortRef.current = null;
+  };
+
+  const elapsed = live ? Math.max(0, Math.round((now - live.startedAt) / 1000)) : 0;
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 overflow-hidden relative bg-muted/20">
-        <svg width="100%" height="100%" viewBox="0 0 480 320" preserveAspectRatio="xMidYMid meet"
-          onMouseMove={(e) => {
-            if (!drag.current) return;
-            const svg = e.currentTarget.getBoundingClientRect();
-            const scale = svg.width / 480;
-            const { id, dx, dy } = drag.current;
-            const nx = dx + (e.clientX - svg.left) / scale;
-            const ny = dy + (e.clientY - svg.top) / scale;
-            setPos((p) => ({ ...p, [id]: { x: Math.max(0, Math.min(400, nx)), y: Math.max(0, Math.min(280, ny)) } }));
-          }}
-          onMouseUp={() => { drag.current = null; }}
-          onMouseLeave={() => { drag.current = null; }}>
-          {/* connection lines between the 4 nodes */}
-          <line x1={pos.claude!.x + 80} y1={pos.claude!.y + 40} x2={pos.codex!.x + 80} y2={pos.codex!.y + 40} stroke="currentColor" className="text-muted-foreground/30" strokeWidth="1.5" />
-          <line x1={pos.claude!.x + 80} y1={pos.claude!.y + 40} x2={pos.opencode!.x + 80} y2={pos.opencode!.y + 40} stroke="currentColor" className="text-muted-foreground/30" strokeWidth="1.5" />
-          <line x1={pos.codex!.x + 80} y1={pos.codex!.y + 40} x2={pos.hermes!.x + 80} y2={pos.hermes!.y + 40} stroke="currentColor" className="text-muted-foreground/30" strokeWidth="1.5" />
-          <line x1={pos.opencode!.x + 80} y1={pos.opencode!.y + 40} x2={pos.hermes!.x + 80} y2={pos.hermes!.y + 40} stroke="currentColor" className="text-muted-foreground/30" strokeWidth="1.5" />
-          {AGENT_IDS.map((id) => {
-            const meta = AGENT_META[id]!;
-            const Icon = meta.icon;
-            const installed = agents.find((a) => a.id === id)?.installed;
-            return (
-              <g key={id} onMouseDown={(e) => {
-                e.preventDefault();
-                drag.current = { id, dx: pos[id]!.x, dy: pos[id]!.y };
-              }} className="cursor-grab">
-                <rect x={pos[id]!.x} y={pos[id]!.y} width="160" height="80" rx="12"
-                  fill="var(--background)" stroke={installed ? "var(--border)" : "var(--destructive)"} strokeWidth="1.5" />
-                <g transform={`translate(${pos[id]!.x + 12}, ${pos[id]!.y + 12})`}>
-                  <foreignObject width="136" height="56">
-                    <div className="flex flex-col justify-center h-full">
-                      <div className="flex items-center gap-2">
-                        <Icon className={cn("h-4 w-4", meta.color)} />
-                        <span className="text-xs font-semibold capitalize">{id}</span>
-                        {!installed && <Badge variant="outline" className="text-[.6rem] text-zinc-400">offline</Badge>}
-                      </div>
-                      <span className="text-[.65rem] text-muted-foreground truncate">
-                        {installed ? "running" : "not installed"}
-                      </span>
-                    </div>
-                  </foreignObject>
-                </g>
-              </g>
-            );
-          })}
-        </svg>
+      <div className="p-3 border-b flex items-center gap-3 flex-wrap">
+        <AgentSelector agents={agents} agent={agent} onSelect={onSelect} size="sm" />
       </div>
-
-      {/* Schedule lane */}
-      <div className="border-t border-border/50 p-3">
-        <div className="text-xs font-semibold flex items-center gap-2 mb-2"><Workflow className="h-3.5 w-3.5" /> Schedule</div>
-        <div className="space-y-1 text-xs text-muted-foreground">
-          {AGENT_IDS.map((id) => (
-            <div key={id} className="flex justify-between border rounded-md px-3 py-1.5">
-              <span className="capitalize">{id}</span>
-              <span>{agents.find((a) => a.id === id)?.installed ? "idle" : "needs install"}</span>
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {live && (
+          <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              {agent} is running
+              <span className="text-xs text-muted-foreground ml-auto flex items-center gap-1.5">
+                <Clock className="h-3 w-3" />{elapsed}s · ~{live.tokens} tok
+              </span>
             </div>
-          ))}
-        </div>
+            <pre className="text-xs whitespace-pre-wrap font-mono text-muted-foreground line-clamp-6">{live.text || "…"}</pre>
+          </div>
+        )}
+        {!live && error && (
+          <div className="p-3 rounded-xl border border-red-500/30 bg-red-500/5 text-xs text-red-600 dark:text-red-400">
+            {error}
+          </div>
+        )}
+        {!live && !error && runs.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
+            <Activity className="h-10 w-10 opacity-30 mb-2" />
+            <p className="text-sm">No runs for {agent || "this agent"} yet.</p>
+          </div>
+        )}
+        {runs.map((r) => <RunCard key={r.run_id} run={r} />)}
+      </div>
+      <div className="border-t p-3 flex gap-2">
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runNow()}
+          placeholder={`Run ${agent || "an agent"}…`}
+          className="flex-1 rounded-xl border border-input bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+        <Button onClick={runNow} disabled={busy || !input.trim() || !agent}>
+          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Run"}
+        </Button>
       </div>
     </div>
   );
@@ -330,19 +445,18 @@ function getInstallCmd(id: string): string {
 }
 
 /* --------------------------- Profile right rail -------------------------- */
-function ProfileRail({ agent, active, profile }: {
-  agent: string; active: AgentInfo | undefined; profile: Profile | null;
-}) {
+// ponytail: the rail hosts the editable agent files (config/skill/memory) + the agent header.
+function ProfileRail({ agent, active }: { agent: string; active: AgentInfo | undefined }) {
   if (!agent) {
     return (
       <div className="p-4 text-sm text-muted-foreground flex-1 flex items-center justify-center text-center">
-        Select an agent to see its config, memory, and skills.
+        Select an agent to edit its config, memory, and skills.
       </div>
     );
   }
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
-      <div className="flex items-center gap-2">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex items-center gap-2 p-4 border-b">
         {(() => { const I = AGENT_META[agent]?.icon ?? Bot; return <I className={cn("h-5 w-5", AGENT_META[agent]?.color)} />; })()}
         <div>
           <div className="text-sm font-semibold capitalize">{agent}</div>
@@ -351,36 +465,9 @@ function ProfileRail({ agent, active, profile }: {
           </div>
         </div>
       </div>
-
-      {!profile ? (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" /> loading…</div>
-      ) : (
-        <>
-          <Section title="Config">
-            {Object.entries(profile.config).filter(([, v]) => v !== null && v !== "").map(([k, v]) => (
-              <div key={k} className="flex justify-between gap-2 text-xs">
-                <span className="text-muted-foreground">{k}</span>
-                <span className="font-mono truncate">{Array.isArray(v) ? v.join(" ") : String(v)}</span>
-              </div>
-            ))}
-            <div className="flex justify-between gap-2 text-xs">
-              <span className="text-muted-foreground">install</span>
-              <span className="font-mono text-[.65rem] truncate">{profile.install_cmd}</span>
-            </div>
-          </Section>
-          <Section title="memory.md"><pre className="whitespace-pre-wrap font-sans text-xs">{profile.memory || "— empty —"}</pre></Section>
-          <Section title="skill.md"><pre className="whitespace-pre-wrap font-sans text-xs">{profile.skill || "— empty —"}</pre></Section>
-        </>
-      )}
-    </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div>
-      <div className="text-xs font-semibold mb-1.5">{title}</div>
-      <div className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">{children}</div>
+      <div className="flex-1 min-h-0">
+        <AgentFiles agent={agent} />
+      </div>
     </div>
   );
 }

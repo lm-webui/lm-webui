@@ -226,6 +226,14 @@ export default function ChatPane({
                   ...(m.generatedImageUrl ? { generatedImageUrl: m.generatedImageUrl } : {}),
                   ...(m.model ? { model: m.model } : {}),
                   ...(m.fileAttachments?.length ? { fileAttachments: m.fileAttachments } : {}),
+                  ...(m.searchUsed !== undefined ? { searchUsed: m.searchUsed } : {}),
+                  ...(m.sources ? { sources: m.sources } : {}),
+                  ...(m.retrievedImages ? { retrievedImages: m.retrievedImages } : {}),
+                  ...(m.context_used ? { context_used: m.context_used } : {}),
+                  ...(m.documentsReferenced !== undefined ? { documentsReferenced: m.documentsReferenced } : {}),
+                  ...(m.memoryUsed !== undefined ? { memoryUsed: m.memoryUsed } : {}),
+                  ...(m.searchQuery ? { searchQuery: m.searchQuery } : {}),
+                  ...(m.citations ? { citations: m.citations } : {}),
                 }}
                 onRegenerate={handleRegenerate}
                 onAddToProject={openProjectPicker}
@@ -234,8 +242,10 @@ export default function ChatPane({
             </div>
           ))}
 
-          {/* Loading indicator when LLM is generating response (standard mode) */}
-          {isLoading && (
+          {/* Loading indicator when LLM is generating response (standard mode).
+              Hidden once a message is streaming content — otherwise it duplicates
+              the streaming bubble's own shimmer. */}
+          {isLoading && !conversation.messages.some((m) => m.isLoading) && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <LoadingMessage
                 showRawResponse={false}

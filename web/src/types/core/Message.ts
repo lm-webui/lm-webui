@@ -22,6 +22,8 @@ export interface ChatMessage extends BaseMessage {
   retrievedImages?: string[];
   documentsReferenced?: boolean;
   memoryUsed?: boolean;
+  searchQuery?: string;
+  citations?: Array<{ id: string; sourceId: string; text: string }>;
 }
 
 // A source/citation surfaced alongside the assistant answer.
