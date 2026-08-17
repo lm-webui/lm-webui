@@ -29,6 +29,9 @@ The backend is a modular monolith. Key modules:
 - **modality** — intent classifier + execution planner (decides whether a request is plain chat, RAG, search, image, or vision)
 - **capabilities** — capability executor (chat, vision, retrieve/search, image generation)
 - **chat / memory** — session and message persistence, context assembly + summarization
+- **agents** — the Agent Hub: per-provider CLI adapters (`app/agents/providers.py`), a stream-json
+  interactive runner (`runner.py`), session + run tracking (`sessions.py`), `--help`-parsed command
+  discovery (`registry.py`), and routes under `routes/agents.py`
 - **database** — SQLite schema + connection pool
 - **hardware / runtime** — GPU/CPU detection and external runtime metadata; `vision_runtime` manages the `llama-server` subprocess for Vision
 - **security** — JWT auth + encryption
@@ -61,6 +64,16 @@ Studio → POST /api/images/generate → Handler → API/ComfyUI → Save → Ga
 ```
 Model Selector → GET /api/models/* → Model Registry → Provider.list_models()
 ```
+
+### Agent Hub chat
+```
+UI → POST /api/agents/{agent}/chat/stream (SSE) → spawn `claude -p --resume <id>` (stream-json)
+     → stream output / prompt / run frames → persist claude session id → SSE to UI
+```
+
+Multi-turn model: Claude owns its transcript on disk; each turn spawns a **fresh** `--resume <id>`
+process (no persistent subprocess to keep alive), so sessions survive backend restarts. Tool
+permissions run with `--dangerously-skip-permissions` so agents execute unattended.
 
 ## Supported Providers
 

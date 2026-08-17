@@ -1,6 +1,8 @@
 """Detect the host CLI agents (claude, codex, opencode, hermes)."""
+import re
 import shutil
 import subprocess
+import time
 
 from app.core.config_manager import get_data_dir
 
@@ -43,6 +45,59 @@ def detect(name: str) -> dict:
 
 def detect_all() -> list:
     return [detect(n) for n in AGENTS]
+
+
+# ── Real CLI command surface (parsed from the installed CLI's --help) ─────────
+# ponytail: naive TTL cache; fine unless many agents + rapid re-opens matter.
+_HELP_TTL = 60
+_help_cache: dict[str, tuple[float, list[dict]]] = {}
+
+_SKIP_HEADERS = {"usage", "arguments", "options", "commands", "aliases", "description", "examples"}
+
+
+def _parse_help(text: str) -> list[dict]:
+    items: list[dict] = []
+    seen: set[str] = set()
+    for line in text.splitlines():
+        line = line.rstrip()
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # Flag: "  --model <m>   Use model X" or "  -p, --print".
+        fm = re.match(r"^\s+(-{1,2}[\w-]+)(?:[, ]+(-{1,2}[\w-]+))?", line)
+        if fm:
+            label = fm.group(1)
+            if label not in seen:
+                seen.add(label)
+                items.append({"id": label, "label": label, "hint": stripped[:80]})
+            continue
+        # Bare subcommand: "  exec   Run codex non-interactively" (token is column-aligned, so
+        # 2+ spaces after it; a wrapped description line has a single space and is skipped).
+        sm = re.match(r"^\s{2,}([a-z][a-z0-9-]*)\s{2,}\S", line)
+        if sm:
+            label = sm.group(1)
+            if label.lower() not in _SKIP_HEADERS and label not in seen:
+                seen.add(label)
+                items.append({"id": label, "label": label, "hint": stripped[:80]})
+    return items[:60]
+
+
+def cli_commands(name: str) -> list[dict]:
+    """The real `--help`-derived command/flag list for an installed CLI agent."""
+    now = time.time()
+    cached = _help_cache.get(name)
+    if cached and now - cached[0] < _HELP_TTL:
+        return cached[1]
+    items: list[dict] = []
+    cmd = AGENTS.get(name, {}).get("cmd")
+    if cmd and shutil.which(cmd):
+        try:
+            r = subprocess.run([cmd, "--help"], capture_output=True, text=True, timeout=10)
+            items = _parse_help((r.stdout or "") + (r.stderr or ""))
+        except Exception:
+            items = []
+    _help_cache[name] = (now, items)
+    return items
 
 
 def profile(name: str) -> dict:

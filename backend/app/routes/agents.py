@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
-from app.agents.registry import AGENTS, detect_all, profile
+from app.agents.registry import AGENTS, detect_all, profile, cli_commands
 from app.agents.runner import run, run_collect, InteractiveSession
 from app.agents import agent_files as af
 from app.agents.providers import is_interactive, context_file
@@ -26,7 +26,12 @@ class ChatRequest(BaseModel):
 
 
 def _resolve_session(agent: str, req: ChatRequest):
-    """Get-or-create the session and build the prompt from its recent transcript."""
+    """Get-or-create the session.
+
+    Returns (sid, s, transcript_prompt). The transcript prompt is only used by the non-interactive
+    one-shot path (codex/opencode/hermes); interactive claude resumes via `--resume` instead, so its
+    context comes from claude's own on-disk session, not this concatenation.
+    """
     sid = req.session_id or sessions.create(agent)
     s = sessions.get(sid)
     if not s:
@@ -49,6 +54,14 @@ async def get_profile(agent: str):
     return profile(agent)
 
 
+@router.get("/{agent}/commands", dependencies=[Depends(require_permission("agents.run"))])
+async def get_commands(agent: str):
+    """The real command/flag surface of the installed CLI, parsed from `--help`."""
+    if agent not in AGENTS:
+        raise HTTPException(404, "Unknown agent")
+    return {"commands": cli_commands(agent)}
+
+
 @router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
 async def list_sessions(agent: str):
     if agent not in AGENTS:
@@ -65,34 +78,32 @@ async def create_session(agent: str):
 
 @router.delete("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.run"))])
 async def delete_session(agent: str, sid: str):
-    sessions.close_live(sid)
     if not sessions.delete(sid):
         raise HTTPException(404, "Session not found")
     return {"ok": True}
 
 
-@router.post("/{agent}/sessions/{sid}/answer", dependencies=[Depends(require_permission("agents.run"))])
-async def answer_prompt(agent: str, sid: str, body: dict):
-    """Answer an interactive tool-use permission ask (approve/deny) for a live session."""
-    live = sessions.get_live(sid)
-    if live is None:
-        raise HTTPException(404, "No live session")
-    prompt_id = body.get("prompt_id")
-    approve = bool(body.get("approve"))
-    if not prompt_id:
-        raise HTTPException(400, "prompt_id is required")
-    await live.answer(prompt_id, approve)
-    return {"ok": True}
+@router.get("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.run"))])
+async def get_session(agent: str, sid: str):
+    """Return a session's transcript so the UI can restore a resumed chat."""
+    s = sessions.get(sid)
+    if not s or s.get("agent") != agent:
+        raise HTTPException(404, "Session not found")
+    return {"session_id": sid, "transcript": s.get("transcript", [])}
 
 
 @router.post("/{agent}/sessions/{sid}/compact", dependencies=[Depends(require_permission("agents.run"))])
 async def compact_session(agent: str, sid: str):
-    """Reset a session's context: clear its transcript + drop the live process."""
+    """Reset a session's context: clear the transcript + claude session id (next run starts fresh).
+
+    ponytail: the old claude session lingers on disk as an orphan — acceptable; claude has no CLI
+    to delete a session by id.
+    """
     s = sessions.get(sid)
     if not s:
         raise HTTPException(404, "Session not found")
     s["transcript"] = []
-    sessions.close_live(sid)
+    sessions.set_claude_session(sid, None)
     return {"ok": True}
 
 
@@ -108,6 +119,12 @@ async def agent_usage(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     runs = sessions.list_runs(agent)
+    session_history = [
+        {"sid": s["sid"], "created_at": s.get("created_at"),
+         "run_count": len((sessions.get(s["sid"]) or {}).get("runs", []))}
+        for s in sessions.list(agent)
+    ]
+    session_history.sort(key=lambda s: s.get("created_at") or "", reverse=True)
     return {
         "run_count": len(runs),
         "last_run_at": runs[0].get("started_at") if runs else None,
@@ -115,6 +132,8 @@ async def agent_usage(agent: str):
         "total_output_tokens": sum(r.get("output_tokens") or 0 for r in runs),
         "total_cost_usd": round(sum(r.get("cost_usd") or 0 for r in runs), 6),
         "context_window": runs[0].get("context_window") if runs else None,
+        "session_count": len(session_history),
+        "sessions": session_history[:10],
     }
 
 
@@ -173,25 +192,27 @@ async def chat_stream(agent: str, req: ChatRequest):
 
     async def event_stream():
         if is_interactive(agent):
-            # Persistent bidirectional stream-json session (claude): reuse across turns, send the
-            # user message, then stream output + tool-use permission prompts until the turn ends.
-            live = sessions.get_live(sid)
-            if live is None:
-                s["model"] = req.model or s.get("model") or ""
-                s["system_prompt"] = req.skill or s.get("system_prompt") or ""
-                live = InteractiveSession(s["cwd"], agent=agent, model=s["model"], system_prompt=s["system_prompt"])
-                await live.start()
+            # Fresh stream-json session per turn (claude), resumed via `--resume <id>` so the
+            # conversation carries context across turns AND across server restarts (zeto-style:
+            # claude owns its transcript on disk). No persistent process to keep alive or answer.
+            if req.model:
+                s["model"] = req.model
+            if req.skill:
+                s["system_prompt"] = req.skill
+            live = InteractiveSession(s["cwd"], agent=agent,
+                                      model=s.get("model") or "", system_prompt=s.get("system_prompt") or "",
+                                      resume_id=s.get("claude_session_id") or "")
+            await live.start()
+            try:
                 # Connected-agent manifest the running agent auto-reads (claude → CLAUDE.md).
                 try:
                     (Path(s["cwd"]) / context_file(agent)).write_text(
                         af.connected_manifest(agent), encoding="utf-8")
                 except OSError:
                     pass
-                sessions.set_live(sid, live)
-            sessions.start_run(sid)
-            await live.send_message(prompt)
-            try:
-                yield await _sse({"type": "status", "data": {"status": "running"}})
+                sessions.start_run(sid)
+                await live.send_message(msg)
+                yield await _sse({"type": "status", "data": {"status": "running", "session_id": sid}})
                 async for ev in live.events():
                     if ev["type"] == "output":
                         sessions.append_output(sid, ev.get("content", ""))
@@ -210,9 +231,14 @@ async def chat_stream(agent: str, req: ChatRequest):
                         yield await _sse({"type": "run", "data": run_info})
                         yield await _sse({"type": "complete"})
                         break
+                # Persist claude's session id (captured from the system frame) so the next turn resumes.
+                if live.session_id:
+                    sessions.set_claude_session(sid, live.session_id)
             except Exception as exc:
                 sessions.fail_run(sid)
                 yield await _sse({"type": "error", "content": str(exc)})
+            finally:
+                await live.close()
             return
 
         # Non-interactive one-shot path.

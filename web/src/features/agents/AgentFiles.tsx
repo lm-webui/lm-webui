@@ -3,9 +3,9 @@
  * skill.md/memory.md are app-managed. Saving a real config backs it up first (backend .bak).
  */
 import { useEffect, useState } from "react";
-import { Loader2, Save, FolderOpen, FileCode2, BookOpen } from "lucide-react";
+import { Loader2, Save, FolderOpen, FileCode2, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { getAgentFiles, saveAgentFile } from "@/utils/api";
@@ -18,6 +18,7 @@ export default function AgentFiles({ agent }: { agent: string }) {
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<FileInfo | null>(null);
+  const [open, setOpen] = useState<Record<string, boolean>>({}); // collapsible sections
 
   useEffect(() => {
     if (!agent) { setFiles([]); return; }
@@ -59,38 +60,44 @@ export default function AgentFiles({ agent }: { agent: string }) {
             Select an agent to edit its config, skill, and memory.
           </div>
         ) : (
-          <Tabs defaultValue={files[0]!.name} className="flex flex-col h-full">
-            <TabsList>
-              {files.map((f) => (
-                <TabsTrigger key={f.name} value={f.name} className="gap-1.5">
-                  {icon(f)} {f.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            {files.map((f) => (
-              <TabsContent key={f.name} value={f.name} className="flex flex-col min-h-0 flex-1 mt-2 space-y-2">
-                <div className="flex items-center gap-1.5 text-[.65rem] text-muted-foreground truncate">
-                  <FolderOpen className="h-3 w-3 shrink-0" />
-                  <span className="truncate font-mono">{f.path}</span>
-                </div>
-                <textarea
-                  value={draft(f)}
-                  onChange={(e) => setDrafts((d) => ({ ...d, [f.name]: e.target.value }))}
-                  spellCheck={false}
-                  className={cn(
-                    "flex-1 min-h-0 w-full resize-none rounded-xl border border-input bg-background px-3 py-2",
-                    "text-xs font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  )}
-                />
-                <div className="flex justify-end">
-                  <Button size="sm" className="gap-1.5" onClick={() => onSave(f)} disabled={saving}>
-                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                    Save
-                  </Button>
-                </div>
-              </TabsContent>
-            ))}
-          </Tabs>
+          <div className="space-y-1">
+            {files.map((f) => {
+              const isOpen = open[f.name] ?? false; // collapsed by default; expand on click
+              return (
+                <Collapsible key={f.name} open={isOpen} onOpenChange={(v) => setOpen((s) => ({ ...s, [f.name]: v }))}>
+                  <CollapsibleTrigger asChild>
+                    <button className="w-full flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium hover:bg-muted/50">
+                      {icon(f)}
+                      <span>{f.label}</span>
+                      <span className="truncate font-mono text-[.6rem] text-muted-foreground">{f.path.split("/").pop()}</span>
+                      {isOpen ? <ChevronUp className="h-3.5 w-3.5 ml-auto" /> : <ChevronDown className="h-3.5 w-3.5 ml-auto" />}
+                    </button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="px-1 pb-3 space-y-2">
+                    <div className="flex items-center gap-1.5 text-[.65rem] text-muted-foreground truncate">
+                      <FolderOpen className="h-3 w-3 shrink-0" />
+                      <span className="truncate font-mono">{f.path}</span>
+                    </div>
+                    <textarea
+                      value={draft(f)}
+                      onChange={(e) => setDrafts((d) => ({ ...d, [f.name]: e.target.value }))}
+                      spellCheck={false}
+                      className={cn(
+                        "w-full min-h-24 resize-y rounded-xl border border-input bg-background px-3 py-2",
+                        "text-xs font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      )}
+                    />
+                    <div className="flex justify-end">
+                      <Button size="sm" className="gap-1.5" onClick={() => onSave(f)} disabled={saving}>
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                        Save
+                      </Button>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </div>
         )}
       </div>
 

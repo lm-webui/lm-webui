@@ -238,12 +238,13 @@ function dispatchStreamEvent(ev: any, cb: StreamCallbacks): void {
 
 export interface AgentStreamCallbacks {
   onOutput?: (line: string) => void;
+  onStatus?: (data: { status?: string; session_id?: string }) => void;
   onPrompt?: (prompt: { prompt_id: string; tool: string; input: any }) => void;
   onRun?: (run: any) => void;
   onError?: (err: Error) => void;
 }
 
-// SSE chat with a host CLI agent (Agent Hub). Frames: output, prompt, run, complete, error.
+// SSE chat with a host CLI agent (Agent Hub). Frames: status, output, prompt, run, complete, error.
 export async function streamAgent(
   agent: string,
   body: { message: string; session_id?: string },
@@ -253,6 +254,9 @@ export async function streamAgent(
   try {
     await readSSE(`/api/agents/${agent}/chat/stream`, body, (ev) => {
       switch (ev.type) {
+        case 'status':
+          if (ev.data) cb.onStatus?.(ev.data);
+          break;
         case 'output':
           if (ev.content) cb.onOutput?.(ev.content);
           break;
@@ -274,18 +278,43 @@ export async function streamAgent(
   }
 }
 
-// Answer an interactive tool-use permission ask (approve/deny) for a live agent session.
-export async function answerAgent(agent: string, sid: string, promptId: string, approve: boolean): Promise<void> {
-  await authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions/${sid}/answer`, {
+// Answer an interactive tool-use permission ask (approve/deny) for the agent's live session.
+export async function answerAgent(agent: string, promptId: string, approve: boolean): Promise<void> {
+  await authFetch(`${API_BASE_URL}/api/agents/${agent}/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ prompt_id: promptId, approve }),
   });
 }
 
+// Native "allow for this session" — auto-approve subsequent tool asks for the live session.
+export async function autoApproveAgent(agent: string): Promise<void> {
+  await authFetch(`${API_BASE_URL}/api/agents/${agent}/auto-approve`, { method: 'POST' });
+}
+
 // Read/write an agent's config/skill/memory files.
 export async function getAgentFiles(agent: string): Promise<{ dir: string; files: any[] }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/files`);
+}
+export async function getAgentTranscript(agent: string, sessionId: string): Promise<{
+  session_id: string; transcript: { role: string; content: string }[];
+}> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions/${sessionId}`);
+}
+export async function getAgentSessions(agent: string): Promise<{ sessions: any[] }> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions`);
+}
+export async function getAgentCommands(agent: string): Promise<{ commands: { id: string; label: string; hint?: string }[] }> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/commands`);
+}
+export async function getAgentUsage(agent: string): Promise<{
+  run_count: number; last_run_at?: string;
+  total_input_tokens: number; total_output_tokens: number; total_cost_usd: number;
+  context_window?: number;
+  session_count: number;
+  sessions: { sid: string; created_at?: string; run_count: number }[];
+}> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/usage`);
 }
 export async function saveAgentFile(agent: string, name: string, content: string): Promise<{ path: string }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/files/${name}`, {

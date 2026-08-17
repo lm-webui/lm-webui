@@ -4,7 +4,7 @@ import json
 from typing import AsyncGenerator, AsyncIterator
 
 from .registry import AGENTS
-from .providers import spawn_cmd, normalize
+from .providers import spawn_cmd, normalize, prepare_workspace
 
 
 class InteractiveSession:
@@ -16,19 +16,33 @@ class InteractiveSession:
     stdin. Events consumed via `events()`.
     """
 
-    def __init__(self, cwd: str, agent: str = "claude", model: str = "", system_prompt: str = ""):
+    def __init__(self, cwd: str, agent: str = "claude", model: str = "",
+                 system_prompt: str = "", resume_id: str = ""):
         self._cwd = cwd
         self._agent = agent
         self._model = model
         self._system_prompt = system_prompt
+        self._resume_id = resume_id
         self._proc = None
         self._queue: asyncio.Queue = asyncio.Queue()
         self._reader_task: asyncio.Task | None = None
+        self._auto_approve = False
+        self._session_id = resume_id  # starts as the id we resumed from; updated by the system frame
+
+    def auto_approve(self) -> None:
+        """Native 'allow for this session': auto-approve subsequent tool permission asks."""
+        self._auto_approve = True
 
     def _cmd(self) -> list[str]:
-        return spawn_cmd(self._agent, self._cwd, self._model, self._system_prompt)
+        return spawn_cmd(self._agent, self._cwd, self._model, self._system_prompt, self._resume_id)
+
+    @property
+    def session_id(self) -> str:
+        """Claude's session id (captured from the stream-json `system` init frame)."""
+        return self._session_id or ""
 
     async def start(self) -> None:
+        prepare_workspace(self._agent, self._cwd)
         self._proc = await asyncio.create_subprocess_exec(
             *self._cmd(),
             cwd=self._cwd,
@@ -50,7 +64,17 @@ class InteractiveSession:
                     ev = json.loads(raw)
                 except json.JSONDecodeError:
                     continue
-                await self._push(normalize(self._agent, ev))
+                # The stream-json `system` init frame carries claude's session id — needed to resume.
+                if ev.get("type") == "system" and ev.get("session_id"):
+                    self._session_id = ev["session_id"]
+                events = normalize(self._agent, ev)
+                if events and self._auto_approve:
+                    # Native "allow for this session": auto-approve each tool instead of prompting.
+                    for e in events:
+                        if e["type"] == "prompt":
+                            await self.answer(e["data"]["prompt_id"], True)
+                    events = [e for e in events if e["type"] != "prompt"]
+                await self._push(events)
         except asyncio.CancelledError:
             pass
 

@@ -1,7 +1,12 @@
-"""Per-agent chat sessions: cwd + transcript for multi-turn context, plus run tracking."""
+"""Per-agent chat sessions: cwd + transcript for multi-turn context, plus run tracking.
+
+Sessions run in a dedicated app-managed workspace `~/.lmwebui/agenthub/session/{agent}/{sid}` (so
+agents don't hit root-folder trust/restriction issues) and are persisted to `index.json` there, so
+runs + transcripts survive a restart and are enumerable per agent.
+"""
 from __future__ import annotations
 
-import asyncio
+import json
 import os
 import uuid
 import shutil
@@ -16,11 +21,40 @@ _MAX_RUNS = 20
 class AgentSessions:
     def __init__(self):
         self._sessions: dict[str, dict] = {}
+        self._load()
+
+    def _session_root(self):
+        return get_data_dir().parent / "agenthub" / "session"
+
+    def _index_path(self):
+        return self._session_root() / "index.json"
 
     def _workspace(self, agent: str) -> str:
-        d = get_data_dir() / "agents" / agent
+        d = self._session_root() / agent
         d.mkdir(parents=True, exist_ok=True)
         return str(d)
+
+    def _serializable(self) -> dict:
+        # Drop the transient active_run (mid-flight run); everything else is plain JSON.
+        return {sid: {k: v for k, v in s.items() if k != "active_run"}
+                for sid, s in self._sessions.items()}
+
+    def _persist(self) -> None:
+        try:
+            p = self._index_path()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_text(json.dumps(self._serializable()), encoding="utf-8")
+        except OSError:
+            pass
+
+    def _load(self) -> None:
+        try:
+            p = self._index_path()
+            if p.exists():
+                data = json.loads(p.read_text(encoding="utf-8"))
+                self._sessions = {sid: {**s, "active_run": None} for sid, s in data.items()}
+        except (OSError, ValueError):
+            self._sessions = {}
 
     def create(self, agent: str) -> str:
         sid = uuid.uuid4().hex[:8]
@@ -32,7 +66,9 @@ class AgentSessions:
             "transcript": [],
             "runs": [],
             "active_run": None,
+            "claude_session_id": None,
         }
+        self._persist()
         return sid
 
     def get(self, sid: str) -> dict | None:
@@ -42,6 +78,14 @@ class AgentSessions:
         s = self._sessions.get(sid)
         if s:
             s["transcript"].append({"role": role, "content": content})
+            self._persist()
+
+    def set_claude_session(self, sid: str, claude_session_id: str | None) -> None:
+        """Record the claude session id this lm-webui session maps to (for --resume)."""
+        s = self._sessions.get(sid)
+        if s:
+            s["claude_session_id"] = claude_session_id
+            self._persist()
 
     def list(self, agent: str | None = None) -> list[dict]:
         return [
@@ -54,35 +98,12 @@ class AgentSessions:
         s = self._sessions.pop(sid, None)
         if not s:
             return False
-        live = s.get("live")
-        if live is not None:
-            try:
-                asyncio.create_task(live.close())
-            except Exception:
-                pass
         try:
             shutil.rmtree(s["cwd"])
         except Exception:
             pass
+        self._persist()
         return True
-
-    # ── Interactive (stream-json) live session ──────────────────────────────
-
-    def set_live(self, sid: str, live) -> None:
-        s = self._sessions.get(sid)
-        if s:
-            s["live"] = live
-
-    def get_live(self, sid: str):
-        s = self._sessions.get(sid)
-        return s.get("live") if s else None
-
-    def close_live(self, sid: str) -> None:
-        s = self._sessions.get(sid)
-        live = s.get("live") if s else None
-        if live is not None:
-            asyncio.create_task(live.close())
-            s["live"] = None
 
     # ── Run tracking (activity timeline) ────────────────────────────────────
 
@@ -128,6 +149,7 @@ class AgentSessions:
         s["runs"].append(run)
         s["runs"] = s["runs"][-_MAX_RUNS:]
         s["active_run"] = None
+        self._persist()
         return run
 
     def fail_run(self, sid: str) -> None:

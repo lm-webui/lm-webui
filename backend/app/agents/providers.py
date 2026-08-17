@@ -5,19 +5,43 @@ protocol; this module maps agent id → how to spawn it and how to normalize its
 shared event shape (output/prompt/complete). The runner + routes consume this instead of
 hardcoding one agent.
 """
+import json
+from pathlib import Path
 from typing import Optional
 
+# Skip all permission prompts: `-p` is non-interactive and can't render a permission yes/no, so
+# keeping a prompt mode here made agents auto-deny tool calls and finish immediately. skip-permissions
+# matches the reference project (zeto) — agents just run. (ponytail: per-tool approval later needs
+# --permission-prompt-tool / Agent SDK, not the stdio result frames.)
 CLAUDE_BASE = ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json",
-               "--permission-mode", "manual", "--verbose"]
+               "--dangerously-skip-permissions", "--verbose"]
 
 
-def _claude_spawn(cwd: str, model: str, skill: str) -> list[str]:
+def _claude_spawn(cwd: str, model: str, skill: str, resume_id: str = "") -> list[str]:
     cmd = [*CLAUDE_BASE]
+    if resume_id:
+        cmd += ["--resume", resume_id]
     if model:
         cmd += ["--model", model]
     if skill:
         cmd += ["--append-system-prompt", skill]
     return cmd
+
+
+def prepare_workspace(agent: str, cwd: str) -> None:
+    """Pre-trust the session workspace so claude doesn't show a trust dialog on first run.
+
+    Writes a `.claude/settings.json` in the session cwd with the default permission mode.
+    """
+    if agent != "claude":
+        return
+    try:
+        d = Path(cwd) / ".claude"
+        d.mkdir(parents=True, exist_ok=True)
+        settings = {"permissions": {"defaultMode": "acceptEdits"}}
+        (d / "settings.json").write_text(json.dumps(settings), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def _claude_normalize(ev: dict) -> Optional[list[dict]]:
@@ -63,9 +87,9 @@ def context_file(agent: str) -> str:
     return PROVIDERS.get(agent, {}).get("context_file", "AGENTS.md")
 
 
-def spawn_cmd(agent: str, cwd: str, model: str = "", skill: str = "") -> list[str]:
+def spawn_cmd(agent: str, cwd: str, model: str = "", skill: str = "", resume_id: str = "") -> list[str]:
     spawn = PROVIDERS.get(agent, {}).get("spawn")
-    return spawn(cwd, model, skill) if spawn else []
+    return spawn(cwd, model, skill, resume_id) if spawn else []
 
 
 def normalize(agent: str, ev: dict) -> Optional[list[dict]]:

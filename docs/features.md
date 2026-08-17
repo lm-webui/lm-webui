@@ -19,7 +19,7 @@ After signing in, LM-WebUI opens a single workspace with:
 - An Image Studio for prompt-based generation
 - A Gallery for generated images
 - A Projects workspace for custom instructions and grouped conversations
-- An Agent workspace (coming soon)
+- An Agent Hub for working with host CLI agents (Claude Code, Codex, OpenCode, Hermes)
 - Settings for API keys, models, runtimes, preferences, and account controls
 
 The application is responsive and adapts the sidebar and workspace controls for smaller screens.
@@ -81,6 +81,39 @@ You can:
 4. Edit or delete the project when its instructions change.
 
 Project instructions are intended for recurring workflows such as code review, research, writing, or a team-specific assistant configuration.
+
+## Agent Hub
+
+The Agent Hub lets you chat with your **host CLI agents** — Claude Code, Codex, OpenCode, and
+Hermes — directly from LM-WebUI. It wraps the installed CLI, so what you get is the agent's real
+behavior (tools, models, permissions) rather than a look-alike. The **Manage** tab shows which
+agents are installed and their versions, and offers an install command hint for any that are
+missing.
+
+### Resumable sessions
+
+Each chat lives in a **session** that carries its context across turns. Continuation uses the CLI's
+native resume (`claude --resume <id>`), so a session survives backend restarts and stays accurate to
+the agent's own transcript — no manual context re-injection. The **Sessions** rail on the right
+lists your past sessions; clicking one reopens it, loads its transcript, and you keep chatting right
+where you left off.
+
+### Real CLI `/` command menu
+
+Typing `/` in the composer lists the installed CLI's **actual commands**, parsed live from the
+agent's `--help` (flags like `--model`, `--resume` for Claude Code; subcommands like `exec`,
+`review`, `doctor` for Codex). Arrow keys and Tab/Shift+Tab cycle the list, Enter inserts the chosen
+command as literal text into the input, and `@` mentions installed agents. This is the real CLI
+surface, not a hand-curated wrapper.
+
+### Activity and files
+
+- **Activity** — per-run history with status, duration, and token/cost estimates.
+- **Files / Manage** — a per-agent editor for its config, `skill.md`, and `memory.md`, with a
+  backup before overwriting the real config file.
+
+> **Note on permissions:** to let agents run unattended, tool-use permission prompts are bypassed
+> (`--dangerously-skip-permissions`). Real per-tool approval is a planned future option.
 
 ## Models and providers
 
@@ -213,6 +246,7 @@ Until those capabilities are implemented and documented separately, deployments 
 | Image generation | ComfyUI and compatible local services | OpenAI and Google | Provider-dependent |
 | File upload | Yes | Yes | Processing depends on file type and model support |
 | Projects | Yes | Yes | Conversation organization and custom instructions |
+| Agent Hub | Yes | No | Uses the installed host CLI (Claude Code, Codex, OpenCode, Hermes) |
 | Model downloads | GGUF and MLX | No | Managed through the model/runtime interface |
 | API keys | N/A | Yes | Managed in authenticated settings |
 | Hardware acceleration | CPU, CUDA, ROCm, Metal | N/A | Applies to local execution |
