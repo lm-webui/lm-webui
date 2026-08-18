@@ -40,5 +40,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME"
+          # `--generate-notes` makes an extra REST call that occasionally 503s on GitHub's side
+          # (transient outage). Create idempotently + retry so a one-off hiccup doesn't fail the build.
+          for i in 1 2 3 4 5; do
+            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break
+            gh release create "$GITHUB_REF_NAME" --generate-notes --title "$GITHUB_REF_NAME" && break
+            echo "release create attempt $i failed, retrying in $((i*5))s..."
+            sleep $((i*5))
+          done
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || exit 1
           gh release upload "$GITHUB_REF_NAME" lm-webui.tar.gz --clobber

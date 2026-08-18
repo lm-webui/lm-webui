@@ -165,12 +165,13 @@ export default function ChatArea({
   ) : undefined;
 
   return (
-    <div className="h-screen w-full bg-background text-zinc-900  dark:text-zinc-100 flex overflow-hidden">
+    <div className="h-dvh w-full bg-background text-zinc-900  dark:text-zinc-100 flex overflow-hidden">
       <Sidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         selectedId={activeChatId}
         onSelect={async (id) => {
+          if (isMobile) setSidebarOpen(false); // auto-close the drawer on mobile
           setActiveChat(id);
           setActiveView("chat");
           // Load messages from backend if the conversation exists but has no messages loaded
@@ -179,10 +180,10 @@ export default function ChatArea({
             await store.loadMessagesForConversation(id);
           }
         }}
-        createNewChat={() => { handleNewChat(); setActiveView("chat"); }}
+        createNewChat={() => { if (isMobile) setSidebarOpen(false); handleNewChat(); setActiveView("chat"); }}
         sidebarCollapsed={sidebarCollapsed}
         setSidebarCollapsed={setSidebarCollapsed}
-        onViewChange={(v) => setActiveView(v as "chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime")}
+        onViewChange={(v) => { if (isMobile) setSidebarOpen(false); setActiveView(v as "chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime"); }}
       />
 
       <main className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-neutral-300/50 dark:bg-neutral-900/30">

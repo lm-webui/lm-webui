@@ -226,7 +226,8 @@ export default function Composer({
             <input
               type="file"
               multiple
-              className="hidden"
+              id="composer-file-input"
+              className="sr-only"
               ref={fileInputRef}
               onChange={handleFileSelect}
             />
@@ -247,16 +248,18 @@ export default function Composer({
                 className="w-56 p-2 rounded-2xl bg-neutral-200/90 dark:bg-neutral-900 border-zinc-300/50 dark:border-zinc-800/50"
               >
                 <div className="flex flex-col gap-1">
-                  <button
-                    onClick={() => { fileInputRef.current?.click(); }}
-                    disabled={isUploading || busy}
-                    className="flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
+                  <label
+                    htmlFor="composer-file-input"
+                    className={cn(
+                      "flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer",
+                      (isUploading || busy) && "opacity-50 pointer-events-none",
+                    )}
                   >
                     <span className="flex items-center gap-2">
                       <Paperclip className="h-4 w-4" /> Upload files
                     </span>
                     {isUploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                  </button>
+                  </label>
                   <button
                     onClick={() =>
                       !isImageMode && setIsSearchEnabled(!isSearchEnabled)

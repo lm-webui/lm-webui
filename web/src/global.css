@@ -65,6 +65,20 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Mobile: kill pull-to-refresh / horizontal rubber-band ("yawning"), the tap-highlight
+       flash, and double-tap zoom (keeps pinch-zoom for accessibility). */
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+}
+
+/* iOS auto-zooms any input/textarea with font-size < 16px; force 16px on touch so the composer,
+   search, and settings fields don't zoom the page when focused. Desktop keeps its own sizes. */
+@media (max-width: 767px) {
+  input,
+  textarea {
+    font-size: 16px !important;
   }
 }
 

@@ -1,5 +1,6 @@
 import * as React from "react"
 import { cn } from "@/lib/utils"
+import { copyText } from "@/lib/clipboard"
 import { Copy, Check, Download, Play, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible"
@@ -56,13 +57,10 @@ const CodeBlock = React.forwardRef<HTMLDivElement, CodeBlockProps>(
     const lines = children.split('\n').filter(line => line.trim() !== '')
 
     const handleCopy = async () => {
-      try {
-        await navigator.clipboard.writeText(children)
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2000)
-      } catch (err) {
-        console.error('Failed to copy text: ', err)
-      }
+      const ok = await copyText(children)
+      if (ok) setCopied(true)
+      else console.error('Failed to copy text')
+      setTimeout(() => setCopied(false), 2000)
     }
 
     const handleDownload = () => {

@@ -161,7 +161,7 @@ function ConversationItem({
         {!isEditing && !conversation.isTitleGenerating && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+              <Button variant="ghost" size="icon" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 max-md:opacity-100"
                 onClick={(e) => e.stopPropagation()}>
                 {isLoadingMessages?.[conversation.id] ? (
                   <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />

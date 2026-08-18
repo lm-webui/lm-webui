@@ -14,6 +14,7 @@ import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
 import AgentFiles from "./AgentFiles";
 import AgentTelemetry from "./AgentTelemetry";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/clipboard";
 
 interface Block { type: string; content: string; }
 interface AgentPrompt { prompt_id: string; tool: string; input: any; }
@@ -439,7 +440,8 @@ function ManageTab({ agents, agent, onRefresh }: {
   const [editingAgent, setEditingAgent] = useState("");
 
   const copy = async (cmd: string) => {
-    try { await navigator.clipboard.writeText(cmd); setCopied(cmd); setTimeout(() => setCopied(""), 1500); } catch {}
+    const ok = await copyText(cmd);
+    if (ok) { setCopied(cmd); setTimeout(() => setCopied(""), 1500); }
   };
 
   // Drill-down: clicking an agent opens its config/skill/memory editor.

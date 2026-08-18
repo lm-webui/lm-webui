@@ -18,6 +18,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
+import { copyText } from "@/lib/clipboard";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import { CodeBlock } from "@/components/chat/CodeBlock";
@@ -216,7 +217,8 @@ export function Message({
         .replace(/\n\s*\n/g, "\n\n")
         .trim();
 
-      await navigator.clipboard.writeText(plainText);
+      const ok = await copyText(plainText);
+      if (!ok) throw new Error("copy failed");
       setCopied(true);
       toast.success("Copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);

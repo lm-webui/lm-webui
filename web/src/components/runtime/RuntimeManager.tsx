@@ -19,6 +19,7 @@ import { RiImageAiFill } from "react-icons/ri";
 import { SiHuggingface, SiApple } from "react-icons/si";
 import { toast } from "sonner";
 import { authFetch } from "@/utils/api";
+import { copyText } from "@/lib/clipboard";
 
 interface Runtime {
   type: string;
@@ -329,9 +330,10 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard");
+  const copyToClipboard = async (text: string) => {
+    const ok = await copyText(text);
+    if (ok) toast.success("Copied to clipboard");
+    else toast.error("Failed to copy");
   };
 
   // Estimate max model size (billions of params) that fits GPU VRAM at a given context.
