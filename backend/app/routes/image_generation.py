@@ -3,6 +3,7 @@ Image Generation Routes — Unified Dispatcher
 Single endpoint that routes to the correct provider handler.
 """
 
+import asyncio
 import logging
 import time
 
@@ -50,6 +51,24 @@ async def generate_image(
     prompt = request.get("prompt", "")
     params = request.get("params", {})
 
+    # Hybrid img2img: a source image (raw data-URI or uploaded file refs) is passed
+    # directly to image-input-capable models; otherwise vision-describe → t2i.
+    from app.capabilities.image_gen import supports_image_input
+    from app.capabilities.vision import collect_image_data_uris, describe_data_uris
+
+    raw_image = request.get("image")
+    file_refs = request.get("file_references") or request.get("files")
+    source_uri = None
+    if raw_image and isinstance(raw_image, str) and raw_image.startswith("data:"):
+        source_uri = raw_image
+    elif file_refs:
+        uris = await asyncio.to_thread(collect_image_data_uris, file_refs)
+        source_uri = uris[0] if uris else None
+    if source_uri and not supports_image_input(provider, model):
+        desc = await describe_data_uris([source_uri], prompt, user_id["id"])
+        if desc:
+            prompt = f"{prompt}\n\nReference image description:\n{desc}".strip()
+
     if not prompt:
         raise HTTPException(400, "Prompt is required")
 
@@ -83,6 +102,7 @@ async def generate_image(
         negative=params.get("negative") or None,  # ComfyUI local path only
         user_id=user_id["id"],
         conversation_id=request.get("conversation_id"),
+        image_data_uri=source_uri if supports_image_input(provider, model) else None,
     )
 
     try:

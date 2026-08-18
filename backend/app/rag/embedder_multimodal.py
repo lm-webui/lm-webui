@@ -80,3 +80,18 @@ def is_available() -> bool:
         return True
     except Exception:
         return False
+
+
+def multimodal_enabled() -> bool:
+    """RAG multimodal pipeline active: RAG enabled AND SigLIP embedder available.
+
+    Single source of truth for the planner/retrieval/ingestion gates. When SigLIP isn't
+    installed the pipeline auto-falls back to BGE text-only.
+    """
+    if not is_available():
+        return False
+    try:
+        from app.core.config_manager import get_config
+        return bool(get_config().rag.enabled)
+    except Exception:
+        return False

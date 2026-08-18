@@ -37,8 +37,18 @@ async def generate_image_gemini(req: ChatRequest, background_tasks=None):
 
         url = f"{GEMINI_API}/{model_name}:generateContent?key={api_key}"
 
+        parts = [{"text": prompt}]
+        if req.image_data_uri:
+            # img2img: pass the source image as an inlineData part (data:image/png;base64,XXX)
+            try:
+                meta, b64 = req.image_data_uri.split(",", 1)
+                mime = meta.split(";")[0].split(":")[1]
+                parts.append({"inlineData": {"mimeType": mime, "data": b64}})
+            except Exception as exc:
+                logger.warning(f"Could not attach image part: {exc}")
+
         payload: dict = {
-            "contents": [{"parts": [{"text": prompt}]}],
+            "contents": [{"parts": parts}],
             "generationConfig": {"responseModalities": ["Text", "Image"]},
         }
 

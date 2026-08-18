@@ -102,33 +102,28 @@ export default function Composer({
   const handleSend = async () => {
     if (!value.trim() || busy) return;
 
-    let ok = false;
-    if (isImageMode) {
-      // Marker only — the backend smart-modality (default image provider) handles generation.
-      ok = await onSend(value, [{ type: "generating_image", prompt: value }]);
-    } else {
-      // Defer upload to send-time: upload pending files, then send with their refs.
-      let refs: any[] = [];
-      if (uploadedFiles.length) {
-        setIsUploading(true);
-        try {
-          const result = await FileService.uploadFiles(uploadedFiles.map((u) => u.file), conversationId || "");
-          if (!result.success || !result.results) {
-            toast.error("Upload failed");
-            setIsUploading(false);
-            return;
-          }
-          refs = result.results;
-        } catch (error) {
-          console.error("Upload failed", error);
+    // Defer upload to send-time: upload pending files, then send with their real refs.
+    // Image mode uploads too — the uploaded image becomes the img2img source.
+    let refs: any[] = [];
+    if (uploadedFiles.length) {
+      setIsUploading(true);
+      try {
+        const result = await FileService.uploadFiles(uploadedFiles.map((u) => u.file), conversationId || "");
+        if (!result.success || !result.results) {
           toast.error("Upload failed");
           setIsUploading(false);
           return;
         }
+        refs = result.results;
+      } catch (error) {
+        console.error("Upload failed", error);
+        toast.error("Upload failed");
         setIsUploading(false);
+        return;
       }
-      ok = await onSend(value, refs);
+      setIsUploading(false);
     }
+    let ok = await onSend(value, refs);
 
     // Only clear the prompt on success — on failure, restore it so the user can retry
     if (ok) {

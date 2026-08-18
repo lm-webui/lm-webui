@@ -54,8 +54,10 @@ def _claude_normalize(ev: dict) -> Optional[list[dict]]:
             if bt == "text" and b.get("text"):
                 out.append({"type": "output", "content": b["text"]})
             elif bt == "tool_use":
-                out.append({"type": "prompt", "data": {
-                    "prompt_id": b.get("id"), "tool": b.get("name"), "input": b.get("input") or {}}})
+                # With skip-permissions this tool_use is an EXECUTED tool call (not a permission
+                # ask) — surface it as honest inline activity, not a prompt card.
+                out.append({"type": "tool", "data": {
+                    "tool": b.get("name"), "input": b.get("input") or {}}})
         return out
     if t == "result":
         usage = ev.get("usage") or {}

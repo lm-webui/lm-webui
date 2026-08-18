@@ -34,24 +34,24 @@ async def execute(ctx: CapabilityContext) -> RetrievalResult:
     return RetrievalResult(chunks=chunks)
 
 
-def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> list[str]:
-    """RAG pipeline: filters -> embed -> hybrid search -> rerank -> context chunks.
+def _retrieve_raw(user_message: str, user_id: int, conversation_id: str | None) -> list[dict]:
+    """Retrieval up to the candidate pool: filters -> embed -> hybrid RRF -> dedup.
 
-    Returns un-numbered ``source\\ntext`` chunks; the prompt builder numbers them.
+    Returns raw chunk dicts (``chunk_id``/``text``/``file_name``/``_score``), pre-rerank
+    and pre-format, so callers can merge pools across BGE + SigLIP before ranking.
     """
     try:
         from app.core.config_manager import get_config
         cfg = get_config()
         if not cfg.rag.enabled:
-            return ""
+            return []
     except Exception:
-        return ""
+        return []
 
     try:
         from app.rag.query_parser import extract_filters
         from app.rag.embedder import embed_query
         from app.rag.vector_store import hybrid_search
-        from app.rag.reranker import rerank
 
         filters = extract_filters(user_message)
         query_vec = embed_query(user_message)
@@ -75,21 +75,42 @@ def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> l
                 continue
             seen.add(cid)
             unique.append(c)
-
-        top_chunks = rerank(user_message, unique, top_k=5) or unique[:5]
-
-        budget = getattr(cfg.rag, "context_token_budget", 2000)
-        parts: list[str] = []
-        used = 0
-        for c in top_chunks:
-            source = c.get("file_name", "source")
-            formatted = f"{source}\n{c.get('text', '')}"
-            approx = max(1, len(formatted) // 3)
-            if used + approx > budget:
-                break
-            used += approx
-            parts.append(formatted)
-        return parts
+        return unique
     except Exception as exc:
         logger.warning("RAG retrieval failed: %s", exc)
         return []
+
+
+def _format_chunks(top_chunks: list[dict]) -> list[str]:
+    """Budget-limit and format reranked candidates into un-numbered ``source\\ntext`` chunks."""
+    try:
+        from app.core.config_manager import get_config
+        cfg = get_config()
+    except Exception:
+        cfg = None
+    budget = getattr(cfg.rag, "context_token_budget", 2000) if cfg is not None else 2000
+
+    parts: list[str] = []
+    used = 0
+    for c in top_chunks:
+        source = c.get("file_name") or c.get("source_file") or "source"
+        formatted = f"{source}\n{c.get('text', '')}"
+        approx = max(1, len(formatted) // 3)
+        if used + approx > budget:
+            break
+        used += approx
+        parts.append(formatted)
+    return parts
+
+
+def _retrieve(user_message: str, user_id: int, conversation_id: str | None) -> list[str]:
+    """Legacy BGE-only RAG path: raw pool -> its own rerank -> formatted chunks.
+
+    Returns un-numbered ``source\\ntext`` chunks; the prompt builder numbers them.
+    """
+    candidates = _retrieve_raw(user_message, user_id, conversation_id)
+    if not candidates:
+        return []
+    from app.rag.reranker import rerank
+    top = rerank(user_message, candidates, top_k=5) or candidates[:5]
+    return _format_chunks(top)

@@ -19,20 +19,18 @@ class RAGProcessor:
         """Lazy-init: import and validate that all sub-modules load."""
         if self._ready:
             return
-        from app.core.config_manager import get_config
-        try:
-            multimodal = get_config().rag.is_multimodal
-        except Exception:
-            multimodal = False
         # BGE deep-text (used by both engines — retrieve_multimodal reuses it).
         from app.rag import embedder  # noqa: F401
         from app.rag import vector_store  # noqa: F401
+        try:
+            from app.rag.embedder_multimodal import multimodal_enabled, embed_text_multimodal
+            multimodal = multimodal_enabled()
+        except Exception:
+            multimodal = False
         if multimodal:
             # Pre-warm the SigLIP multimodal model so the first query/upload is fast.
             try:
-                from app.rag.embedder_multimodal import is_available, embed_text_multimodal
-                if is_available():
-                    embed_text_multimodal(["warm"])  # cached; loads weights into RAM
+                embed_text_multimodal(["warm"])  # cached; loads weights into RAM
             except Exception as exc:
                 logger.warning("SigLIP pre-warm failed: %s", exc)
 
@@ -133,10 +131,11 @@ class RAGProcessor:
         count = insert_chunks(records, user_id)
 
         # Architecture B (multimodal): also ingest into the SigLIP latent tables when
-        # the multimodal engine is enabled. Docs get short SigLIP chunks/captions;
+        # RAG is on and SigLIP is available. Docs get short SigLIP chunks/captions;
         # images get a vision row + a text anchor. BGE deep-text indexing above is kept.
         try:
-            multimodal = get_config().rag.is_multimodal
+            from app.rag.embedder_multimodal import multimodal_enabled
+            multimodal = multimodal_enabled()
         except Exception:
             multimodal = False
         if multimodal:

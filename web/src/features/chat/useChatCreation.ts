@@ -1,19 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { ChatService, ChatRequest } from "./chatService";
-import { ImageService, ImageRequest } from "@/features/images/imageService";
-import { useChatStore, useAddMessage, useFinalizeMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartImageGeneration, useCompleteImageGeneration, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
+import { useChatStore, useAddMessage, useFinalizeMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
-
-// Simple image message formatter - creates text-only content (image will be rendered separately)
-const formatImageMessage = (imageUrl: string): string => {
-  console.log("🔄 formatImageMessage called with URL:", imageUrl?.substring(0, 50) + "...");
-
-  // Return only text content - image will be rendered via generatedImageUrl field
-  return `**Image Generated Successfully!**
-
-*Click on the image below to view it in full size.*`;
-};
 
 // Generate unique message IDs to prevent conflicts
 const generateMessageId = (prefix: string = 'msg'): string => {
@@ -81,8 +70,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
   const conversations = useChatStore(useShallow(state => state.conversations));
 
   // Zustand loading actions
-  const startImageGeneration = useStartImageGeneration();
-  const completeImageGeneration = useCompleteImageGeneration();
   const startConversationCreation = useStartConversationCreation();
   const completeConversationCreation = useCompleteConversationCreation();
 
@@ -161,13 +148,9 @@ export function useChatCreation(options?: UseChatCreationOptions) {
 
     const currentInput = message;
 
-    // Set loading state based on message type (the explicit imageMode flag routes via the
-    // normal chat pipeline → conversation loading, not the legacy image-generation loader).
-    if (hookOptions.isImageMode && !imageMode) {
-      startImageGeneration(targetConversationId);
-    } else {
-      startConversationCreation();
-    }
+    // Image mode now streams through the normal chat pipeline (smart-modality), so both
+    // use conversation loading rather than the legacy image-generation loader.
+    startConversationCreation();
     
     // Reset search status
     setSearchStatus("");
@@ -179,69 +162,9 @@ export function useChatCreation(options?: UseChatCreationOptions) {
     let receivedContent = false;
     let receivedImageUrl = "";
     try {
-    // Check if image mode is enabled and route to image generation
-    if (hookOptions.isImageMode && !imageMode) {
-      // Route to image generation API
-      const imageRequest: ImageRequest = {
-        message: currentInput,
-        provider: hookOptions.selectedLLM,
-        model: hookOptions.selectedModel,
-        api_key: "",
-      };
-
-      const imageResult = await ImageService.generateImage(imageRequest, {
-        isAuthenticated: hookOptions.isAuthenticated,
-        currentConversationId,
-        currentSessionId,
-        conversations: Object.values(conversations) as any,
-        selectedModel: hookOptions.selectedModel,
-        modelMapping: hookOptions.modelMapping,
-        setCurrentSessionId: () => {},
-        setCurrentConversationId: () => {},
-        setConversations: () => {},
-      });
-
-      console.log("🖼️ Image generation result:", {
-        imageUrl: imageResult.imageUrl,
-        conversationId: imageResult.conversationId,
-        provider: hookOptions.selectedLLM,
-        imageUrlType: typeof imageResult.imageUrl,
-        imageUrlLength: imageResult.imageUrl?.length
-      });
-
-      // Create assistant message using unified formatting - ensures consistency across providers
-      const assistantMessage = {
-        id: assistantMessageId,
-        role: "assistant" as const,
-        content: formatImageMessage(imageResult.imageUrl),
-        timestamp: new Date(),
-        generatedImageUrl: imageResult.imageUrl,
-        created_at: new Date().toISOString()
-      };
-
-      console.log("🤖 Adding assistant message to state:", {
-        id: assistantMessageId,
-        content: assistantMessage.content.substring(0, 50) + "...",
-      });
-
-      targetIdRef.current = assistantMessageId;
-
-      // Add assistant message to Zustand store
-      if (currentConversationId) {
-        addMessage(currentConversationId, assistantMessage);
-      }
-
-      // Complete image generation loading
-      completeImageGeneration(currentConversationId);
-
-      // Reset image mode after successful generation
-      if (options?.setIsImageMode) {
-        options.setIsImageMode(false);
-      }
-
-      } else {
-        // Use regular chat service for normal mode
-        const chatRequest: ChatRequest = {
+      // Route via the normal chat pipeline (smart-modality). Image mode streams the same
+      // way and lands as an `image` event → onImage finalizes generatedImageUrl on the message.
+      const chatRequest: ChatRequest = {
           message: currentInput,
           provider: hookOptions.selectedLLM,
           model: hookOptions.selectedModel,
@@ -251,7 +174,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           file_references: fileReferences,
           web_search: hookOptions.isSearchEnabled ?? false,
           search_provider: hookOptions.selectedSearchEngine ?? "duckduckgo",
-          is_image_mode: imageMode,
+          is_image_mode: hookOptions.isImageMode || imageMode,
         };
 
       // Stream tokens into this assistant message as they arrive.
@@ -335,7 +258,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           // Add only assistant message (user message already in localStorage from earlier)
           localStorage.setItem(`tempMessages_${result.sessionId}`, JSON.stringify([...existingMessages, localAssistantMessage]));
         }
-      }
     } catch (error: any) {
       // Only treat as a failed send (keep prompt) if no assistant content was streamed —
       // a mid-stream/late error after content counts as sent so the prompt clears.
@@ -350,17 +272,17 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         }
       }
     } finally {
-      // Ensure loading states are cleared
-      if (hookOptions.isImageMode && !imageMode) {
-        completeImageGeneration(currentConversationId);
-      } else {
-        completeConversationCreation();
+      // Ensure loading states are cleared.
+      completeConversationCreation();
+      // Image mode is a one-shot generation — reset the toggle when the send settles.
+      if (hookOptions.isImageMode && options?.setIsImageMode) {
+        options.setIsImageMode(false);
       }
       setSearchStatus(""); // Clear search status
       abortControllerRef.current = null; // Clear the controller
     }
     return sent;
-  }, [options, activeChatId, messages, conversations, addMessage, createNewChat, setActiveChat, startImageGeneration, completeImageGeneration, startConversationCreation, completeConversationCreation]);
+  }, [options, activeChatId, messages, conversations, addMessage, createNewChat, setActiveChat, startConversationCreation, completeConversationCreation]);
 
   const handleStopMessage = useCallback(() => {
     ChatService.stopMessage(abortControllerRef.current, setIsLoading);

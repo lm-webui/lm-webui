@@ -6,6 +6,7 @@ export interface ImageRequest {
   provider: string;
   model: string;
   api_key?: string;
+  file_references?: any[];
 }
 
 export interface Conversation {

@@ -26,9 +26,7 @@ rag:
   context_token_budget: 2000
   history_token_budget: 4000
   query_rewrite: false
-  engine: "multimodal"          # "bge" (legacy text) | "multimodal" (Architecture B)
   multimodal:
-    enabled: true
     vision_model: "google/siglip2-base-patch16-224"
     short_chunk_words: 50
     audio:

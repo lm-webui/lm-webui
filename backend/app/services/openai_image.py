@@ -43,6 +43,9 @@ async def generate_image_openai(req: ChatRequest, background_tasks=None):
         def _generate():
             client = OpenAI(api_key=api_key)
             kwargs = dict(model=model, prompt=prompt, n=1, size=size, quality=quality)
+            # gpt-image-1 supports an `image` param (list of data-URIs) for img2img.
+            if req.image_data_uri and "gpt-image" in (model or "").lower():
+                kwargs["image"] = [req.image_data_uri]
             # gpt-image-1 returns b64_json by default; don't pass response_format
             return client.images.generate(**kwargs)
 

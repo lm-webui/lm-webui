@@ -240,6 +240,7 @@ export interface AgentStreamCallbacks {
   onOutput?: (line: string) => void;
   onStatus?: (data: { status?: string; session_id?: string }) => void;
   onPrompt?: (prompt: { prompt_id: string; tool: string; input: any }) => void;
+  onTool?: (tool: { tool: string; input: any }) => void;
   onRun?: (run: any) => void;
   onError?: (err: Error) => void;
 }
@@ -262,6 +263,9 @@ export async function streamAgent(
           break;
         case 'prompt':
           if (ev.data) cb.onPrompt?.(ev.data);
+          break;
+        case 'tool':
+          if (ev.data) cb.onTool?.(ev.data);
           break;
         case 'run':
           if (ev.data) cb.onRun?.(ev.data);
@@ -304,7 +308,7 @@ export async function getAgentTranscript(agent: string, sessionId: string): Prom
 export async function getAgentSessions(agent: string): Promise<{ sessions: any[] }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions`);
 }
-export async function getAgentCommands(agent: string): Promise<{ commands: { id: string; label: string; hint?: string }[] }> {
+export async function getAgentCommands(agent: string): Promise<{ skills: { id: string; label: string; hint?: string }[] }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/commands`);
 }
 export async function getAgentUsage(agent: string): Promise<{
@@ -462,6 +466,11 @@ export async function generateImage(req: ChatRequest, conversationId?: string): 
     api_key: apiKeyToUse,
     params: (req as any).params || { size: "1024x1024" },
   };
+
+  // img2img: forward uploaded image refs so the backend can resolve and attach them.
+  if ((req as any).file_references && (req as any).file_references.length) {
+    imageRequest.file_references = (req as any).file_references;
+  }
 
   if (conversationId) {
     imageRequest.conversation_id = conversationId;

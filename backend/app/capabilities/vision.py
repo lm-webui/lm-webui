@@ -138,6 +138,38 @@ def collect_image_data_uris(file_references: list) -> list:
         db.close()
 
 
+async def describe_data_uris(uris: list, message: str = "", user_id: int = 1) -> str:
+    """Describe image data-URIs with the configured/local vision model.
+
+    Used as the t2i fallback: when the selected image provider/model can't take a
+    source image (DALL-E, ComfyUI), we still want the user's image to influence the
+    result, so a vision pass turns it into a text description. Returns "" if no vision
+    model is available (caller keeps the plain prompt).
+    """
+    if not uris:
+        return ""
+    try:
+        from app.core.config_manager import get_config as _vc
+        from app.providers.factory import ProviderFactory
+        vc = _vc().vision
+        model = _user_vision_model(user_id) or getattr(vc, "model", "") or ""
+        if getattr(vc, "provider", ""):
+            provider = ProviderFactory.get_provider(vc.provider)
+            if provider:
+                return await _describe(provider, uris, message)
+        if not model or not _health(model):
+            return ""
+        from app.runtime.vision_runtime import vision_runtime
+        vision_runtime.model = model
+        if not await vision_runtime.start():
+            return ""
+        from app.providers.remote.openai import OpenAIProvider
+        provider = OpenAIProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
+        return await _describe(provider, uris, message)
+    except Exception:
+        return ""
+
+
 async def execute(ctx: CapabilityContext) -> VisionResult:
     """Collect image data-URIs and resolve the vision provider into ctx.
 

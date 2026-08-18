@@ -100,13 +100,7 @@ class RAGConfig(BaseModel):
     history_token_budget: int = Field(default=4000, ge=200, le=64000, description="Max tokens of conversation history (summary + recent messages) injected")
     query_rewrite: bool = Field(default=False, description="Rewrite short/ambiguous queries via LLM before embedding (conversational RAG)")
     top_k_rerank: int = Field(default=5, ge=1, le=20, description="Final items after reranking")
-    engine: str = Field(default="multimodal", description="Retrieval engine: 'bge' (legacy text) or 'multimodal'")
     multimodal: "MultimodalConfig" = Field(default_factory=lambda: MultimodalConfig())
-
-    @property
-    def is_multimodal(self) -> bool:
-        """True when the multimodal latent engine is the active RAG engine."""
-        return self.engine == "multimodal"
 
 class AudioConfig(BaseModel):
     """Audio ingestion for Architecture B (voice / sound search)."""
@@ -118,7 +112,6 @@ class AudioConfig(BaseModel):
 
 class MultimodalConfig(BaseModel):
     """Architecture B — modality-native multimodal retrieval (SigLIP)."""
-    enabled: bool = Field(default=False, description="Enable multimodal latent retrieval (SigLIP)")
     vision_model: str = Field(default="google/siglip2-base-patch16-224", description="SigLIP2 vision/text model")
     short_chunk_words: int = Field(default=50, ge=10, le=200, description="Max words for SigLIP short chunks/captions")
     audio: AudioConfig = Field(default_factory=AudioConfig)

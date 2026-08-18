@@ -44,10 +44,14 @@ _DOC_HINTS = re.compile(
 
 
 def _multimodal_enabled() -> bool:
-    """True when Architecture B (multimodal latent retrieval) is the active RAG engine."""
+    """True when multimodal latent retrieval can run (RAG on + SigLIP available).
+
+    When False, the planner falls back to the BGE text-only `retrieve` path so retrieval
+    still works on SigLIP-less installs instead of silently querying empty latent tables.
+    """
     try:
-        from app.core.config_manager import get_config
-        return get_config().rag.is_multimodal
+        from app.rag.embedder_multimodal import multimodal_enabled
+        return multimodal_enabled()
     except Exception:
         return False
 
@@ -83,8 +87,13 @@ def plan(
     has_docs = _has_docs(file_references or [])
 
     # User's explicit image-mode intent overrides classification → force image generation.
+    # With an image attached, also run vision (describe) so a t2i-only provider can
+    # use the description; img2img-capable models get the raw image directly.
     if image_mode:
         p.diffusion = True
+        if has_images:
+            p.vision = True
+            p.vision_mode = "describe"
         return p
 
     if intent.processing_class == ProcessingClass.GENERATE:

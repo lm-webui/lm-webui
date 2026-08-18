@@ -1,8 +1,10 @@
 """Detect the host CLI agents (claude, codex, opencode, hermes)."""
+import json
 import re
 import shutil
 import subprocess
 import time
+from pathlib import Path
 
 from app.core.config_manager import get_data_dir
 
@@ -124,3 +126,75 @@ def profile(name: str) -> dict:
         "skill": _read("skill.md"),
         "install_cmd": cfg["install"],
     }
+
+
+# ── Installed Claude skills/plugins ─────────────────────────────────────────
+# Claude Code surfaces installed skills/plugins as "/<plugin>:<skill>" slash commands (and plain
+# "/<skill>" for user-level skills under ~/.claude/skills). Discover them from the host so the
+# Agent Hub's "/" menu reflects whatever the CLI has installed — no per-skill UI code needed.
+def _skill_desc(path: Path) -> str:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    if not text.startswith("---"):
+        return ""
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return ""
+    fm = parts[1]
+    for i, line in enumerate(fm.splitlines()):
+        if line.strip().startswith("description:"):
+            d = line.split(":", 1)[1].strip().strip(">").strip()
+            if not d:
+                rest = fm.splitlines()[i + 1:]
+                d = next((l.strip().strip(">").strip() for l in rest if l.strip()), "")
+            return d[:80] or ""
+    return ""
+
+
+def _skill_cmd(skill_dir: Path, prefix: str = ""):
+    f = skill_dir / "SKILL.md"
+    if not f.exists():
+        return None
+    name = skill_dir.name
+    label = f"/{prefix}:{name}" if prefix else f"/{name}"
+    return {"id": label.lstrip("/"), "label": label, "hint": _skill_desc(f)}
+
+
+def _claude_skills() -> list[dict]:
+    out: list[dict] = []
+    seen: set[str] = set()
+    home = Path.home() / ".claude"
+    # User-level skills: ~/.claude/skills/<name>/SKILL.md -> /<name>
+    skills_root = home / "skills"
+    if skills_root.is_dir():
+        for d in sorted(skills_root.iterdir()):
+            if d.is_dir():
+                cmd = _skill_cmd(d)
+                if cmd and cmd["id"] not in seen:
+                    seen.add(cmd["id"]); out.append(cmd)
+    # Installed plugins: installed_plugins.json -> installPath/skills/<name>/SKILL.md -> /<plugin>:<name>
+    ip = home / "plugins" / "installed_plugins.json"
+    if ip.exists():
+        try:
+            data = json.loads(ip.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            data = {}
+        for key, entries in (data.get("plugins") or {}).items():
+            plugin_id = key.split("@")[0] or key
+            for e in entries or []:
+                skills_dir = Path(e.get("installPath") or "") / "skills"
+                if not skills_dir.is_dir():
+                    continue
+                for d in sorted(skills_dir.iterdir()):
+                    if d.is_dir():
+                        cmd = _skill_cmd(d, prefix=plugin_id)
+                        if cmd and cmd["id"] not in seen:
+                            seen.add(cmd["id"]); out.append(cmd)
+    return out
+
+
+def discover_skills(name: str) -> list[dict]:
+    """Installed skills/plugins for an agent (currently claude; others have none)."""
+    return _claude_skills() if name == "claude" else []

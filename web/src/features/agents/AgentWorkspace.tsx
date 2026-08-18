@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from "react";
 import {
-  Bot, Loader2, Copy, Check, RefreshCw, ShieldQuestion, ArrowLeft,
+  Bot, Loader2, Copy, Check, RefreshCw, ArrowLeft, Wrench,
   PanelRightClose, PanelRightOpen, Activity, CircleDot, Clock, Plus, MessageSquareText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch, streamAgent, answerAgent, autoApproveAgent, getAgentSessions, getAgentTranscript } from "@/utils/api";
+import { authFetch, streamAgent, getAgentSessions, getAgentTranscript } from "@/utils/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AgentCommandMenu } from "./AgentCommandMenu";
 import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
@@ -17,14 +17,19 @@ import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 
 interface Block { type: string; content: string; }
-interface AgentPrompt { prompt_id: string; tool: string; input: any; }
+interface AgentTool { tool: string; input: any; }
 interface Msg {
   role: "user" | "agent";
   blocks?: Block[];
   content?: string;
   id?: string;
   streaming?: boolean;
-  prompts?: AgentPrompt[];
+  tools?: AgentTool[];
+}
+
+function truncateInput(input: any): string {
+  const s = typeof input === "string" ? input : JSON.stringify(input);
+  return (s || "").replace(/\s+/g, " ").slice(0, 80) || "…";
 }
 export default function AgentWorkspace() {
   const isMobile = useIsMobile();
@@ -163,41 +168,6 @@ function AgentSelector({ agents, agent, onSelect, size = "md" }: {
   );
 }
 
-/* ---------------------- Interactive permission prompt --------------------- */
-function PromptCard({ prompt, onAnswer, onAutoApprove }: {
-  prompt: AgentPrompt; onAnswer: (approve: boolean) => void; onAutoApprove?: () => void;
-}) {
-  const [done, setDone] = useState<"approved" | "denied" | "auto" | null>(null);
-  const input = typeof prompt.input === "string" ? prompt.input : JSON.stringify(prompt.input);
-  return (
-    <div className="mt-2 rounded-lg border border-border bg-muted/30 p-2 space-y-1">
-      <div className="text-xs font-medium flex items-center gap-1.5">
-        <ShieldQuestion className="h-3.5 w-3.5 text-muted-foreground" />
-        <span>{prompt.tool}</span>
-      </div>
-      <pre className="text-[.65rem] whitespace-pre-wrap font-mono text-muted-foreground line-clamp-3">{input}</pre>
-      {done === null ? (
-        <div className="flex gap-1.5 pt-0.5 flex-wrap">
-          <Button size="sm" variant="secondary" className="h-6 text-xs"
-            onClick={() => { setDone("approved"); onAnswer(true); }}>Approve</Button>
-          <Button size="sm" variant="ghost" className="h-6 text-xs"
-            onClick={() => { setDone("denied"); onAnswer(false); }}>Deny</Button>
-          {onAutoApprove && (
-            <Button size="sm" variant="outline" className="h-6 text-xs"
-              onClick={() => { setDone("auto"); onAutoApprove(); }}>Auto-approve session</Button>
-          )}
-        </div>
-      ) : (
-        <div className="text-[.65rem] text-muted-foreground">
-          {done === "approved" && "✓ Approved"}
-          {done === "denied" && "✕ Denied"}
-          {done === "auto" && "✓ Auto-approved for this session"}
-        </div>
-      )}
-    </div>
-  );
-}
-
 /* ------------------------------- Chat tab ------------------------------- */
 function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, setMessages }: {
   agents: AgentInfo[]; agent: string; onSelect: (id: string) => void;
@@ -207,14 +177,9 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [sessionModel, setSessionModel] = useState("");
-  const [sessionSkill, setSessionSkill] = useState("");
 
-  // Pick an agent (creates a new session via the lifted onSelect) and reset per-chat options.
-  const pickAgent = (id: string) => {
-    setSessionModel("");
-    setSessionSkill("");
-    onSelect(id);
-  };
+  // Pick an agent (creates a new session via the lifted onSelect).
+  const pickAgent = (id: string) => { setSessionModel(""); onSelect(id); };
 
   const compactSession = async () => {
     if (!sessionId) return;
@@ -222,12 +187,13 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
     setMessages([]);
   };
 
+  // Slash commands that map to real app actions run; TUI-only ones insert as literal text.
   const handleCommand = (id: string, value?: string) => {
     if (id === "new") pickAgent(agent);
     else if (id === "clear") setMessages([]);
     else if (id === "compact") compactSession();
     else if (id === "model" && value) setSessionModel(value);
-    else if (id === "skill" && value) setSessionSkill(value);
+    else if (!value) setInput((p) => (p ? p.replace(/\s*[/@]\S*$/, "") : "") + " /" + id + " ");
   };
 
   const send = async () => {
@@ -236,7 +202,7 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
     setBusy(true);
     setInput("");
     const msgId = `a${Date.now()}`;
-    setMessages((m) => [...m, { role: "user", content: text }, { role: "agent", id: msgId, content: "", streaming: true, prompts: [] }]);
+    setMessages((m) => [...m, { role: "user", content: text }, { role: "agent", id: msgId, content: "", streaming: true, tools: [] }]);
 
     const patch = (fn: (msg: Msg) => Msg) =>
       setMessages((m) => m.map((msg) => (msg.id === msgId ? fn(msg) : msg)));
@@ -246,7 +212,6 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
       message: text,
       ...(sessionId ? { session_id: sessionId } : {}),
       ...(sessionModel ? { model: sessionModel } : {}),
-      ...(sessionSkill ? { skill: sessionSkill } : {}),
     }, {
       onStatus: (d) => {
         if (d.session_id) setSessionId(d.session_id); // learn the real live-session id
@@ -255,8 +220,8 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
         acc += line;
         patch((msg) => ({ ...msg, content: acc, streaming: true }));
       },
-      onPrompt: (p) => {
-        patch((msg) => ({ ...msg, prompts: [...(msg.prompts || []), p], streaming: false }));
+      onTool: (t) => {
+        patch((msg) => ({ ...msg, tools: [...(msg.tools || []), t] }));
       },
       onRun: () => patch((msg) => ({ ...msg, streaming: false })),
       onError: (err) => patch((msg) => ({ ...msg, content: acc || err.message || "Agent run failed", streaming: false })),
@@ -281,16 +246,19 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
                 </div>
               )}
               <div className="whitespace-pre-wrap">{m.content || (m.streaming ? "" : "")}</div>
-              {m.prompts && m.prompts.map((p) => (
-                <PromptCard key={p.prompt_id} prompt={p} onAnswer={(approve) => answerAgent(agent, p.prompt_id, approve)}
-                  onAutoApprove={() => autoApproveAgent(agent)} />
+              {m.tools && m.tools.map((t, ti) => (
+                <div key={ti}
+                  className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border/50 bg-background/40 px-2 py-1 text-[.65rem] font-mono text-muted-foreground">
+                  <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
+                  <span className="break-all"><span className="font-semibold text-foreground/80">{t.tool}</span> {truncateInput(t.input)}</span>
+                </div>
               ))}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="border-t p-3 space-y-2">
+      <div className="shrink-0 p-3 space-y-2 bg-transparent">
         {/* Agent selector — each agent starts a new session with it */}
         <AgentSelector agents={agents} agent={agent} onSelect={pickAgent} />
 

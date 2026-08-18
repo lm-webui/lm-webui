@@ -19,6 +19,8 @@ class ChatRequest(BaseModel):
     style: Optional[str] = "vivid"
     negative: Optional[str] = None  # ComfyUI negative prompt (local image path only)
     metadata: Optional[dict] = None
+    # img2img — base64 data-URI of a source image for image-input-capable models
+    image_data_uri: Optional[str] = None
 
 
 class ModelsResponse(BaseModel):

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
-from app.agents.registry import AGENTS, detect_all, profile, cli_commands
+from app.agents.registry import AGENTS, detect_all, profile, discover_skills
 from app.agents.runner import run, run_collect, InteractiveSession
 from app.agents import agent_files as af
 from app.agents.providers import is_interactive, context_file
@@ -56,10 +56,10 @@ async def get_profile(agent: str):
 
 @router.get("/{agent}/commands", dependencies=[Depends(require_permission("agents.run"))])
 async def get_commands(agent: str):
-    """The real command/flag surface of the installed CLI, parsed from `--help`."""
+    """Installed skills/plugins (Claude) surfaced as slash commands — no per-skill UI code."""
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    return {"commands": cli_commands(agent)}
+    return {"skills": discover_skills(agent)}
 
 
 @router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
@@ -219,6 +219,8 @@ async def chat_stream(agent: str, req: ChatRequest):
                         yield await _sse({"type": "output", "content": ev["content"]})
                     elif ev["type"] == "prompt":
                         yield await _sse({"type": "prompt", "data": ev["data"]})
+                    elif ev["type"] == "tool":
+                        yield await _sse({"type": "tool", "data": ev["data"]})
                     elif ev["type"] == "complete":
                         run_info = sessions.end_run(sid, 0, usage=ev.get("usage"),
                                                     cost_usd=ev.get("cost_usd"),
