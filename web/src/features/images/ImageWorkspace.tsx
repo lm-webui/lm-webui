@@ -88,6 +88,12 @@ export default function ImageWorkspace() {
             connected: !!runtimes.comfyui?.installed,
             models: apiModels.local || ["sdxl", "flux-dev", "flux-schnell", "sd3", "ltx"],
           },
+          gguf: {
+            label: "GGUF", icon: "server",
+            // GGUF-quantized diffusion also runs through ComfyUI (its GGUF node pack)
+            connected: !!runtimes.comfyui?.installed,
+            models: apiModels.gguf || ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
+          },
         });
       } catch { /* ignore */ }
       setLoading(false);
@@ -109,6 +115,11 @@ export default function ImageWorkspace() {
       { value: "9:16", label: "Portrait Tall (9:16)" },
     ],
     local: [
+      { value: "1024x1024", label: "Square (1024×1024)" },
+      { value: "1536x1024", label: "Landscape (1536×1024)" },
+      { value: "1024x1536", label: "Portrait (1024×1536)" },
+    ],
+    gguf: [
       { value: "1024x1024", label: "Square (1024×1024)" },
       { value: "1536x1024", label: "Landscape (1536×1024)" },
       { value: "1024x1536", label: "Portrait (1024×1536)" },
@@ -156,8 +167,8 @@ export default function ImageWorkspace() {
           conversation_id: convId,
           params: {
             size, quality, steps, seed: seed >= 0 ? seed + i : undefined,
-            // negative prompt applies only to the local ComfyUI path
-            ...(provider === "local" ? { negative } : {}),
+            // negative prompt applies only to the local ComfyUI paths
+            ...(provider === "local" || provider === "gguf" ? { negative } : {}),
           },
         } as any);
         if (imageUrl) setResults((prev) => [imageUrl, ...prev]);

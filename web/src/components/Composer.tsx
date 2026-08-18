@@ -322,6 +322,7 @@ export default function Composer({
                         "-image",
                         "gemini-3",
                         "gemini-2.5-flash-image",
+                        "gguf",
                       ].some((k) => m.toLowerCase().includes(k)),
                     )
                   : availableModels || []

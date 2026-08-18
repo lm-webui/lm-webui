@@ -26,6 +26,7 @@ PROVIDER_ROUTING = {
     "google": generate_image_gemini,
     "gemini": generate_image_gemini,  # alias
     "comfyui": generate_image_local,
+    "gguf": generate_image_local,     # GGUF-quantized diffusion via ComfyUI's GGUF nodes
 }
 
 CLOUD_CHAT_VISION = {"grok", "kimi", "deepseek"}
@@ -227,6 +228,7 @@ async def get_image_models(user_id: dict = Depends(get_current_user)):
         "openai": ["dall-e-3", "dall-e-2", "gpt-image-1"],
         "google": ["imagen-3", "gemini-2.5-flash-image"],
         "comfyui": ["sdxl", "flux-dev", "flux-schnell", "sd3", "ltx"],
+        "gguf": ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
     }
     api_keys = registry.get_user_api_keys(user_id["id"])
 
@@ -298,5 +300,6 @@ async def image_generation_status(user_id: dict = Depends(get_current_user)):
             "openai": "ready" if has_key("openai") else "missing_key",
             "google": "ready" if has_key("google") else "missing_key",
             "comfyui": "check_runtime",
+            "gguf": "check_runtime",
         },
     }

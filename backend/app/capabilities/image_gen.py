@@ -18,6 +18,7 @@ _IMAGE_HANDLERS = {
     "google": "app.services.gemini_image.generate_image_gemini",
     "gemini": "app.services.gemini_image.generate_image_gemini",
     "comfyui": "app.services.local_image.generate_image_local",
+    "gguf": "app.services.local_image.generate_image_local",
 }
 
 

@@ -30,8 +30,10 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
     if not user_id:
         return JSONResponse(status_code=400, content={"error": "User ID required"})
 
-    model = req.model or "sdxl"
-    if model not in WORKFLOWS:
+    provider = getattr(req, "provider", "") or ""
+    is_gguf = provider == "gguf"
+    model = req.model or ("flux1-dev" if is_gguf else "sdxl")
+    if not is_gguf and model not in WORKFLOWS:
         return JSONResponse(status_code=400, content={"error": f"Unknown model: {model}"})
 
     try:
@@ -53,11 +55,14 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
                 "height": height,
                 "seed": seed,
                 "negative": getattr(req, "negative", "") or "",
+                # Base checkpoint providing CLIP + VAE for a GGUF UNet (best-effort default).
+                "base_checkpoint": "flux1-dev.safetensors",
             }
 
+            build = _build_workflow_gguf if is_gguf else _build_workflow
             async with session.post(
                 f"{COMFYUI_BASE}/prompt",
-                json={"prompt": await _build_workflow(prompt_data)},
+                json={"prompt": await build(prompt_data)},
             ) as resp:
                 if resp.status != 200:
                     return JSONResponse(status_code=502, content={"error": f"ComfyUI error: {await resp.text()}"})
@@ -70,8 +75,8 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
 
         result = await save_generated_image(
             image_bytes=image_data, user_id=user_id, prompt=req.message,
-            model=model, provider="local",
-            params={"steps": steps, "seed": seed, "size": f"{width}x{height}"},
+            model=model, provider=provider or "local",
+            params={"steps": steps, "seed": seed, "size": f"{width}x{height}", "gguf": is_gguf},
         )
         return {"status": "generated", "image_url": result["image_url"]}
 
@@ -105,6 +110,31 @@ async def _build_workflow(params: dict) -> dict:
         "7": {"class_type": "CLIPTextEncode", "inputs": {"text": params.get("negative", ""), "clip": ["4", 1]}},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
         "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "lmwebui", "images": ["8", 0]}},
+    }
+
+
+def _build_workflow_gguf(params: dict) -> dict:
+    """ComfyUI graph for GGUF-quantized diffusion (needs ComfyUI's GGUF node pack).
+
+    The GGUF UNet loads via `UnetLoaderGGUF`; CLIP + VAE come from a base safetensors checkpoint.
+    ponytail: best-effort against the standard node names — the user must have the GGUF nodes + the
+    base checkpoint present in ComfyUI.
+    """
+    return {
+        "1": {"class_type": "UnetLoaderGGUF",
+              "inputs": {"unet_name": params["model"] + ".gguf", "weight_dtype": "default"}},
+        "2": {"class_type": "CheckpointLoaderSimple",
+              "inputs": {"ckpt_name": params.get("base_checkpoint", "flux1-dev.safetensors")}},
+        "3": {"class_type": "CLIPTextEncode", "inputs": {"text": params["prompt"], "clip": ["2", 1]}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": params.get("negative", ""), "clip": ["2", 1]}},
+        "5": {"class_type": "EmptyLatentImage",
+              "inputs": {"width": params["width"], "height": params["height"], "batch_size": 1}},
+        "6": {"class_type": "KSampler", "inputs": {
+            "seed": params.get("seed", 42), "steps": params["steps"], "cfg": params["cfg"],
+            "sampler_name": "euler", "scheduler": "normal", "denoise": 1,
+            "model": ["1", 0], "positive": ["3", 0], "negative": ["4", 0], "latent_image": ["5", 0]}},
+        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["2", 2]}},
+        "8": {"class_type": "SaveImage", "inputs": {"filename_prefix": "lmwebui", "images": ["7", 0]}},
     }
 
 
