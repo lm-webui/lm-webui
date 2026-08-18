@@ -50,3 +50,49 @@ jobs:
           done
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || exit 1
           gh release upload "$GITHUB_REF_NAME" lm-webui.tar.gz --clobber
+
+  desktop-macos:
+    needs: build
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install frontend and desktop dependencies
+        run: |
+          cd web
+          npm ci
+          cd ../desktop
+          npm install
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-build.txt
+
+      - name: Build macOS DMG
+        run: |
+          cd desktop
+          npm run version:sync
+          npm run build:web
+          npm run build:sidecar
+          npm run tauri -- build --bundles dmg
+
+      - name: Rename DMG to stable download name
+        run: |
+          dmg=$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' -type f | head -n 1)
+          test -n "$dmg"
+          cp "$dmg" LM-WebUI-macos-arm64.dmg
+
+      - name: Upload macOS DMG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" LM-WebUI-macos-arm64.dmg --clobber

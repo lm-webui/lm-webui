@@ -265,7 +265,7 @@ app.mount("/generated", StaticFiles(directory=str(MEDIA_DIR / "generated")), nam
 # Serve the active Vite build in the single production container. API routes
 # are registered first so /api/* is never shadowed by the SPA fallback.
 # SPA catch-all — serve index.html for any non-API path (React Router handles the rest).
-WEB_DIST = BASE_DIR / "web" / "dist"
+WEB_DIST = Path(os.environ.get("LMWEBUI_WEB_DIST", str(BASE_DIR / "web" / "dist"))).resolve()
 SPA_INDEX = WEB_DIST / "index.html"
 
 

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch, streamAgent, getAgentSessions, getAgentTranscript } from "@/utils/api";
+import { authFetch, streamAgent, getAgentSessions, getAgentTranscript, installAgent } from "@/utils/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AgentCommandMenu } from "./AgentCommandMenu";
 import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
@@ -225,6 +225,7 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
       },
       onRun: () => patch((msg) => ({ ...msg, streaming: false })),
       onError: (err) => patch((msg) => ({ ...msg, content: acc || err.message || "Agent run failed", streaming: false })),
+      onInstall: () => patch((msg) => ({ ...msg, streaming: false })),
     });
     setBusy(false);
   };
@@ -405,11 +406,21 @@ function ManageTab({ agents, agent, onRefresh }: {
   agents: AgentInfo[]; agent: string; onRefresh: () => void;
 }) {
   const [copied, setCopied] = useState("");
+  const [installing, setInstalling] = useState("");
   const [editingAgent, setEditingAgent] = useState("");
 
   const copy = async (cmd: string) => {
     const ok = await copyText(cmd);
     if (ok) { setCopied(cmd); setTimeout(() => setCopied(""), 1500); }
+  };
+
+  const install = async (id: string) => {
+    setInstalling(id);
+    try {
+      await installAgent(id);
+      setTimeout(onRefresh, 2500);
+    } catch { /* the host terminal remains the source of install errors */ }
+    setInstalling("");
   };
 
   // Drill-down: clicking an agent opens its config/skill/memory editor.
@@ -461,6 +472,10 @@ function ManageTab({ agents, agent, onRefresh }: {
                       {copied === getInstallCmd(id) ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                     </Button>
                   </div>
+                  <Button size="sm" className="w-full" disabled={installing === id}
+                    onClick={(e) => { e.stopPropagation(); install(id); }}>
+                    {installing === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Install in host terminal"}
+                  </Button>
                 </div>
               )}
             </CardContent>

@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
-from app.agents.registry import AGENTS, detect_all, profile, discover_skills
+from app.agents.registry import AGENTS, detect, detect_all, profile, discover_skills, launch_install_terminal
 from app.agents.runner import run, run_collect, InteractiveSession
 from app.agents import agent_files as af
 from app.agents.providers import is_interactive, context_file
@@ -52,6 +52,19 @@ async def get_profile(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return profile(agent)
+
+
+@router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.run"))])
+async def install_agent(agent: str):
+    """Launch the trusted per-agent install command in the backend host terminal."""
+    if agent not in AGENTS:
+        raise HTTPException(404, "Unknown agent")
+    if detect(agent)["installed"]:
+        return {"launched": False, "installed": True, "agent": agent}
+    try:
+        return launch_install_terminal(agent)
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc))
 
 
 @router.get("/{agent}/commands", dependencies=[Depends(require_permission("agents.run"))])
@@ -191,6 +204,18 @@ async def chat_stream(agent: str, req: ChatRequest):
         return f"data: {json.dumps(payload)}\n\n"
 
     async def event_stream():
+        if not detect(agent)["installed"]:
+            command = AGENTS[agent]["install"]
+            yield await _sse({"type": "status", "data": {"status": "not_installed"}})
+            yield await _sse({
+                "type": "output",
+                "content": f"{agent} is not installed on the host. Run this in a terminal:\n\n$ {command}\n",
+            })
+            yield await _sse({"type": "install", "data": {"agent": agent, "command": command}})
+            sessions.fail_run(sid)
+            yield await _sse({"type": "complete"})
+            return
+
         if is_interactive(agent):
             # Fresh stream-json session per turn (claude), resumed via `--resume <id>` so the
             # conversation carries context across turns AND across server restarts (zeto-style:

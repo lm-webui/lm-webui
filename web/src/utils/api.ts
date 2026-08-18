@@ -243,6 +243,7 @@ export interface AgentStreamCallbacks {
   onTool?: (tool: { tool: string; input: any }) => void;
   onRun?: (run: any) => void;
   onError?: (err: Error) => void;
+  onInstall?: (install: { agent: string; command: string }) => void;
 }
 
 // SSE chat with a host CLI agent (Agent Hub). Frames: status, output, prompt, run, complete, error.
@@ -270,6 +271,9 @@ export async function streamAgent(
         case 'run':
           if (ev.data) cb.onRun?.(ev.data);
           break;
+        case 'install':
+          if (ev.data) cb.onInstall?.(ev.data);
+          break;
         case 'error':
           cb.onError?.(new Error(ev.content || 'Agent run failed'));
           break;
@@ -280,6 +284,12 @@ export async function streamAgent(
   } catch (err) {
     cb.onError?.(err as Error);
   }
+}
+
+export async function installAgent(agent: string): Promise<{
+  launched: boolean; installed?: boolean; agent: string; command?: string;
+}> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/install`, { method: 'POST' });
 }
 
 // Answer an interactive tool-use permission ask (approve/deny) for the agent's live session.

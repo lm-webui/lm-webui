@@ -1,0 +1,16 @@
+{
+  "name": "lm-webui-desktop",
+  "private": true,
+  "version": "0.8.3",
+  "scripts": {
+    "dev": "npm run build:web && tauri dev",
+    "build": "npm run build:web && tauri build",
+    "build:web": "cd ../web && npm run build",
+    "build:sidecar": "bash ./scripts/build-sidecar.sh",
+    "version:sync": "node ./scripts/sync-version.mjs",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0"
+  }
+}

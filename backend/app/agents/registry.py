@@ -3,6 +3,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -47,6 +48,28 @@ def detect(name: str) -> dict:
 
 def detect_all() -> list:
     return [detect(n) for n in AGENTS]
+
+
+def launch_install_terminal(name: str) -> dict:
+    """Open the host terminal with the trusted registry install command."""
+    command = AGENTS[name]["install"]
+    if sys.platform == "darwin":
+        apple_script = (
+            'tell application "Terminal" to do script '
+            + json.dumps(f"{command}; echo; echo 'Installation finished. Close this window.'; exec $SHELL")
+            + '\ntell application "Terminal" to activate'
+        )
+        subprocess.Popen(["osascript", "-e", apple_script])
+    elif sys.platform == "win32":
+        subprocess.Popen(["cmd", "/K", command], creationflags=subprocess.CREATE_NEW_CONSOLE)
+    else:
+        terminal = next((shutil.which(x) for x in (
+            "x-terminal-emulator", "gnome-terminal", "konsole", "xterm"
+        ) if shutil.which(x)), None)
+        if not terminal:
+            raise RuntimeError("No supported host terminal was found")
+        subprocess.Popen([terminal, "-e", "bash", "-lc", f"{command}; echo; read -r -p 'Press Enter to close...' "])
+    return {"launched": True, "agent": name, "command": command}
 
 
 # ── Real CLI command surface (parsed from the installed CLI's --help) ─────────

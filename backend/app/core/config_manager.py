@@ -277,7 +277,19 @@ class ConfigManager:
         # Deep merge: environment variables override YAML config
         self._deep_merge(merged, yaml_config)
         self._deep_merge(merged, env_config)
-        
+
+        # Desktop launchers use explicit path variables because the generic
+        # APP_* parser splits underscores into nested keys (for example,
+        # BASE_DIR would become base.dir instead of base_dir).
+        desktop_paths = {
+            "base_dir": os.getenv("LMWEBUI_BASE_DIR"),
+            "data_dir": os.getenv("LMWEBUI_DATA_DIR"),
+            "media_dir": os.getenv("LMWEBUI_MEDIA_DIR"),
+            "models_dir": os.getenv("LMWEBUI_MODELS_DIR"),
+            "config_path": os.getenv("LMWEBUI_CONFIG_PATH"),
+        }
+        merged.setdefault("paths", {}).update({k: v for k, v in desktop_paths.items() if v})
+
         return merged
     
     def _parse_env_value(self, value: str) -> Any:
