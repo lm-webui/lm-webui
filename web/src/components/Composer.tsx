@@ -123,12 +123,22 @@ export default function Composer({
       }
       setIsUploading(false);
     }
-    let ok = await onSend(value, refs);
+    const submittedValue = value;
+    // Move the submitted text into the chat immediately. Restore it if the request fails.
+    setValue("");
 
-    // Only clear the prompt on success — on failure, restore it so the user can retry
+    let ok: boolean;
+    try {
+      ok = await onSend(submittedValue, refs);
+    } catch (error) {
+      setValue(submittedValue);
+      throw error;
+    }
+
     if (ok) {
-      setValue("");
       clearPendingFiles();
+    } else {
+      setValue(submittedValue);
     }
   };
 
