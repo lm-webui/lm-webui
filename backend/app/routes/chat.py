@@ -142,6 +142,7 @@ async def chat_stream(
         conversationId=request.get("conversation_id"),
         webSearch=request.get("web_search", False),
         file_references=request.get("file_references", []),
+        isImageMode=request.get("is_image_mode", False),
     )
 
     orchestrator = get_orchestrator()
