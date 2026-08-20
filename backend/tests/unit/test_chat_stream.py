@@ -40,4 +40,8 @@ def test_stream_route_preserves_image_mode(monkeypatch):
 
     frames = asyncio.run(consume())
     assert orchestrator.request.isImageMode is True
-    assert any(json.loads(frame.decode().split("data: ", 1)[1])['type'] == "complete" for frame in frames)
+    assert any(
+        json.loads((frame.decode() if isinstance(frame, bytes) else frame).split("data: ", 1)[1])["type"]
+        == "complete"
+        for frame in frames
+    )
