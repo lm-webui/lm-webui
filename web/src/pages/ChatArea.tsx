@@ -225,7 +225,7 @@ export default function ChatArea({
         {activeView === "workspace" && <ImageWorkspace />}
         {activeView === "gallery" && <ImageGallery />}
         {activeView === "projects" && <ProjectsWorkspace onOpenConversation={openConversation} onNewConversation={openProjectConversation} projectComposer={projectComposer} />}
-        {activeView === "agent" && <AgentWorkspace />}
+        {activeView === "agent" && <div className="flex min-h-0 min-w-0 flex-1 overflow-hidden"><AgentWorkspace /></div>}
         {activeView === "runtime" && (
           <RuntimeManager
             open={true}

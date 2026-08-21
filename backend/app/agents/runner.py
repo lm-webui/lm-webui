@@ -97,14 +97,13 @@ class InteractiveSession:
         await self._write(json.dumps(frame))
 
     async def answer(self, tool_use_id: str, approve: bool) -> None:
-        """Approve/deny a tool-use permission ask (writes a stream-json result frame)."""
-        subtype = "success" if approve else "error"
-        content = ([{"type": "tool_result", "tool_use_id": tool_use_id,
-                     "content": [{"type": "text", "text": "Approved by user"}]}]
-                   if approve else
-                   [{"type": "tool_result", "tool_use_id": tool_use_id,
-                     "content": [{"type": "text", "text": "Denied by user"}], "is_error": True}])
-        frame = {"type": "result", "subtype": subtype, "content": content}
+        """Approve/deny a Claude `can_use_tool` control request."""
+        frame = {"type": "control_response", "response": {
+            "subtype": "success" if approve else "error",
+            "request_id": tool_use_id,
+            "response": {"behavior": "allow" if approve else "deny",
+                          **({"updatedInput": {}} if approve else {"message": "Denied by user"})},
+        }}
         await self._write(json.dumps(frame))
 
     async def _write(self, line: str) -> None:

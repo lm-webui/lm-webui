@@ -17,6 +17,10 @@ from app.agents.sessions import sessions
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
+# One live print-mode process per agent is enough for the current Agent Hub UI. The map lets
+# approval requests reach the exact process that emitted them.
+_live_sessions: dict[str, InteractiveSession] = {}
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -228,6 +232,7 @@ async def chat_stream(agent: str, req: ChatRequest):
                                       model=s.get("model") or "", system_prompt=s.get("system_prompt") or "",
                                       resume_id=s.get("claude_session_id") or "")
             await live.start()
+            _live_sessions[agent] = live
             try:
                 # Connected-agent manifest the running agent auto-reads (claude → CLAUDE.md).
                 try:
@@ -246,6 +251,8 @@ async def chat_stream(agent: str, req: ChatRequest):
                         yield await _sse({"type": "prompt", "data": ev["data"]})
                     elif ev["type"] == "tool":
                         yield await _sse({"type": "tool", "data": ev["data"]})
+                    elif ev["type"] == "tool_result":
+                        yield await _sse({"type": "tool_result", "data": ev["data"]})
                     elif ev["type"] == "complete":
                         run_info = sessions.end_run(sid, 0, usage=ev.get("usage"),
                                                     cost_usd=ev.get("cost_usd"),
@@ -265,6 +272,8 @@ async def chat_stream(agent: str, req: ChatRequest):
                 sessions.fail_run(sid)
                 yield await _sse({"type": "error", "content": str(exc)})
             finally:
+                if _live_sessions.get(agent) is live:
+                    _live_sessions.pop(agent, None)
                 await live.close()
             return
 
@@ -289,3 +298,24 @@ async def chat_stream(agent: str, req: ChatRequest):
             yield await _sse({"type": "error", "content": str(exc)})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.post("/{agent}/answer", dependencies=[Depends(require_permission("agents.run"))])
+async def answer_agent(agent: str, body: dict):
+    """Resolve a permission request from the live Claude stream."""
+    live = _live_sessions.get(agent)
+    prompt_id = body.get("prompt_id")
+    if not live or not prompt_id:
+        raise HTTPException(409, "No live agent permission request")
+    await live.answer(prompt_id, bool(body.get("approve")))
+    return {"ok": True}
+
+
+@router.post("/{agent}/auto-approve", dependencies=[Depends(require_permission("agents.run"))])
+async def auto_approve_agent(agent: str):
+    """Allow subsequent permission requests for the current live session."""
+    live = _live_sessions.get(agent)
+    if not live:
+        raise HTTPException(409, "No live agent session")
+    live.auto_approve()
+    return {"ok": True}

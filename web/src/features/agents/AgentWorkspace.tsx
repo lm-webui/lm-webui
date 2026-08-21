@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch, streamAgent, getAgentSessions, getAgentTranscript, installAgent } from "@/utils/api";
+import { authFetch, streamAgent, getAgentSessions, getAgentTranscript, installAgent, answerAgent, autoApproveAgent } from "@/utils/api";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { AgentCommandMenu } from "./AgentCommandMenu";
 import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 
 interface Block { type: string; content: string; }
-interface AgentTool { tool: string; input: any; }
+interface AgentTool { tool: string; tool_use_id?: string; input?: any; result?: any; status: "running" | "done" | "error"; }
 interface Msg {
   role: "user" | "agent";
   blocks?: Block[];
@@ -25,6 +25,7 @@ interface Msg {
   id?: string;
   streaming?: boolean;
   tools?: AgentTool[];
+  prompt?: { prompt_id: string; tool: string; input: any };
 }
 
 function truncateInput(input: any): string {
@@ -86,8 +87,8 @@ export default function AgentWorkspace() {
   const ActiveIcon = AGENT_META[agent]?.icon ?? Bot;
 
   return (
-    <div className="flex h-full bg-background relative">
-      <Tabs value={tab} onValueChange={setTab} className="flex-1 min-w-0 flex flex-col">
+    <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background relative">
+      <Tabs value={tab} onValueChange={setTab} className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/50 px-4 h-12 shrink-0">
           <div className="flex items-center gap-2">
@@ -145,7 +146,7 @@ function AgentSelector({ agents, agent, onSelect, size = "md" }: {
   agents: AgentInfo[]; agent: string; onSelect: (id: string) => void; size?: "sm" | "md";
 }) {
   return (
-    <div className="flex items-center gap-1.5 overflow-x-auto flex-wrap">
+    <div className="flex h-9 shrink-0 items-center gap-1.5 overflow-x-auto whitespace-nowrap">
       {AGENT_IDS.map((id) => {
         const meta = AGENT_META[id]!;
         const Icon = meta.icon;
@@ -221,7 +222,28 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
         patch((msg) => ({ ...msg, content: acc, streaming: true }));
       },
       onTool: (t) => {
-        patch((msg) => ({ ...msg, tools: [...(msg.tools || []), t] }));
+        patch((msg) => ({ ...msg, tools: [...(msg.tools || []), { ...t, status: "running" }] }));
+      },
+      onToolResult: (result) => {
+        patch((msg) => {
+          const tools = [...(msg.tools || [])];
+          let index = result.tool_use_id
+            ? tools.findIndex((tool) => tool.tool_use_id === result.tool_use_id)
+            : -1;
+          if (index < 0) {
+            for (let i = tools.length - 1; i >= 0; i -= 1) {
+              const tool = tools[i];
+              if (tool?.status === "running") { index = i; break; }
+            }
+          }
+          const current = index >= 0 ? tools[index] : undefined;
+          if (current) tools[index] = { ...current, tool: current.tool || result.tool || "tool", result: result.content, status: result.is_error ? "error" : "done" };
+          else tools.push({ tool: result.tool || "tool", result: result.content, status: result.is_error ? "error" : "done" });
+          return { ...msg, tools };
+        });
+      },
+      onPrompt: (prompt) => {
+        patch((msg) => ({ ...msg, prompt }));
       },
       onRun: () => patch((msg) => ({ ...msg, streaming: false })),
       onError: (err) => patch((msg) => ({ ...msg, content: acc || err.message || "Agent run failed", streaming: false })),
@@ -249,17 +271,52 @@ function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, s
               <div className="whitespace-pre-wrap">{m.content || (m.streaming ? "" : "")}</div>
               {m.tools && m.tools.map((t, ti) => (
                 <div key={ti}
-                  className="mt-1.5 flex items-start gap-1.5 rounded-md border border-border/50 bg-background/40 px-2 py-1 text-[.65rem] font-mono text-muted-foreground">
-                  <Wrench className="h-3 w-3 mt-0.5 shrink-0" />
-                  <span className="break-all"><span className="font-semibold text-foreground/80">{t.tool}</span> {truncateInput(t.input)}</span>
+                  className={cn("mt-1.5 rounded-md border px-2 py-1 text-[.65rem] font-mono", t.status === "error" ? "border-red-500/40 bg-red-500/10" : "border-border/50 bg-background/40")}>
+                  <div className="flex items-start gap-1.5 text-muted-foreground">
+                    {t.status === "running" ? <Loader2 className="h-3 w-3 mt-0.5 shrink-0 animate-spin" /> : <Wrench className="h-3 w-3 mt-0.5 shrink-0" />}
+                    <span className="break-all"><span className="font-semibold text-foreground/80">{t.tool}</span>{t.input !== undefined && ` ${truncateInput(t.input)}`}</span>
+                  </div>
+                  {t.result !== undefined && <div className="mt-1 border-t border-border/40 pt-1 whitespace-pre-wrap break-words text-muted-foreground">{truncateInput(t.result)}</div>}
                 </div>
               ))}
+              {m.prompt && (
+                <div className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
+                  <div className="font-medium text-amber-200">{m.prompt.tool || "Agent request"}</div>
+                  <div className="mt-1 break-words text-muted-foreground">{truncateInput(m.prompt.input)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <Button size="sm" className="h-7 text-xs" onClick={async () => {
+                      await answerAgent(agent, m.prompt!.prompt_id, true);
+                      setMessages((all) => all.map((msg) => {
+                        if (msg.id !== m.id) return msg;
+                        const { prompt: _prompt, ...rest } = msg;
+                        return rest;
+                      }));
+                    }}>Allow</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
+                      await answerAgent(agent, m.prompt!.prompt_id, false);
+                      setMessages((all) => all.map((msg) => {
+                        if (msg.id !== m.id) return msg;
+                        const { prompt: _prompt, ...rest } = msg;
+                        return rest;
+                      }));
+                    }}>Deny</Button>
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={async () => {
+                      await autoApproveAgent(agent);
+                      setMessages((all) => all.map((msg) => {
+                        if (msg.id !== m.id) return msg;
+                        const { prompt: _prompt, ...rest } = msg;
+                        return rest;
+                      }));
+                    }}>Allow for session</Button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      <div className="shrink-0 p-3 space-y-2 bg-transparent">
+      <div className="shrink-0 border-t border-border/40 bg-background p-3 space-y-2">
         {/* Agent selector — each agent starts a new session with it */}
         <AgentSelector agents={agents} agent={agent} onSelect={pickAgent} />
 

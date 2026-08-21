@@ -1,6 +1,6 @@
 # LM-WebUI Desktop
 
-Cross-platform Tauri wrapper for the existing React frontend and FastAPI backend.
+Cross-platform Tauri wrapper for the existing LM-WebUI React frontend and FastAPI backend.
 
 ## Development
 

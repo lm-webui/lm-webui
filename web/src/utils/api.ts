@@ -240,7 +240,8 @@ export interface AgentStreamCallbacks {
   onOutput?: (line: string) => void;
   onStatus?: (data: { status?: string; session_id?: string }) => void;
   onPrompt?: (prompt: { prompt_id: string; tool: string; input: any }) => void;
-  onTool?: (tool: { tool: string; input: any }) => void;
+  onTool?: (tool: { tool: string; tool_use_id?: string; input: any }) => void;
+  onToolResult?: (result: { tool: string; tool_use_id?: string; content: any; is_error?: boolean }) => void;
   onRun?: (run: any) => void;
   onError?: (err: Error) => void;
   onInstall?: (install: { agent: string; command: string }) => void;
@@ -267,6 +268,9 @@ export async function streamAgent(
           break;
         case 'tool':
           if (ev.data) cb.onTool?.(ev.data);
+          break;
+        case 'tool_result':
+          if (ev.data) cb.onToolResult?.(ev.data);
           break;
         case 'run':
           if (ev.data) cb.onRun?.(ev.data);

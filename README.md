@@ -1,6 +1,9 @@
 # LM WebUI 🛡️
 
-**LM-WebUI** makes running local AI as easy as installing an app. No more juggling separate apps, model or vendor limitations, or runtime setup headaches. A built-in Runtime Manager manages inference engines and models for you, while chat, vision, image generation, and file context all live in one interface on your own machine. Built for privacy-first and sovereign AI systems.
+LM-WebUI is the local-first control plane for AI workloads.
+
+Run and operate models, inference runtimes, agents, tools, retrieval, and
+usage from one workspace across local and cloud environments.
 
 ![lm-webui](assets/lm-webui-header.png)
 
@@ -9,7 +12,7 @@
     <img src="https://img.shields.io/badge/development-active-green" />
   </a>
   <a href="https://github.com/lm-webui/lm-webui/releases">
-    <img src="https://img.shields.io/badge/release-v0.7.7-blue" />
+    <img src="https://img.shields.io/badge/release-v0.8.5-blue" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-black" />
@@ -23,7 +26,33 @@
   <b>Run Local AI, Without the Complexity</b>
 </p>
 
+## The problem
+
+AI workloads are assembled from separate models, runtimes, agents, tools,
+retrieval systems, and provider dashboards. That makes execution difficult to
+configure, monitor, debug, and control.
+
+LM-WebUI brings that execution layer together while preserving local-first
+deployment and hybrid cloud flexibility.
+
+### What LM-WebUI controls
+
+- Models and model providers
+- Local inference runtimes
+- Agent sessions and tools
+- Multimodal retrieval and context
+- Modality-aware execution routing
+- Usage and token tracking
+- Hardware-aware execution
+- Generated artifacts and media
+
+LM-WebUI combines runtime management, multimodal chat, retrieval, image generation, and agent workflows in one privacy-first workspace.
+
 ---
+
+<p align="center">
+  <img src="./assets/demo.png" width="1080" />
+</p>
 
 No more setup maze. **LM-WebUI makes local AI inference easier to run and use.** Install and manage inference runtimes, download models, and work with local AI instantly from one interface.
 
@@ -63,7 +92,7 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 |---|---|
 | **Smart-Modality™** | Automatically chooses the right path for each request, direct chat, RAG, web search, vision, or image generation. So, simple tasks stay fast without unnecessary processing, retrieval runs only when you need past data, and web search combines with RAG/vision (or is skipped for direct image questions). |
 | **Runtime Manager** | Manages the inference engines and model formats below — llama.cpp (GGUF), MLX, and ComfyUI (image workflows). Ollama and vLLM are configured as API providers in Settings. |
-| **Files & RAG** | Upload documents, images, and audio for conversation context. Extract/OCR content, upload status, file references, and citation display. Retrieval via **Multimodal Latent RAG**: a single query finds relevant text chunks and visually-matching images (SigLIP2 shared latent space), fused with Reciprocal Rank Fusion. |
+| **Files & RAG** | Upload documents, images, and audio for conversation context. Extract/OCR content, upload status, file references, and citation display. Retrieval via **LatentFusion RAG** that makes a single query finds relevant text chunks and visually-matching images and shared latent vector space, fused with Reciprocal Rank Fusion. |
 | **Multimodal Retrieval** | Cross-modal search across docs, images, and audio in one latent index (SigLIP2 text + vision, CLAP-ready). A text query returns matching paragraphs and diagrams/charts in a single pass. |
 | **Multimodal Vision** | Analyze images, screenshots, diagrams, and other visual content using compatible local vision models — auto-routed, no manual model switching. Simple image questions answer directly via the vision model; complex ones compose with RAG and web context.
 | **Chat** | Chat with local or cloud AI models from one interface. Supports GGUF/llama.cpp, MLX, Ollama, vLLM, OpenAI, Gemini, Anthropic, DeepSeek, Grok, and more. Includes streaming, code rendering, Mermaid diagrams, tables, conversations, and web search.|
