@@ -16,6 +16,11 @@ yarn-error.log*
 pnpm-debug.log*
 web/dist/
 web/coverage/
+# Desktop (Tauri) build artifacts — Rust target dir is large; Cargo.lock IS committed
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
+desktop/src-tauri/web-dist/
+desktop/.pyinstaller/
 # Environment Var
 web/.env.local
 web/.env.production

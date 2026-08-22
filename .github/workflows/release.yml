@@ -53,10 +53,12 @@ jobs:
 
   desktop-macos:
     needs: build
-    # arm64 runner so the DMG matches the LM-WebUI-macos-arm64.dmg name / "Apple Silicon" claim.
-    # ponytail: if the org lacks arm64 runners, use macos-14 (Intel) and rename to
-    # LM-WebUI-macos-x86_64.dmg instead — never publish a mislabeled binary.
-    runs-on: macos-14-xlarge
+    # `macos-14` is the free arm64 (Apple Silicon) runner and matches the
+    # LM-WebUI-macos-arm64.dmg name / "Apple Silicon" claim. `macos-14-xlarge` is a
+    # PAID larger runner (Team/Enterprise) — it blocks free repos before any step runs.
+    # ponytail: to build Intel instead, use macos-14-large and rename to
+    # LM-WebUI-macos-x86_64.dmg — never publish a mislabeled binary.
+    runs-on: macos-14
     permissions:
       contents: write
     steps:
@@ -88,8 +90,8 @@ jobs:
         run: |
           cd desktop
           npm run version:sync
-          npm run build:web
-          npm run build:sidecar
+          # tauri's beforeBuildCommand already runs build:web + build:sidecar,
+          # so we only sync the version here (build:web would otherwise run twice).
           npm run tauri -- build --bundles dmg
 
       - name: Rename DMG to stable download name

@@ -80,7 +80,7 @@ jobs:
         run: |
           cd backend
           uv pip install --system -r requirements.txt
-          uv pip install --system pytest pytest-cov
+          uv pip install --system -r requirements-test.txt
       # Run backend unit tests (hermetic; integration excluded via pytest.ini)
       - name: Run backend tests
         run: |
