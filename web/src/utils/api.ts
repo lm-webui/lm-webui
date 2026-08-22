@@ -5,6 +5,14 @@ const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 // new URL() requires an absolute base — use origin when API_BASE_URL is empty (native install)
 const URL_BASE = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
+// WebSocket URL for the Agent Hub terminal. Same host as the API; http(s)→ws(s).
+// Cookies (the access_token) ride the handshake automatically via credentials.
+export function agentTerminalWsUrl(agent: string, sessionId: string): string {
+  const base = new URL(URL_BASE);
+  const proto = base.protocol === "https:" ? "wss:" : "ws:";
+  return `${proto}//${base.host}/api/agents/${agent}/terminal/${sessionId}`;
+}
+
 // Helper function to handle token refresh
 async function handleTokenRefresh(): Promise<void> {
   console.log('🔐 401 detected, attempting token refresh...');
@@ -290,10 +298,11 @@ export async function streamAgent(
   }
 }
 
-export async function installAgent(agent: string): Promise<{
+export async function installAgent(agent: string, update?: boolean): Promise<{
   launched: boolean; installed?: boolean; agent: string; command?: string;
 }> {
-  return authFetch(`${API_BASE_URL}/api/agents/${agent}/install`, { method: 'POST' });
+  const q = update ? '?update=1' : '';
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/install${q}`, { method: 'POST' });
 }
 
 // Answer an interactive tool-use permission ask (approve/deny) for the agent's live session.

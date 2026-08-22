@@ -31,8 +31,19 @@ AGENTS = {
 }
 
 
-def detect(name: str) -> dict:
-    """Return install/version info for one agent."""
+# detect() spawns a `--version` subprocess per call; throttle it so re-opens of the agent
+# list / Manage tab don't re-spawn subprocesses every time. 24h TTL. (ponytail: naive dict cache,
+# fine for the handful of agents here.)
+_DETECT_TTL = 86400  # 24h
+_detect_cache: dict[str, tuple[float, dict]] = {}
+
+
+def detect(name: str, refresh: bool = False) -> dict:
+    """Return install/version/status info for one agent (24h TTL cache; pass refresh=True to bypass)."""
+    now = time.time()
+    cached = _detect_cache.get(name)
+    if not refresh and cached and now - cached[0] < _DETECT_TTL:
+        return cached[1]
     cfg = AGENTS[name]
     path = shutil.which(cfg["cmd"])
     version = None
@@ -43,11 +54,14 @@ def detect(name: str) -> dict:
             version = ((r.stdout or r.stderr).strip() or "").splitlines()[0] or None
         except Exception:
             version = None
-    return {"id": name, "installed": bool(path), "version": version, "path": path}
+    status = "ok" if path and version else "degraded" if path else "missing"
+    info = {"id": name, "installed": bool(path), "version": version, "path": path, "status": status}
+    _detect_cache[name] = (now, info)
+    return info
 
 
-def detect_all() -> list:
-    return [detect(n) for n in AGENTS]
+def detect_all(refresh: bool = False) -> list:
+    return [detect(n, refresh=refresh) for n in AGENTS]
 
 
 def launch_install_terminal(name: str) -> dict:

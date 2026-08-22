@@ -5,7 +5,7 @@ import { ComponentType } from "react";
 import { Bot, Cpu, Terminal, RefreshCw, Trash2, Layers, Wand2 } from "lucide-react";
 import { SiClaudecode, SiOpencode } from "react-icons/si";
 
-export interface AgentInfo { id: string; installed: boolean; version?: string; path?: string; }
+export interface AgentInfo { id: string; installed: boolean; version?: string; path?: string; status?: "ok" | "degraded" | "missing"; }
 export interface Skill { id: string; label: string; instructions: string; }
 export interface CommandDef { id: string; label: string; hint?: string; icon: typeof Bot; value?: boolean; }
 

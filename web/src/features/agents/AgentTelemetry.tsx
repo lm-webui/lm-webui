@@ -2,8 +2,9 @@
  * Shows token usage, run count, cost, and a context-window fill bar. Polls /usage.
  */
 import { useEffect, useState } from "react";
-import { Activity, Clock, Coins, MessageSquareText, Gauge } from "lucide-react";
+import { Activity, Clock, Coins, MessageSquareText, Gauge, CheckCircle, AlertTriangle, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { getAgentUsage } from "@/utils/api";
 import { AGENT_META } from "./agentProviders";
 import type { AgentInfo } from "./agentProviders";
@@ -22,6 +23,17 @@ function fmt(n: number): string {
 }
 function fmtUsd(n: number): string {
   return n > 0 ? `$${n.toFixed(4)}` : "—";
+}
+
+// Health status badge, matching the Runtime Manager's status styling (RuntimeTab.tsx).
+function HealthBadge({ status, installed }: { status?: string | undefined; installed: boolean }) {
+  if (status === "ok" || (installed && !status)) {
+    return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle className="h-3 w-3 mr-1" />Installed</Badge>;
+  }
+  if (status === "degraded") {
+    return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"><AlertTriangle className="h-3 w-3 mr-1" />Degraded</Badge>;
+  }
+  return <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"><XCircle className="h-3 w-3 mr-1" />Not installed</Badge>;
 }
 
 export default function AgentTelemetry({ agent, active }: { agent: string; active?: AgentInfo | undefined }) {
@@ -55,10 +67,12 @@ export default function AgentTelemetry({ agent, active }: { agent: string; activ
         <div>
           <div className="text-sm font-semibold">{AGENT_META[agent]?.label ?? agent}</div>
           <div className="text-[.65rem] text-muted-foreground">
-            {active?.installed ? (active.version || "installed") : "not installed"}
+            {active?.version ? `v${active.version}` : (active?.installed ? "installed" : "not installed")}
           </div>
         </div>
       </div>
+
+      <HealthBadge status={active?.status} installed={!!active?.installed} />
 
       <div className="grid grid-cols-2 gap-2">
         {rows.map((r) => (

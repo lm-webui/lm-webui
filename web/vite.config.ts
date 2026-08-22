@@ -26,7 +26,8 @@ export default defineConfig(() => ({
         target: 'http://localhost:7070',
         changeOrigin: true,
         secure: false,
-        credentials: true
+        credentials: true,
+        ws: true
       },
       '/auth': {
         target: 'http://localhost:7070',

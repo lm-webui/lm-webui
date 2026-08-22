@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@types/react-syntax-highlighter": "^15.5.13",
+    "@xterm/xterm": "^6.0.0",
     "axios": "^1.12.2",
     "js-yaml": "^5.2.3",
     "prismjs": "^1.30.0",
@@ -59,8 +60,8 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.0",
     "globals": "^17.2.0",
-    "jsdom": "^26.0.0",
     "js-yaml": "^5.2.3",
+    "jsdom": "^26.0.0",
     "lucide-react": "^0.462.0",
     "mermaid": "^11.16.0",
     "postcss": "^8.5.25",

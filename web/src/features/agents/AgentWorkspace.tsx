@@ -1,51 +1,35 @@
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Bot, Loader2, Copy, Check, RefreshCw, ArrowLeft, Wrench,
+  Bot, Loader2, Copy, Check, RefreshCw, ArrowLeft,
   PanelRightClose, PanelRightOpen, Activity, CircleDot, Clock, Plus, MessageSquareText,
+  CheckCircle, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch, streamAgent, getAgentSessions, getAgentTranscript, installAgent, answerAgent, autoApproveAgent } from "@/utils/api";
+import { authFetch, streamAgent, getAgentSessions, installAgent } from "@/utils/api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { AgentCommandMenu } from "./AgentCommandMenu";
 import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
 import AgentFiles from "./AgentFiles";
 import AgentTelemetry from "./AgentTelemetry";
+import TerminalPane from "./TerminalPane";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
-
-interface Block { type: string; content: string; }
-interface AgentTool { tool: string; tool_use_id?: string; input?: any; result?: any; status: "running" | "done" | "error"; }
-interface Msg {
-  role: "user" | "agent";
-  blocks?: Block[];
-  content?: string;
-  id?: string;
-  streaming?: boolean;
-  tools?: AgentTool[];
-  prompt?: { prompt_id: string; tool: string; input: any };
-}
-
-function truncateInput(input: any): string {
-  const s = typeof input === "string" ? input : JSON.stringify(input);
-  return (s || "").replace(/\s+/g, " ").slice(0, 80) || "…";
-}
+import { toast } from "sonner";
 export default function AgentWorkspace() {
   const isMobile = useIsMobile();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
   const [agent, setAgent] = useState("");
-  const [tab, setTab] = useState("chat");
+  const [tab, setTab] = useState("terminal");
   // ponytail: rail collapses by default on mobile (init from width to avoid a flash).
   const [railOpen, setRailOpen] = useState(() => typeof window === "undefined" || window.innerWidth >= 768);
 
   // Collapse the rail if the viewport shrinks to mobile (covers resize/rotation too).
   useEffect(() => { if (isMobile) setRailOpen(false); }, [isMobile]);
 
-  // Chat-session state lifted up so the rail's session list can drive the chat.
+  // The session id drives the terminal's WebSocket connection (one PTY per (agent, session)).
   const [sessionId, setSessionId] = useState("");
-  const [messages, setMessages] = useState<Msg[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
 
   const refresh = async () => {
@@ -61,26 +45,17 @@ export default function AgentWorkspace() {
 
   const selectAgent = async (id: string) => {
     setAgent(id);
-    setMessages([]);
     setSessionId("");
     try {
       const r: any = await authFetch(`/api/agents/${id}/sessions`, { method: "POST" });
       setSessionId(r.session_id);
     } catch { setSessionId(""); }
-    setTab("chat");
+    setTab("terminal"); // the TUI is the single interactive surface for a live agent
   };
 
   const resumeSession = async (sid: string) => {
     setSessionId(sid);
-    setMessages([]);
-    try {
-      const d = await getAgentTranscript(agent, sid);
-      setMessages((d.transcript || []).map((m) => ({
-        role: m.role === "user" ? "user" : "agent",
-        content: m.content,
-      })));
-    } catch { /* transcript not found — start empty */ }
-    setTab("chat");
+    setTab("terminal"); // the PTY replays the session's history on connect
   };
 
   const active = agents.find((a) => a.id === agent);
@@ -97,7 +72,7 @@ export default function AgentWorkspace() {
           </div>
           <div className="flex-1 flex justify-center">
             <TabsList>
-              <TabsTrigger value="chat">Chat</TabsTrigger>
+              <TabsTrigger value="terminal">Terminal</TabsTrigger>
               <TabsTrigger value="activity">Activity</TabsTrigger>
               <TabsTrigger value="manage">Manage</TabsTrigger>
             </TabsList>
@@ -107,9 +82,13 @@ export default function AgentWorkspace() {
           </Button>
         </div>
 
-        <TabsContent value="chat" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
-          <ChatTab agents={agents} agent={agent} onSelect={selectAgent}
-            sessionId={sessionId} setSessionId={setSessionId} messages={messages} setMessages={setMessages} />
+        <TabsContent value="terminal" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+          <div className="flex flex-col h-full min-h-0">
+            <TerminalPane agent={agent} sessionId={sessionId} />
+            <div className="shrink-0 border-t border-border/40 bg-background p-3">
+              <AgentSelector agents={agents} agent={agent} onSelect={selectAgent} />
+            </div>
+          </div>
         </TabsContent>
         <TabsContent value="activity" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           <ActivityTab agents={agents} agent={agent} onSelect={setAgent} />
@@ -165,177 +144,6 @@ function AgentSelector({ agents, agent, onSelect, size = "md" }: {
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/* ------------------------------- Chat tab ------------------------------- */
-function ChatTab({ agents, agent, onSelect, sessionId, setSessionId, messages, setMessages }: {
-  agents: AgentInfo[]; agent: string; onSelect: (id: string) => void;
-  sessionId: string; setSessionId: (id: string) => void;
-  messages: Msg[]; setMessages: Dispatch<SetStateAction<Msg[]>>;
-}) {
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [sessionModel, setSessionModel] = useState("");
-
-  // Pick an agent (creates a new session via the lifted onSelect).
-  const pickAgent = (id: string) => { setSessionModel(""); onSelect(id); };
-
-  const compactSession = async () => {
-    if (!sessionId) return;
-    try { await authFetch(`/api/agents/${agent}/sessions/${sessionId}/compact`, { method: "POST" }); } catch {}
-    setMessages([]);
-  };
-
-  // Slash commands that map to real app actions run; TUI-only ones insert as literal text.
-  const handleCommand = (id: string, value?: string) => {
-    if (id === "new") pickAgent(agent);
-    else if (id === "clear") setMessages([]);
-    else if (id === "compact") compactSession();
-    else if (id === "model" && value) setSessionModel(value);
-    else if (!value) setInput((p) => (p ? p.replace(/\s*[/@]\S*$/, "") : "") + " /" + id + " ");
-  };
-
-  const send = async () => {
-    const text = input.trim();
-    if (!text || !agent || busy) return;
-    setBusy(true);
-    setInput("");
-    const msgId = `a${Date.now()}`;
-    setMessages((m) => [...m, { role: "user", content: text }, { role: "agent", id: msgId, content: "", streaming: true, tools: [] }]);
-
-    const patch = (fn: (msg: Msg) => Msg) =>
-      setMessages((m) => m.map((msg) => (msg.id === msgId ? fn(msg) : msg)));
-
-    let acc = "";
-    await streamAgent(agent, {
-      message: text,
-      ...(sessionId ? { session_id: sessionId } : {}),
-      ...(sessionModel ? { model: sessionModel } : {}),
-    }, {
-      onStatus: (d) => {
-        if (d.session_id) setSessionId(d.session_id); // learn the real live-session id
-      },
-      onOutput: (line) => {
-        acc += line;
-        patch((msg) => ({ ...msg, content: acc, streaming: true }));
-      },
-      onTool: (t) => {
-        patch((msg) => ({ ...msg, tools: [...(msg.tools || []), { ...t, status: "running" }] }));
-      },
-      onToolResult: (result) => {
-        patch((msg) => {
-          const tools = [...(msg.tools || [])];
-          let index = result.tool_use_id
-            ? tools.findIndex((tool) => tool.tool_use_id === result.tool_use_id)
-            : -1;
-          if (index < 0) {
-            for (let i = tools.length - 1; i >= 0; i -= 1) {
-              const tool = tools[i];
-              if (tool?.status === "running") { index = i; break; }
-            }
-          }
-          const current = index >= 0 ? tools[index] : undefined;
-          if (current) tools[index] = { ...current, tool: current.tool || result.tool || "tool", result: result.content, status: result.is_error ? "error" : "done" };
-          else tools.push({ tool: result.tool || "tool", result: result.content, status: result.is_error ? "error" : "done" });
-          return { ...msg, tools };
-        });
-      },
-      onPrompt: (prompt) => {
-        patch((msg) => ({ ...msg, prompt }));
-      },
-      onRun: () => patch((msg) => ({ ...msg, streaming: false })),
-      onError: (err) => patch((msg) => ({ ...msg, content: acc || err.message || "Agent run failed", streaming: false })),
-      onInstall: () => patch((msg) => ({ ...msg, streaming: false })),
-    });
-    setBusy(false);
-  };
-
-  return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
-            <Bot className="h-12 w-12 opacity-30 mb-3" />
-            <p className="text-sm">Chat with {agent || "an agent"} — type a message or a /command</p>
-          </div>
-        ) : messages.map((m, i) => (
-          <div key={m.id ?? i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
-            <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${m.role === "user" ? "bg-primary/10" : "bg-muted/40"}`}>
-              {m.streaming && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <Loader2 className="h-3 w-3 animate-spin" /> {agent} is working…
-                </div>
-              )}
-              <div className="whitespace-pre-wrap">{m.content || (m.streaming ? "" : "")}</div>
-              {m.tools && m.tools.map((t, ti) => (
-                <div key={ti}
-                  className={cn("mt-1.5 rounded-md border px-2 py-1 text-[.65rem] font-mono", t.status === "error" ? "border-red-500/40 bg-red-500/10" : "border-border/50 bg-background/40")}>
-                  <div className="flex items-start gap-1.5 text-muted-foreground">
-                    {t.status === "running" ? <Loader2 className="h-3 w-3 mt-0.5 shrink-0 animate-spin" /> : <Wrench className="h-3 w-3 mt-0.5 shrink-0" />}
-                    <span className="break-all"><span className="font-semibold text-foreground/80">{t.tool}</span>{t.input !== undefined && ` ${truncateInput(t.input)}`}</span>
-                  </div>
-                  {t.result !== undefined && <div className="mt-1 border-t border-border/40 pt-1 whitespace-pre-wrap break-words text-muted-foreground">{truncateInput(t.result)}</div>}
-                </div>
-              ))}
-              {m.prompt && (
-                <div className="mt-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2 text-xs">
-                  <div className="font-medium text-amber-200">{m.prompt.tool || "Agent request"}</div>
-                  <div className="mt-1 break-words text-muted-foreground">{truncateInput(m.prompt.input)}</div>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    <Button size="sm" className="h-7 text-xs" onClick={async () => {
-                      await answerAgent(agent, m.prompt!.prompt_id, true);
-                      setMessages((all) => all.map((msg) => {
-                        if (msg.id !== m.id) return msg;
-                        const { prompt: _prompt, ...rest } = msg;
-                        return rest;
-                      }));
-                    }}>Allow</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={async () => {
-                      await answerAgent(agent, m.prompt!.prompt_id, false);
-                      setMessages((all) => all.map((msg) => {
-                        if (msg.id !== m.id) return msg;
-                        const { prompt: _prompt, ...rest } = msg;
-                        return rest;
-                      }));
-                    }}>Deny</Button>
-                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={async () => {
-                      await autoApproveAgent(agent);
-                      setMessages((all) => all.map((msg) => {
-                        if (msg.id !== m.id) return msg;
-                        const { prompt: _prompt, ...rest } = msg;
-                        return rest;
-                      }));
-                    }}>Allow for session</Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="shrink-0 border-t border-border/40 bg-background p-3 space-y-2">
-        {/* Agent selector — each agent starts a new session with it */}
-        <AgentSelector agents={agents} agent={agent} onSelect={pickAgent} />
-
-        <div className="flex gap-2">
-          <AgentCommandMenu
-            agent={agent}
-            value={input}
-            onChange={setInput}
-            agents={agents}
-            onPickAgent={(id) => pickAgent(id)}
-            onCommand={handleCommand}
-            onSubmit={send}
-            placeholder={`Message ${agent}… or /command`}
-          />
-          <Button onClick={send} disabled={busy || !input.trim()}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send"}
-          </Button>
-        </div>
-      </div>
     </div>
   );
 }
@@ -459,6 +267,17 @@ function ActivityTab({ agents, agent, onSelect }: {
 }
 
 /* ----------------------------- Manage tab ------------------------------- */
+// Health badge, matching the Runtime Manager's status styling (RuntimeTab.tsx).
+function HealthBadge({ status, installed }: { status?: string | undefined; installed: boolean }) {
+  if (status === "ok" || (installed && !status)) {
+    return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle className="h-3 w-3 mr-1" />Installed</Badge>;
+  }
+  if (status === "degraded") {
+    return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"><AlertTriangle className="h-3 w-3 mr-1" />Degraded</Badge>;
+  }
+  return <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"><XCircle className="h-3 w-3 mr-1" />Not installed</Badge>;
+}
+
 function ManageTab({ agents, agent, onRefresh }: {
   agents: AgentInfo[]; agent: string; onRefresh: () => void;
 }) {
@@ -471,10 +290,11 @@ function ManageTab({ agents, agent, onRefresh }: {
     if (ok) { setCopied(cmd); setTimeout(() => setCopied(""), 1500); }
   };
 
-  const install = async (id: string) => {
+  const install = async (id: string, update: boolean) => {
     setInstalling(id);
     try {
-      await installAgent(id);
+      await installAgent(id, update);
+      toast.success(`${update ? "Update" : "Install"} launched in the host terminal.`);
       setTimeout(onRefresh, 2500);
     } catch { /* the host terminal remains the source of install errors */ }
     setInstalling("");
@@ -505,32 +325,41 @@ function ManageTab({ agents, agent, onRefresh }: {
         const a = agents.find((x) => x.id === id);
         const installed = a?.installed;
         return (
-          <Card key={id} className={cn("cursor-pointer", agent === id && "ring-1 ring-primary")} onClick={() => setEditingAgent(id)}>
+          <Card key={id} className={cn(installed && "cursor-pointer", agent === id && "ring-1 ring-primary")}
+            onClick={() => installed && setEditingAgent(id)}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Icon className={cn("h-5 w-5", meta.color)} />
                   <CardTitle className="text-sm">{meta.label}</CardTitle>
                 </div>
-                <Badge variant={installed ? "secondary" : "outline"} className={installed ? "" : "text-zinc-400"}>
-                  {installed ? (a.version || "installed") : "not installed"}
-                </Badge>
+                <HealthBadge status={a?.status} installed={!!installed} />
               </div>
             </CardHeader>
             <CardContent>
               {installed ? (
-                <p className="text-[.7rem] text-muted-foreground truncate">{a.path || "on PATH"}</p>
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    {a?.version && <span className="mr-2">v{a.version}</span>}
+                    <span className="truncate max-w-[180px]">{a?.path || "on PATH"}</span>
+                  </p>
+                  <Button variant="outline" size="sm" className="w-full" disabled={installing === id}
+                    onClick={(e) => { e.stopPropagation(); install(id, true); }}>
+                    {installing === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+                    {installing === id ? "Updating…" : "Update in host terminal"}
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-2">
                   <p className="text-[.7rem] text-muted-foreground">Install this agent on the host to chat with it.</p>
                   <div className="flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1">
-                    <code className="flex-1 text-[.65rem] truncate">{AGENT_META[id] && getInstallCmd(id)}</code>
+                    <code className="flex-1 text-[.65rem] truncate">{getInstallCmd(id)}</code>
                     <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); copy(getInstallCmd(id)); }}>
                       {copied === getInstallCmd(id) ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
                     </Button>
                   </div>
                   <Button size="sm" className="w-full" disabled={installing === id}
-                    onClick={(e) => { e.stopPropagation(); install(id); }}>
+                    onClick={(e) => { e.stopPropagation(); install(id, false); }}>
                     {installing === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Install in host terminal"}
                   </Button>
                 </div>

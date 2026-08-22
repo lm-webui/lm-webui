@@ -1,15 +1,18 @@
 """Agent Hub routes — chat wrapper around host CLI agents (admin-only)."""
+import asyncio
 import json
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Cookie, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
+from app.security.auth.core import verify_token
 from app.agents.registry import AGENTS, detect, detect_all, profile, discover_skills, launch_install_terminal
 from app.agents.runner import run, run_collect, InteractiveSession
+from app.agents.terminal import TerminalRegistry
 from app.agents import agent_files as af
 from app.agents.providers import is_interactive, context_file
 from app.agents.parser import parse
@@ -20,6 +23,13 @@ router = APIRouter(prefix="/api/agents", tags=["agents"])
 # One live print-mode process per agent is enough for the current Agent Hub UI. The map lets
 # approval requests reach the exact process that emitted them.
 _live_sessions: dict[str, InteractiveSession] = {}
+
+# PTY-backed interactive sessions, owned per (agent, session_id) so concurrent sessions can't
+# cross-route input/approvals (the per-agent global map above was the bug).
+terminals = TerminalRegistry()
+
+# Native interactive command per agent (bare `cmd` drops into the CLI's TUI).
+TERMINAL_CMD = {name: [cfg["cmd"]] for name, cfg in AGENTS.items()}
 
 
 class ChatRequest(BaseModel):
@@ -59,11 +69,15 @@ async def get_profile(agent: str):
 
 
 @router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.run"))])
-async def install_agent(agent: str):
-    """Launch the trusted per-agent install command in the backend host terminal."""
+async def install_agent(agent: str, update: bool = False):
+    """Launch the trusted per-agent install command in the backend host terminal.
+
+    update=True relaunches the install command even when already installed (npm install -g always
+    fetches the latest, so the install command *is* the update command).
+    """
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    if detect(agent)["installed"]:
+    if not update and detect(agent)["installed"]:
         return {"launched": False, "installed": True, "agent": agent}
     try:
         return launch_install_terminal(agent)
@@ -319,3 +333,71 @@ async def auto_approve_agent(agent: str):
         raise HTTPException(409, "No live agent session")
     live.auto_approve()
     return {"ok": True}
+
+
+@router.websocket("/{agent}/terminal/{sid}")
+async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str = Cookie(None)):
+    """Bidirectional raw terminal for one (agent, session): bytes in/out over WebSocket.
+
+    Input from the browser is written straight into the pty; the agent's raw output (prompts,
+    spinners, colors, sub-agents) streams back. One process per (agent, sid) — owned and scoped by
+    session, so concurrent sessions never cross-route. This is the primary interactive surface;
+    `/chat/stream` + `/answer` remain as the structured fallback.
+    """
+    # Admin-only, same gate as the HTTP routes (WebSocket can't take a Depends).
+    try:
+        payload = verify_token(access_token) if access_token else None
+    except Exception:
+        payload = None
+    if not payload or "agents.run" not in payload.get("permissions", []):
+        await ws.close(code=4403)
+        return
+    if agent not in AGENTS or agent not in TERMINAL_CMD:
+        await ws.close(code=4404)
+        return
+    s = sessions.get(sid)
+    if not s or s.get("agent") != agent:
+        await ws.close(code=4404)
+        return
+    if not detect(agent)["installed"]:
+        await ws.close(code=4403, reason="agent not installed")
+        return
+
+    ts = await terminals.get_or_create(agent, sid, TERMINAL_CMD[agent], s["cwd"])
+    await ws.accept()
+    try:
+        await ws.send_bytes(ts.backlog())  # replay history to a reconnecting client
+    except Exception:
+        pass
+
+    async def pump_out():
+        async for data in ts.output():
+            try:
+                await ws.send_bytes(data)
+            except Exception:
+                return
+
+    out_task = asyncio.create_task(pump_out())
+    try:
+        while True:
+            msg = await ws.receive()
+            if msg.get("type") == "websocket.disconnect":
+                break
+            # Binary frames are raw pty input; text frames are control (resize).
+            if "bytes" in msg and isinstance(msg.get("bytes"), bytes):
+                ts.write(msg["bytes"])
+            elif "text" in msg:
+                try:
+                    ctrl = json.loads(msg["text"])
+                    if ctrl.get("type") == "resize":
+                        ts.resize(int(ctrl.get("cols") or 0), int(ctrl.get("rows") or 0))
+                except (ValueError, TypeError):
+                    pass
+    finally:
+        out_task.cancel()
+        try:
+            await out_task
+        except asyncio.CancelledError:
+            pass
+        await ts.close()
+        terminals.drop(agent, sid)
