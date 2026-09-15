@@ -2,11 +2,26 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
 import urllib.request
 from urllib.parse import urlparse
+
+# Every host runtime that can be installed, and how. This is the single table: the host bridge
+# (agent_server.py) imports it, so a runtime can no longer be installable over the API but rejected
+# by this CLI — `runtime install comfyui` used to be impossible for exactly that reason.
+INSTALL = {
+    "ollama": ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
+    "mlx": [sys.executable, "-m", "pip", "install", "mlx", "mlx-lm", "mlx-optiq"],
+    "gguf": [sys.executable, "-m", "pip", "install", "llama-cpp-python"],
+    "vllm": [sys.executable, "-m", "pip", "install", "vllm"],
+    "comfyui": ["sh", "-c", (
+        'test -d "$HOME/ComfyUI" || git clone https://github.com/comfyanonymous/ComfyUI "$HOME/ComfyUI"; '
+        'python -m pip install -r "$HOME/ComfyUI/requirements.txt"'
+    )],
+}
 
 
 def _run(command: list[str]) -> int:
@@ -25,6 +40,45 @@ def status() -> int:
         "mlx_python": _module_available("mlx"),
         "llama_cpp_python": _module_available("llama_cpp"),
     }, indent=2))
+    return 0
+
+
+def _get_json(url: str) -> dict:
+    with urllib.request.urlopen(url, timeout=5) as response:
+        return json.loads(response.read().decode())
+
+
+def doctor_check(url: str) -> int:
+    """Check a running LM-WebUI instance and report the host inventory alongside it.
+
+    `url` is explicit (flag or LMWEBUI_APP_URL) because the app is not necessarily on this machine
+    — it may be in Docker behind host.docker.internal, or on another host entirely.
+    """
+    if not _valid_endpoint(url):
+        print("URL must be a valid http or https URL", file=sys.stderr)
+        return 2
+    base = url.rstrip("/")
+    # flush: the failure below writes to stderr, which would otherwise appear before this line
+    print(f"Checking LM-WebUI at {base} ...", flush=True)
+    try:
+        health = _get_json(base + "/api/health")
+    except Exception as exc:
+        print(f"❌ Not reachable: {exc}", file=sys.stderr)
+        status()
+        return 1
+
+    print("Status:", health.get("status", "unknown"))
+    print("✅ Service is healthy" if health.get("ready") else "⏳ Starting up...")
+    if health.get("error"):
+        print("   Reason:", health["error"])
+    print(f"Open: {base}")
+    try:
+        # There is no setup token: the first account to register becomes admin.
+        if _get_json(base + "/api/auth/status").get("hasUser") is False:
+            print(f"⚠️  No account yet — the first user to register at {base} becomes admin.")
+    except Exception:
+        pass  # older backend, or the route is unavailable — not worth failing a doctor run over
+    status()
     return 0
 
 
@@ -54,30 +108,8 @@ def _valid_endpoint(endpoint: str) -> bool:
     return parsed.scheme in {"http", "https"} and bool(parsed.hostname)
 
 
-def register_runtime(runtime: str, endpoint: str, server: str) -> int:
-    if not _valid_endpoint(endpoint) or not _valid_endpoint(server):
-        print("Server and endpoint must be valid http or https URLs", file=sys.stderr)
-        return 2
-    print(json.dumps({
-        "next": "Register this endpoint from the admin Runtime Manager",
-        "server": server.rstrip("/"),
-        "runtime_type": runtime,
-        "endpoint": endpoint.rstrip("/"),
-    }, indent=2))
-    return 0
-
-
 def install(runtime: str, dry_run: bool) -> int:
-    commands = {
-        "ollama": ["sh", "-c", "curl -fsSL https://ollama.com/install.sh | sh"],
-        "mlx": [sys.executable, "-m", "pip", "install", "mlx", "mlx-lm"],
-        "gguf": [sys.executable, "-m", "pip", "install", "llama-cpp-python"],
-        "vllm": [sys.executable, "-m", "pip", "install", "vllm"],
-    }
-    if runtime not in commands:
-        print(f"Unsupported host runtime: {runtime}", file=sys.stderr)
-        return 2
-    command = commands[runtime]
+    command = INSTALL[runtime]  # argparse restricts this to INSTALL's keys
     print("Planned command:", " ".join(command))
     if dry_run:
         return 0
@@ -89,39 +121,43 @@ def install(runtime: str, dry_run: bool) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="lm-webui-host", description="Manage host runtimes used by LM-WebUI")
+    parser = argparse.ArgumentParser(
+        prog="lm-webui-host",
+        description="Inspect this host and manage the runtimes and host bridge LM-WebUI uses",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("status")
-    sub.add_parser("doctor")
+    sub.add_parser("status", help="JSON inventory of this host (no network calls)")
+    doctor = sub.add_parser("doctor", help="check a running LM-WebUI, then show the host inventory")
+    doctor.add_argument(
+        "--url",
+        default=os.environ.get("LMWEBUI_APP_URL", "http://localhost:7070"),
+        help="base URL of the running app (env: LMWEBUI_APP_URL)",
+    )
     runtime = sub.add_parser("runtime")
     runtime_sub = runtime.add_subparsers(dest="runtime_command", required=True)
-    runtime_sub.add_parser("list")
-    detect = runtime_sub.add_parser("detect")
-    test = runtime_sub.add_parser("test")
+    test = runtime_sub.add_parser("test", help="probe an Ollama-compatible endpoint")
     test.add_argument("endpoint", nargs="?", default="http://127.0.0.1:11434")
-    register = runtime_sub.add_parser("register")
-    register.add_argument("runtime", choices=["ollama", "openai_compatible", "vllm", "llamacpp"])
-    register.add_argument("--endpoint", required=True)
-    register.add_argument("--server", default="http://127.0.0.1:7070")
     install_parser = runtime_sub.add_parser("install")
-    install_parser.add_argument("runtime", choices=["ollama", "mlx", "gguf", "vllm"])
+    install_parser.add_argument("runtime", choices=sorted(INSTALL))
     install_parser.add_argument("--dry-run", action="store_true")
-    uninstall_parser = runtime_sub.add_parser("uninstall")
-    uninstall_parser.add_argument("runtime", choices=["ollama", "mlx", "gguf", "vllm"])
+    serve_parser = runtime_sub.add_parser("serve", help="run the authenticated host bridge")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8765)
     args = parser.parse_args()
-    if args.command in {"status", "doctor"}:
+
+    if args.command == "status":
         return status()
-    if args.runtime_command in {"list", "detect"}:
-        return status()
-    if args.runtime_command == "test":
-        return test_runtime(args.endpoint)
-    if args.runtime_command == "register":
-        return register_runtime(args.runtime, args.endpoint, args.server)
-    if args.runtime_command == "install":
-        return install(args.runtime, args.dry_run)
-    if args.runtime_command == "uninstall":
-        print(f"Remove {args.runtime} using the host operating system's package/service manager.")
-        return 0
+    if args.command == "doctor":
+        return doctor_check(args.url)
+    if args.command == "runtime":
+        if args.runtime_command == "test":
+            return test_runtime(args.endpoint)
+        if args.runtime_command == "install":
+            return install(args.runtime, args.dry_run)
+        if args.runtime_command == "serve":
+            from .agent_server import serve
+            serve(args.host, args.port)
+            return 0
     return 2
 
 

@@ -111,6 +111,12 @@ async def install_runtime(
     """Install a runtime on the host via subprocess."""
     if runtime_type not in {"mlx", "comfyui"}:
         raise HTTPException(400, f"Runtime '{runtime_type}' does not support auto-install")
+    from app.services import host_agent
+    if host_agent.enabled():
+        try:
+            return host_agent.request("/runtimes/install", {"runtime": runtime_type})
+        except Exception as exc:
+            raise HTTPException(502, f"Host agent unavailable: {exc}")
     installer = get_runtime_installer()
     result = installer.install(runtime_type)
     if not result["success"]:

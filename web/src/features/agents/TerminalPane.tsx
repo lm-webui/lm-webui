@@ -74,6 +74,15 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   const sockRef = useRef<WebSocket | null>(null);
   const [state, setState] = useState<ConnState>("closed");
   const [ready, setReady] = useState(false);
+  // Bumping this re-runs the connect effect, which is how "reconnect" works without a page reload.
+  const [nonce, setNonce] = useState(0);
+  // Why the socket dropped: 4403 = not installed / no terminal permission, 4404 = session mismatch.
+  const [closed, setClosed] = useState<{ code: number; reason: string } | null>(null);
+
+  const send = (data: string | Uint8Array) => {
+    const s = sockRef.current;
+    if (s?.readyState === WebSocket.OPEN) s.send(data as any);
+  };
 
   // 1. Load the terminal engine.
   useEffect(() => {
@@ -102,11 +111,12 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       try { fit.fit(); } catch { /* host may be hidden initially */ }
     }
     term.focus(); // native input (arrows/numbers/Enter) works without a click
-    // Keyboard → pty bytes.
-    term.onData((data: string) => { sockRef.current?.send(new TextEncoder().encode(data)); });
+    // Keyboard → pty bytes. Sending on a CONNECTING/CLOSED socket throws InvalidStateError, so
+    // everything goes through send().
+    term.onData((data: string) => send(new TextEncoder().encode(data)));
     // Terminal resize → backend window size.
     term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-      sockRef.current?.send(JSON.stringify({ type: "resize", cols, rows }));
+      send(JSON.stringify({ type: "resize", cols, rows }));
     });
     const ro = new ResizeObserver(() => { try { fitRef.current?.fit(); } catch { /* ignore */ } });
     ro.observe(hostRef.current);
@@ -119,13 +129,15 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     const ws = new WebSocket(agentTerminalWsUrl(agent, sessionId));
     sockRef.current = ws;
     setState("connecting");
+    setClosed(null);
     ws.binaryType = "arraybuffer";
+    let errored = false;
     ws.onopen = () => {
       setState("open");
       try { fitRef.current?.fit(); } catch { /* ignore */ }
       termRef.current?.focus(); // refocus on connect/reconnect/session switch
       const t = termRef.current;
-      ws.send(JSON.stringify({ type: "resize", cols: t?.cols ?? 80, rows: t?.rows ?? 24 }));
+      send(JSON.stringify({ type: "resize", cols: t?.cols ?? 80, rows: t?.rows ?? 24 }));
     };
     ws.onmessage = (ev) => {
       const t = termRef.current;
@@ -133,13 +145,26 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       if (ev.data instanceof ArrayBuffer) t.write(new Uint8Array(ev.data));
       else if (typeof ev.data === "string") t.write(ev.data);
     };
-    ws.onclose = () => setState((s) => (s === "connecting" ? "error" : "closed"));
-    ws.onerror = () => { ws.close(); setState("error"); };
-    return () => { ws.close(); sockRef.current = null; };
+    // onerror always precedes onclose; setting state here would be overwritten by onclose a tick
+    // later, so it only records that the drop was not clean.
+    ws.onerror = () => { errored = true; };
+    ws.onclose = (ev) => {
+      setClosed({ code: ev.code, reason: ev.reason });
+      setState(errored || ev.code !== 1000 ? "error" : "closed");
+    };
+    return () => {
+      // Detach the handlers before closing: a superseded socket's onclose must not clobber the
+      // state of the one replacing it.
+      ws.onclose = null;
+      ws.onerror = null;
+      ws.onmessage = null;
+      ws.close();
+      sockRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agent, sessionId, ready]);
+  }, [agent, sessionId, ready, nonce]);
 
-  const connect = () => { if (state !== "open") window.location.reload(); };
+  const connect = () => setNonce((n) => n + 1);
 
   if (!agent || !sessionId) {
     return (
@@ -162,6 +187,12 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
           </button>
         )}
       </div>
+
+      {state !== "open" && closed && (
+        <div className="shrink-0 border-b border-border/40 bg-destructive/10 px-3 py-1 text-[.65rem] text-destructive font-mono">
+          socket closed ({closed.code}{closed.reason ? `: ${closed.reason}` : ""})
+        </div>
+      )}
 
       <div ref={hostRef} className="flex-1 min-h-0 min-w-0 overflow-hidden bg-black/80 p-2" />
 

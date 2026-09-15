@@ -45,6 +45,11 @@ class TerminalSession:
     def exit_code(self) -> int | None:
         return self._exit_code
 
+    @property
+    def alive(self) -> bool:
+        """True while the pty is still open — i.e. the CLI process is running."""
+        return self._master is not None
+
     def backlog(self) -> bytes:
         """All output since the session started (for replay to a reconnecting client)."""
         return b"".join(self._backlog)
@@ -129,7 +134,15 @@ class TerminalSession:
 
 
 class TerminalRegistry:
-    """Owns live terminal sessions by (agent, sid); one process per key."""
+    """Owns live terminal sessions by (agent, sid); one process per key.
+
+    A session outlives the WebSocket that opened it: disconnecting detaches, it does not kill,
+    so the client can reconnect and replay the backlog. The process is reaped when its session
+    is deleted, or by the registry noticing it exited.
+
+    ponytail: an abandoned session keeps its CLI process until the session is deleted. Add an
+    idle reaper if unattended tabs ever pile up on a shared deployment.
+    """
 
     def __init__(self):
         self._sessions: dict[tuple[str, str], TerminalSession] = {}
@@ -140,7 +153,7 @@ class TerminalRegistry:
     async def get_or_create(self, agent: str, sid: str, cmd: list[str], cwd: str) -> TerminalSession:
         key = (agent, sid)
         ts = self._sessions.get(key)
-        if ts is None or ts._master is None:  # dead/reaped → respawn
+        if ts is None or not ts.alive:  # dead/reaped → respawn
             ts = TerminalSession(agent, cmd, cwd)
             await ts.start()
             self._sessions[key] = ts
@@ -148,3 +161,9 @@ class TerminalRegistry:
 
     def drop(self, agent: str, sid: str) -> None:
         self._sessions.pop((agent, sid), None)
+
+    async def close(self, agent: str, sid: str) -> None:
+        """Kill and forget a session's process — for when the session itself is deleted."""
+        ts = self._sessions.pop((agent, sid), None)
+        if ts is not None:
+            await ts.close()

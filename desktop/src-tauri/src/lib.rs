@@ -27,6 +27,11 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, u16), String> {
         return Err(format!("Backend sidecar not found: {}", binary.display()));
     }
 
+    // Keep the sidecar's stderr: with Stdio::null() a failed boot is undiagnosable.
+    let stderr = fs::File::create(root.join("logs").join("stderr.log"))
+        .map(Stdio::from)
+        .unwrap_or_else(|_| Stdio::null());
+
     let child = Command::new(binary)
         .current_dir(&resource_dir)
         .env("APP_ENVIRONMENT", "production")
@@ -40,7 +45,7 @@ fn start_backend(app: &tauri::AppHandle) -> Result<(Child, u16), String> {
         .env("LMWEBUI_WEB_DIST", resource_dir.join("web-dist"))
         .env("CORS_ORIGINS", format!("http://127.0.0.1:{port}"))
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(stderr)
         .spawn()
         .map_err(|e| format!("Failed to start backend: {e}"))?;
 

@@ -3,6 +3,9 @@
 # Config is generated at ~/.lmwebui/config.yaml on install.
 
 server:
+  # Informational only — nothing reads these. The bind address comes from the service definition
+  # (systemd unit / launchd plist / APP_SERVER_HOST+APP_SERVER_PORT for the desktop app), and the
+  # port is also pinned in ~/.lmwebui/lmwebui, which prints the URL and probes health.
   host: "0.0.0.0"
   port: 7070
 

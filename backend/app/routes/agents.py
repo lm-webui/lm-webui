@@ -10,8 +10,10 @@ from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
 from app.security.auth.core import verify_token
-from app.agents.registry import AGENTS, detect, detect_all, profile, discover_skills, launch_install_terminal
-from app.agents.runner import run, run_collect, InteractiveSession
+from app.agents.registry import (
+    AGENTS, detect, detect_all, forget, profile, launch_install_terminal,
+)
+from app.agents.runner import run, InteractiveSession
 from app.agents.terminal import TerminalRegistry
 from app.agents import agent_files as af
 from app.agents.providers import is_interactive, context_file
@@ -20,8 +22,9 @@ from app.agents.sessions import sessions
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
-# One live print-mode process per agent is enough for the current Agent Hub UI. The map lets
-# approval requests reach the exact process that emitted them.
+# Live print-mode process per *session*, so approval requests reach the exact process that
+# emitted them. Keyed by agent it was not: two sessions for one agent clobbered each other and
+# /answer approved a tool call in the other tab's run.
 _live_sessions: dict[str, InteractiveSession] = {}
 
 # PTY-backed interactive sessions, owned per (agent, session_id) so concurrent sessions can't
@@ -48,7 +51,7 @@ def _resolve_session(agent: str, req: ChatRequest):
     """
     sid = req.session_id or sessions.create(agent)
     s = sessions.get(sid)
-    if not s:
+    if not s or s.get("agent") != agent:
         raise HTTPException(404, "Session not found")
     history = s["transcript"][-6:]
     context = "\n".join(f"{m['role']}: {m['content']}" for m in history)
@@ -57,8 +60,15 @@ def _resolve_session(agent: str, req: ChatRequest):
 
 
 @router.get("", dependencies=[Depends(require_permission("agents.run"))])
-async def list_agents():
-    return {"agents": detect_all()}
+async def list_agents(refresh: bool = False):
+    """Installed CLI agents on the backend's own machine.
+
+    Deliberately *not* host-bridged: the host bridge covers runtimes only (it has no install,
+    file, chat or terminal routes), so listing host agents here would show install state that
+    every other route in this file cannot act on. Pass `?refresh=true` to bypass the 24h
+    detect cache (the UI does this after an install).
+    """
+    return {"agents": detect_all(refresh=refresh)}
 
 
 @router.get("/{agent}/profile", dependencies=[Depends(require_permission("agents.run"))])
@@ -80,17 +90,13 @@ async def install_agent(agent: str, update: bool = False):
     if not update and detect(agent)["installed"]:
         return {"launched": False, "installed": True, "agent": agent}
     try:
-        return launch_install_terminal(agent)
+        result = launch_install_terminal(agent)
     except RuntimeError as exc:
+        # No host terminal (headless / Docker / no GUI). The UI shows the command to copy instead.
         raise HTTPException(409, str(exc))
-
-
-@router.get("/{agent}/commands", dependencies=[Depends(require_permission("agents.run"))])
-async def get_commands(agent: str):
-    """Installed skills/plugins (Claude) surfaced as slash commands — no per-skill UI code."""
-    if agent not in AGENTS:
-        raise HTTPException(404, "Unknown agent")
-    return {"skills": discover_skills(agent)}
+    # The 24h detect cache would otherwise keep reporting 'missing' for the rest of the day.
+    forget(agent)
+    return result
 
 
 @router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
@@ -109,6 +115,8 @@ async def create_session(agent: str):
 
 @router.delete("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.run"))])
 async def delete_session(agent: str, sid: str):
+    # Deleting the session is what reaps its PTY now that a disconnect only detaches.
+    await terminals.close(agent, sid)
     if not sessions.delete(sid):
         raise HTTPException(404, "Session not found")
     return {"ok": True}
@@ -186,25 +194,17 @@ async def put_agent_file(agent: str, name: str, body: dict):
     return {"ok": True, "path": path}
 
 
-@router.post("/{agent}/chat", dependencies=[Depends(require_permission("agents.run"))])
-async def chat(agent: str, req: ChatRequest):
-    if agent not in AGENTS:
-        raise HTTPException(404, "Unknown agent")
-    msg = req.message.strip()
-    if not msg:
-        raise HTTPException(400, "Message is required")
-    sid, s, prompt = _resolve_session(agent, req)
+def _reject_unsupported(agent: str, req: ChatRequest) -> None:
+    """400 rather than silently ignoring a field the CLI cannot take.
 
-    try:
-        raw = await run_collect(agent, prompt, s["cwd"])
-    except Exception as exc:
-        raise HTTPException(500, f"Agent run failed: {exc}")
-
-    blocks = parse(agent, raw)
-    sessions.append(sid, "user", msg)
-    if blocks:
-        sessions.append(sid, "assistant", blocks[-1].get("content", ""))
-    return {"session_id": sid, "blocks": blocks}
+    Only claude documents --model / --append-system-prompt (registry.AGENTS). The other three
+    used to accept `model` and `skill` and drop them on the floor.
+    """
+    cfg = AGENTS[agent]
+    if req.model and not cfg.get("model_flag"):
+        raise HTTPException(400, f"{agent} does not accept a model")
+    if req.skill and not cfg.get("skill_flag"):
+        raise HTTPException(400, f"{agent} does not accept a skill")
 
 
 @router.post("/{agent}/chat/stream", dependencies=[Depends(require_permission("agents.run"))])
@@ -215,22 +215,29 @@ async def chat_stream(agent: str, req: ChatRequest):
     msg = req.message.strip()
     if not msg:
         raise HTTPException(400, "Message is required")
+    _reject_unsupported(agent, req)
     sid, s, prompt = _resolve_session(agent, req)
-    sessions.start_run(sid)
 
     async def _sse(payload: dict):
         return f"data: {json.dumps(payload)}\n\n"
+
+    def _finish(sid: str, msg: str, run_info: dict | None) -> None:
+        """Record the turn's transcript. Shared by both paths."""
+        sessions.append(sid, "user", msg)
+        if run_info and run_info.get("output"):
+            blocks = parse(agent, run_info["output"])
+            if blocks:
+                sessions.append(sid, "assistant", blocks[-1].get("content", ""))
 
     async def event_stream():
         if not detect(agent)["installed"]:
             command = AGENTS[agent]["install"]
             yield await _sse({"type": "status", "data": {"status": "not_installed"}})
             yield await _sse({
-                "type": "output",
-                "content": f"{agent} is not installed on the host. Run this in a terminal:\n\n$ {command}\n",
+                "type": "error",
+                "content": f"{agent} is not installed here. Run this where the backend runs:\n\n$ {command}",
             })
             yield await _sse({"type": "install", "data": {"agent": agent, "command": command}})
-            sessions.fail_run(sid)
             yield await _sse({"type": "complete"})
             return
 
@@ -245,9 +252,9 @@ async def chat_stream(agent: str, req: ChatRequest):
             live = InteractiveSession(s["cwd"], agent=agent,
                                       model=s.get("model") or "", system_prompt=s.get("system_prompt") or "",
                                       resume_id=s.get("claude_session_id") or "")
-            await live.start()
-            _live_sessions[agent] = live
             try:
+                await live.start()
+                _live_sessions[sid] = live
                 # Connected-agent manifest the running agent auto-reads (claude → CLAUDE.md).
                 try:
                     (Path(s["cwd"]) / context_file(agent)).write_text(
@@ -267,15 +274,19 @@ async def chat_stream(agent: str, req: ChatRequest):
                         yield await _sse({"type": "tool", "data": ev["data"]})
                     elif ev["type"] == "tool_result":
                         yield await _sse({"type": "tool_result", "data": ev["data"]})
+                    elif ev["type"] == "error":
+                        # The CLI died without a result frame (runner._read always sends one).
+                        run_info = sessions.end_run(sid, ev.get("exit_code", 1))
+                        _finish(sid, msg, run_info)
+                        yield await _sse({"type": "run", "data": run_info})
+                        yield await _sse({"type": "error", "content": ev.get("content", "Agent failed")})
+                        yield await _sse({"type": "complete"})
+                        break
                     elif ev["type"] == "complete":
                         run_info = sessions.end_run(sid, 0, usage=ev.get("usage"),
                                                     cost_usd=ev.get("cost_usd"),
                                                     context_window=ev.get("context_window"))
-                        sessions.append(sid, "user", msg)
-                        if run_info and run_info.get("output"):
-                            blocks = parse(agent, run_info["output"])
-                            if blocks:
-                                sessions.append(sid, "assistant", blocks[-1].get("content", ""))
+                        _finish(sid, msg, run_info)
                         yield await _sse({"type": "run", "data": run_info})
                         yield await _sse({"type": "complete"})
                         break
@@ -286,38 +297,46 @@ async def chat_stream(agent: str, req: ChatRequest):
                 sessions.fail_run(sid)
                 yield await _sse({"type": "error", "content": str(exc)})
             finally:
-                if _live_sessions.get(agent) is live:
-                    _live_sessions.pop(agent, None)
+                if _live_sessions.get(sid) is live:
+                    _live_sessions.pop(sid, None)
                 await live.close()
             return
 
         # Non-interactive one-shot path.
         holder: dict = {}
+        sessions.start_run(sid)
         try:
-            yield await _sse({"type": "status", "data": {"status": "running"}})
+            yield await _sse({"type": "status", "data": {"status": "running", "session_id": sid}})
             async for line in run(agent, prompt, s["cwd"], holder):
                 sessions.append_output(sid, line)
                 yield await _sse({"type": "output", "content": line})
             rc = holder.get("returncode", 1)
             run_info = sessions.end_run(sid, rc)
-            sessions.append(sid, "user", msg)
-            if run_info and run_info.get("output"):
-                blocks = parse(agent, run_info["output"])
-                if blocks:
-                    sessions.append(sid, "assistant", blocks[-1].get("content", ""))
+            _finish(sid, msg, run_info)
+            if rc != 0:
+                yield await _sse({
+                    "type": "error",
+                    "content": f"{agent} exited with code {rc}.",
+                })
             yield await _sse({"type": "run", "data": run_info})
             yield await _sse({"type": "complete"})
         except Exception as exc:
-            sessions.fail_run(sid)
             yield await _sse({"type": "error", "content": str(exc)})
+        finally:
+            # Runs on client disconnect too — without it the run stays `running` forever.
+            sessions.fail_run(sid)
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.post("/{agent}/answer", dependencies=[Depends(require_permission("agents.run"))])
 async def answer_agent(agent: str, body: dict):
-    """Resolve a permission request from the live Claude stream."""
-    live = _live_sessions.get(agent)
+    """Resolve a permission request from the live Claude stream.
+
+    Keyed by session_id, not agent: with two sessions open on one agent the old per-agent map
+    answered whichever process happened to be registered last.
+    """
+    live = _live_sessions.get(body.get("session_id") or "")
     prompt_id = body.get("prompt_id")
     if not live or not prompt_id:
         raise HTTPException(409, "No live agent permission request")
@@ -326,9 +345,9 @@ async def answer_agent(agent: str, body: dict):
 
 
 @router.post("/{agent}/auto-approve", dependencies=[Depends(require_permission("agents.run"))])
-async def auto_approve_agent(agent: str):
-    """Allow subsequent permission requests for the current live session."""
-    live = _live_sessions.get(agent)
+async def auto_approve_agent(agent: str, body: dict):
+    """Allow subsequent permission requests for the given live session."""
+    live = _live_sessions.get(body.get("session_id") or "")
     if not live:
         raise HTTPException(409, "No live agent session")
     live.auto_approve()
@@ -394,10 +413,11 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
                 except (ValueError, TypeError):
                     pass
     finally:
+        # Detach, do not kill: the CLI keeps running so a reconnect replays the backlog and
+        # switching tabs/agents doesn't terminate an in-flight session. Reaped by
+        # DELETE /{agent}/sessions/{sid}, or by the registry when the process exits on its own.
         out_task.cancel()
         try:
             await out_task
         except asyncio.CancelledError:
             pass
-        await ts.close()
-        terminals.drop(agent, sid)

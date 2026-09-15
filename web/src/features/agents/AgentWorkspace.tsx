@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  Bot, Loader2, Copy, Check, RefreshCw, ArrowLeft,
+  Bot, Loader2, Copy, Check, RefreshCw,
   PanelRightClose, PanelRightOpen, Activity, CircleDot, Clock, Plus, MessageSquareText,
-  CheckCircle, XCircle, AlertTriangle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { authFetch, streamAgent, getAgentSessions, installAgent } from "@/utils/api";
+import {
+  authFetch, streamAgent, getAgents, getAgentSessions, getAgentProfile, installAgent,
+} from "@/utils/api";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { AGENT_META, AGENT_IDS, type AgentInfo } from "./agentProviders";
+import { AGENT_META, AGENT_IDS, HealthBadge, type AgentInfo } from "./agentProviders";
+import { AgentRail } from "./AgentRail";
 import AgentFiles from "./AgentFiles";
 import AgentTelemetry from "./AgentTelemetry";
 import TerminalPane from "./TerminalPane";
@@ -32,25 +32,47 @@ export default function AgentWorkspace() {
   const [sessionId, setSessionId] = useState("");
   const [sessions, setSessions] = useState<any[]>([]);
 
-  const refresh = async () => {
-    try { const d: any = await authFetch("/api/agents"); setAgents(d.agents || []); } catch {}
+  // `bust` re-probes install state server-side, bypassing the backend's 24h detect cache.
+  const refresh = async (bust = false) => {
+    try {
+      const d: any = await getAgents(bust);
+      setAgents(d.agents || []);
+    } catch (err) {
+      // Not silent: an empty list renders every agent as "not installed", which is a
+      // very different story from "the request failed".
+      toast.error(`Could not list agents: ${(err as Error).message}`);
+    }
   };
-  useEffect(() => { refresh(); }, []);
+  useEffect(() => { void refresh(); }, []);
 
   // Load the agent's past sessions for the rail (continuation is --resume-based now).
   useEffect(() => {
     if (!agent) { setSessions([]); return; }
-    getAgentSessions(agent).then((d) => setSessions(d.sessions || [])).catch(() => setSessions([]));
+    let alive = true;
+    getAgentSessions(agent)
+      .then((d) => { if (alive) setSessions(d.sessions || []); })
+      .catch(() => { if (alive) setSessions([]); });
+    return () => { alive = false; };
   }, [agent]);
 
+  // Guards against a stale POST: clicking claude then codex could otherwise land claude's
+  // session id while codex is selected, and the terminal would connect to a mismatched pair.
+  const selectSeq = useRef(0);
+
   const selectAgent = async (id: string) => {
+    const seq = ++selectSeq.current;
     setAgent(id);
     setSessionId("");
+    setTab("terminal"); // the TUI is the single interactive surface for a live agent
     try {
       const r: any = await authFetch(`/api/agents/${id}/sessions`, { method: "POST" });
-      setSessionId(r.session_id);
-    } catch { setSessionId(""); }
-    setTab("terminal"); // the TUI is the single interactive surface for a live agent
+      if (seq === selectSeq.current) setSessionId(r.session_id);
+    } catch (err) {
+      if (seq === selectSeq.current) {
+        setSessionId("");
+        toast.error(`Could not start a ${id} session: ${(err as Error).message}`);
+      }
+    }
   };
 
   const resumeSession = async (sid: string) => {
@@ -63,6 +85,14 @@ export default function AgentWorkspace() {
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-1 overflow-hidden bg-background relative">
+      {/* The agent menu. The Hub needs the width for the terminal, so below `sm` the rail is
+          replaced by the chip selector under the header. */}
+      <AgentRail
+        agents={agents}
+        agent={agent}
+        onSelect={selectAgent}
+        className="hidden sm:flex"
+      />
       <Tabs value={tab} onValueChange={setTab} className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border/50 px-4 h-12 shrink-0">
@@ -82,19 +112,23 @@ export default function AgentWorkspace() {
           </Button>
         </div>
 
-        <TabsContent value="terminal" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+        <div className="shrink-0 border-b border-border/40 px-3 py-2 sm:hidden">
+          <AgentSelector agents={agents} agent={agent} onSelect={selectAgent} />
+        </div>
+
+        {/* forceMount: without it Radix unmounts the inactive panels, so leaving the Terminal
+            tab tears down the WebSocket (and, before the backend detach fix, the agent's
+            process with it). The hidden-when-inactive class needs the panel to stay mounted. */}
+        <TabsContent forceMount value="terminal" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
           <div className="flex flex-col h-full min-h-0">
             <TerminalPane agent={agent} sessionId={sessionId} />
-            <div className="shrink-0 border-t border-border/40 bg-background p-3">
-              <AgentSelector agents={agents} agent={agent} onSelect={selectAgent} />
-            </div>
           </div>
         </TabsContent>
-        <TabsContent value="activity" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
-          <ActivityTab agents={agents} agent={agent} onSelect={setAgent} />
+        <TabsContent forceMount value="activity" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+          <ActivityTab agent={agent} sessionId={sessionId} />
         </TabsContent>
-        <TabsContent value="manage" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
-          <ManageTab agents={agents} agent={agent} onRefresh={refresh} />
+        <TabsContent forceMount value="manage" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
+          <ManageTab agent={agent} active={active} onRefresh={refresh} />
         </TabsContent>
       </Tabs>
 
@@ -183,9 +217,7 @@ function RunCard({ run }: { run: any }) {
   );
 }
 
-function ActivityTab({ agents, agent, onSelect }: {
-  agents: AgentInfo[]; agent: string; onSelect: (id: string) => void;
-}) {
+function ActivityTab({ agent, sessionId }: { agent: string; sessionId: string }) {
   const [runs, setRuns] = useState<any[]>([]);
   const [live, setLive] = useState<{ text: string; startedAt: number; tokens: number } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -198,7 +230,16 @@ function ActivityTab({ agents, agent, onSelect }: {
     if (!a) { setRuns([]); return; }
     try { const d: any = await authFetch(`/api/agents/${a}/runs`); setRuns(d.runs || []); } catch { setRuns([]); }
   };
-  useEffect(() => { loadRuns(agent); }, [agent]);
+  useEffect(() => {
+    // Switching agents must not leave the previous agent's run streaming into this tab's card.
+    abortRef.current?.abort();
+    setLive(null);
+    setError("");
+    void loadRuns(agent);
+  }, [agent]);
+
+  // Stop a run's callbacks writing into an unmounted tab.
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   const runNow = async () => {
     const text = input.trim();
@@ -211,11 +252,16 @@ function ActivityTab({ agents, agent, onSelect }: {
     const ctl = new AbortController();
     abortRef.current = ctl;
     let acc = "";
-    await streamAgent(agent, { message: text }, {
+    // session_id is what makes the second run continue the first (claude resumes via --resume);
+    // omitting it created a brand-new session — and so a brand-new conversation — every time.
+    await streamAgent(agent, { message: text, ...(sessionId ? { session_id: sessionId } : {}) }, {
       onOutput: (line) => { acc += line; setLive({ text: acc, startedAt, tokens: Math.floor(acc.length / 4) }); },
-      onRun: (run) => { setLive(null); setRuns((r) => [run, ...r.filter((x) => x.run_id !== run.run_id)]); },
-      onError: (err) => { setLive(null); setError(err.message || "Agent run failed"); },
+      onRun: (run) => { setRuns((r) => [run, ...r.filter((x) => x.run_id !== run.run_id)]); },
+      onError: (err) => { setError(err.message || "Agent run failed"); },
+      // Runs last on every path, including the not-installed one that emits no `run` frame.
+      onComplete: () => setLive(null),
     }, ctl.signal);
+    setLive(null);
     setBusy(false);
     abortRef.current = null;
   };
@@ -250,9 +296,8 @@ function ActivityTab({ agents, agent, onSelect }: {
         )}
         {runs.map((r) => <RunCard key={r.run_id} run={r} />)}
       </div>
-      <div className="border-t p-3 space-y-2">
-        {/* Agent selector above the input, matching the chat tab layout */}
-        <AgentSelector agents={agents} agent={agent} onSelect={onSelect} />
+      <div className="border-t p-3">
+        {/* Agent selection lives in the rail (or the mobile chip row under the header). */}
         <div className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runNow()}
             placeholder={`Run ${agent || "an agent"}…`}
@@ -267,125 +312,108 @@ function ActivityTab({ agents, agent, onSelect }: {
 }
 
 /* ----------------------------- Manage tab ------------------------------- */
-// Health badge, matching the Runtime Manager's status styling (RuntimeTab.tsx).
-function HealthBadge({ status, installed }: { status?: string | undefined; installed: boolean }) {
-  if (status === "ok" || (installed && !status)) {
-    return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"><CheckCircle className="h-3 w-3 mr-1" />Installed</Badge>;
-  }
-  if (status === "degraded") {
-    return <Badge className="bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"><AlertTriangle className="h-3 w-3 mr-1" />Degraded</Badge>;
-  }
-  return <Badge className="bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"><XCircle className="h-3 w-3 mr-1" />Not installed</Badge>;
-}
-
-function ManageTab({ agents, agent, onRefresh }: {
-  agents: AgentInfo[]; agent: string; onRefresh: () => void;
+/* The selected agent's detail: install state on top, its config/skill/memory files below.
+ * Selection lives in the rail, so there is no card grid or drill-down here. */
+function ManageTab({ agent, active, onRefresh }: {
+  agent: string; active: AgentInfo | undefined; onRefresh: (bust?: boolean) => void;
 }) {
-  const [copied, setCopied] = useState("");
-  const [installing, setInstalling] = useState("");
-  const [editingAgent, setEditingAgent] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [installing, setInstalling] = useState(false);
+  const [installCmd, setInstallCmd] = useState("");
+  const installed = !!active?.installed;
 
-  const copy = async (cmd: string) => {
-    const ok = await copyText(cmd);
-    if (ok) { setCopied(cmd); setTimeout(() => setCopied(""), 1500); }
+  // The install command is owned by the backend agent registry — read it rather than mirror it.
+  useEffect(() => {
+    if (!agent) { setInstallCmd(""); return; }
+    let alive = true;
+    getAgentProfile(agent)
+      .then((p) => { if (alive) setInstallCmd(p.install_cmd || ""); })
+      .catch(() => { if (alive) setInstallCmd(""); });
+    return () => { alive = false; };
+  }, [agent]);
+
+  const copy = async () => {
+    if (!installCmd) return;
+    if (await copyText(installCmd)) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }
   };
 
-  const install = async (id: string, update: boolean) => {
-    setInstalling(id);
+  const install = async (update: boolean) => {
+    if (!agent) return;
+    setInstalling(true);
     try {
-      await installAgent(id, update);
-      toast.success(`${update ? "Update" : "Install"} launched in the host terminal.`);
-      setTimeout(onRefresh, 2500);
-    } catch { /* the host terminal remains the source of install errors */ }
-    setInstalling("");
+      const r = await installAgent(agent, update);
+      if (r.launched) {
+        toast.success(`${update ? "Update" : "Install"} launched in a terminal.`);
+      } else {
+        toast.info(`${agent} is already installed.`);
+      }
+      // The backend drops its detect cache on the way out, so this re-probe sees the new state.
+      setTimeout(() => onRefresh(true), 2500);
+    } catch (err) {
+      // 409 = no terminal to open (headless / Docker). The command is right here to copy.
+      toast.error((err as Error).message || `Could not install ${agent}`);
+    }
+    setInstalling(false);
   };
 
-  // Drill-down: clicking an agent opens its config/skill/memory editor.
-  if (editingAgent) {
+  if (!agent) {
     return (
-      <div className="flex flex-col h-full min-h-0">
-        <div className="p-3 border-b flex items-center gap-2">
-          <Button variant="ghost" size="sm" className="gap-1" onClick={() => setEditingAgent("")}>
-            <ArrowLeft className="h-3.5 w-3.5" /> All agents
-          </Button>
-          <span className="text-sm font-medium">{AGENT_META[editingAgent]?.label ?? editingAgent}</span>
-        </div>
-        <div className="flex-1 min-h-0">
-          <AgentFiles agent={editingAgent} />
-        </div>
+      <div className="flex h-full flex-col items-center justify-center text-sm text-muted-foreground">
+        Pick an agent from the left to manage it.
       </div>
     );
   }
 
+  const meta = AGENT_META[agent];
+
   return (
-    <div className="p-4 overflow-y-auto h-full grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {AGENT_IDS.map((id) => {
-        const meta = AGENT_META[id]!;
-        const Icon = meta.icon;
-        const a = agents.find((x) => x.id === id);
-        const installed = a?.installed;
-        return (
-          <Card key={id} className={cn(installed && "cursor-pointer", agent === id && "ring-1 ring-primary")}
-            onClick={() => installed && setEditingAgent(id)}>
-            <CardHeader className="pb-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icon className={cn("h-5 w-5", meta.color)} />
-                  <CardTitle className="text-sm">{meta.label}</CardTitle>
-                </div>
-                <HealthBadge status={a?.status} installed={!!installed} />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="shrink-0 border-b border-border/40 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{meta?.label ?? agent}</span>
+          <HealthBadge status={active?.status} installed={installed} />
+          {installed && meta ? (
+            <Button variant="outline" size="sm" className="ml-auto gap-1.5" disabled={installing}
+              onClick={() => install(true)}>
+              {installing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {installing ? "Updating…" : "Update"}
+            </Button>
+          ) : null}
+        </div>
+
+        {installed ? (
+          <p className="text-xs text-muted-foreground">
+            {active?.version && <span className="mr-2">v{active.version}</span>}
+            <span className="font-mono text-[.65rem]">{active?.path || "on PATH"}</span>
+          </p>
+        ) : (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              This agent is not on the host yet. Install it to chat with it.
+            </p>
+            {installCmd ? (
+              <div className="flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1">
+                <code className="flex-1 truncate font-mono text-[.65rem]">{installCmd}</code>
+                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={copy} title="Copy install command">
+                  {copied ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
+                </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {installed ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
-                    {a?.version && <span className="mr-2">v{a.version}</span>}
-                    <span className="truncate max-w-[180px]">{a?.path || "on PATH"}</span>
-                  </p>
-                  <Button variant="outline" size="sm" className="w-full" disabled={installing === id}
-                    onClick={(e) => { e.stopPropagation(); install(id, true); }}>
-                    {installing === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
-                    {installing === id ? "Updating…" : "Update in host terminal"}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-[.7rem] text-muted-foreground">Install this agent on the host to chat with it.</p>
-                  <div className="flex items-center gap-1 rounded-md bg-muted/50 px-2 py-1">
-                    <code className="flex-1 text-[.65rem] truncate">{getInstallCmd(id)}</code>
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={(e) => { e.stopPropagation(); copy(getInstallCmd(id)); }}>
-                      {copied === getInstallCmd(id) ? <Check className="h-3 w-3 text-emerald-500" /> : <Copy className="h-3 w-3" />}
-                    </Button>
-                  </div>
-                  <Button size="sm" className="w-full" disabled={installing === id}
-                    onClick={(e) => { e.stopPropagation(); install(id, false); }}>
-                    {installing === id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Install in host terminal"}
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        );
-      })}
-      <div className="sm:col-span-2">
-        <Button variant="outline" size="sm" onClick={onRefresh} className="gap-2">
-          <RefreshCw className="h-3.5 w-3.5" /> Re-check installed agents
-        </Button>
+            ) : null}
+            <Button size="sm" disabled={installing} onClick={() => install(false)}>
+              {installing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Install in host terminal"}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1">
+        <AgentFiles agent={agent} />
       </div>
     </div>
   );
-}
-
-// ponytail: install cmds are defined on the backend; mirror as fallback if profile not loaded.
-function getInstallCmd(id: string): string {
-  const hints: Record<string, string> = {
-    claude: "npm install -g @anthropic-ai/claude-code",
-    codex: "npm install -g @openai/codex",
-    opencode: "npm install -g opencode-ai",
-    hermes: "npm install -g hermes",
-  };
-  return hints[id] ?? id;
 }
 
 /* ------------------------- Session rail (right) ------------------------- */

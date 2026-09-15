@@ -14,6 +14,7 @@ import IndexEnhanced from "./pages/Index";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
+import Pair from "./pages/Pair";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 
 // Wrapper component to handle WebSocket initialization
@@ -43,6 +44,7 @@ const AppContent = () => {
   
   return (
     <Routes>
+      <Route path="/pair" element={<Pair />} />
       <Route path="/login" element={
         requiresRegistration ? <Navigate to="/register" replace /> : <Login />
       } />

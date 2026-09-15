@@ -9,8 +9,10 @@ Common issues when running LM-WebUI and how to resolve them. If the steps below 
 
 ## Server won't start, or is unreachable
 
-- **Port 7070 already in use.** LM-WebUI listens on port `7070` by default. Check with `lsof -i :7070` (macOS/Linux) and free it, or change the port in the server config.
+- **Let the CLI diagnose it first.** `lm-webui status` reports the cause when the service doesn't answer: whether an uvicorn process is running, whether port `7070` is free and who holds it if not, whether the virtualenv is intact, whether `config.yaml` parses, and the last lines of the service log. It prints the same diagnosis after a failed `lm-webui start`. A reachable-but-broken service reports `Reason:` with the exception class instead.
+- **Port 7070 already in use.** LM-WebUI listens on port `7070`. The bind address is fixed in the service definition — the systemd unit `/etc/systemd/system/lmwebui.service`, or the launchd plist `~/Library/LaunchAgents/com.lmwebui.server.plist`. `server.host`/`server.port` in `config.yaml` are **not read**; editing them does nothing. To move the port, edit the service definition (or re-run `install.sh` to regenerate it) and also update `PORT` in `~/.lmwebui/lmwebui`, which prints the URL and probes health.
 - **Check health.** Run `lm-webui status` or open `GET http://localhost:7070/api/health`. If it reports `Not reachable`, the server process isn't up — check `lm-webui logs`.
+- **No account yet.** `lm-webui status` warns when no user is registered. There is no setup token: the first account to register becomes admin. On a machine reachable from an untrusted network, register before leaving it exposed.
 
 ## "Please select an AI provider before sending a message"
 
@@ -71,7 +73,7 @@ The web UI is served from `web/dist`, which is generated during the build and no
 
 ## Where to look
 
-- **Logs:** `lm-webui logs` — macOS `~/lmwebui/logs/stdout.log`; Linux `journalctl -u lmwebui -f`.
+- **Logs:** `lm-webui logs` — macOS `~/.lmwebui/logs/stdout.log` and `~/.lmwebui/logs/stderr.log`; Linux `journalctl -u lmwebui -f`. uvicorn and the app's logging both write to **stderr**, so read `stderr.log` when a startup fails.
 - **Data:** `~/.lmwebui/data/` (preserved across updates).
 - **Models:** `~/.lmwebui/models/`.
 - **Status:** `lm-webui status`.

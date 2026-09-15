@@ -1,119 +1,172 @@
-/* Agent Files editor — edit a host agent's config/skill/memory with Save + confirmation.
- * The real config file lives in the agent's home dir (~/.claude/settings.json etc.);
- * skill.md/memory.md are app-managed. Saving a real config backs it up first (backend .bak).
+/* Agent files — the config/skill/memory triplet the backend resolves for one agent.
+ *
+ * A status list opens one focused editor dialog at a time. The CLI's real config is written
+ * behind a confirmation because it lives in the user's home directory; the app-managed
+ * markdown files save directly. Editing a `kind: "config"` file also gets a persistent
+ * warning banner inside the editor.
  */
-import { useEffect, useState } from "react";
-import { Loader2, Save, FolderOpen, FileCode2, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { getAgentFiles, saveAgentFile } from "@/utils/api";
-import { cn } from "@/lib/utils";
-
-interface FileInfo { name: string; label: string; path: string; kind: "config" | "app"; content: string; }
+import { AgentFileEditorDialog } from "./AgentFileEditorDialog";
+import {
+  MAX_FILE_BYTES,
+  byteLength,
+  isDirty,
+  jsonError,
+  toAgentFile,
+  type AgentFile,
+} from "./agentFileKinds";
 
 export default function AgentFiles({ agent }: { agent: string }) {
-  const [files, setFiles] = useState<FileInfo[]>([]);
+  const [files, setFiles] = useState<AgentFile[]>([]);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [openName, setOpenName] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [confirm, setConfirm] = useState<FileInfo | null>(null);
-  const [open, setOpen] = useState<Record<string, boolean>>({}); // collapsible sections
+  const [loading, setLoading] = useState(false);
+  const [confirming, setConfirming] = useState<AgentFile | null>(null);
 
   useEffect(() => {
-    if (!agent) { setFiles([]); return; }
-    getAgentFiles(agent).then((d) => {
-      setFiles(d.files || []);
-      setDrafts(Object.fromEntries((d.files || []).map((f: FileInfo) => [f.name, f.content])));
-    }).catch(() => setFiles([]));
+    if (!agent) { setFiles([]); setOpenName(null); return; }
+    let alive = true;
+    setLoading(true);
+    getAgentFiles(agent)
+      .then((d) => {
+        if (!alive) return;
+        const next: AgentFile[] = (d.files || []).map(toAgentFile);
+        setFiles(next);
+        setDrafts(Object.fromEntries(next.map((f) => [f.name, f.content])));
+      })
+      .catch(() => { if (alive) setFiles([]); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
   }, [agent]);
 
-  const draft = (f: FileInfo) => drafts[f.name] ?? f.content;
+  const openFile = useMemo(
+    () => files.find((f) => f.name === openName) ?? null,
+    [files, openName],
+  );
 
-  const doSave = async (f: FileInfo) => {
+  const draft = openFile ? drafts[openFile.name] ?? openFile.content : "";
+  const dirty = openFile ? isDirty(draft, openFile.content) : false;
+  const tooLarge = byteLength(draft) > MAX_FILE_BYTES;
+  // Only `.json` configs are checked; `.jsonc`/`.toml` have no parser here.
+  const warning = openFile?.format === "json" ? jsonError(draft) : null;
+
+  const doSave = useCallback(async (file: AgentFile) => {
+    const content = drafts[file.name] ?? file.content;
     setSaving(true);
     try {
-      const r = await saveAgentFile(agent, f.name, draft(f));
-      toast.success(`Saved ✓${f.kind === "config" ? ` (backup: ${r.path}.bak)` : ""}`);
+      const r = await saveAgentFile(agent, file.name, content);
+      setFiles((prev) => prev.map((f) => (f.name === file.name ? { ...f, content } : f)));
+      toast.success(`Saved ${file.label}${file.kind === "config" ? ` (backup: ${r.path}.bak)` : ""}`);
     } catch {
-      toast.error("Save failed");
+      toast.error(`Could not save ${file.label}`);
     } finally {
       setSaving(false);
-      setConfirm(null);
+      setConfirming(null);
     }
-  };
+  }, [agent, drafts]);
 
-  const onSave = (f: FileInfo) => {
-    if (f.kind === "config") setConfirm(f); // confirm before touching a real home-dir config
-    else doSave(f);
+  const onSave = (file: AgentFile) => {
+    if (file.kind === "config") setConfirming(file);
+    else void doSave(file);
   };
-
-  const icon = (f: FileInfo) =>
-    f.name === "config" ? <FileCode2 className="h-4 w-4" /> : f.name === "skill.md"
-      ? <BookOpen className="h-4 w-4" /> : <FolderOpen className="h-4 w-4" />;
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <div className="flex-1 overflow-y-auto p-4">
-        {files.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-muted-foreground text-sm">
-            Select an agent to edit its config, skill, and memory.
-          </div>
-        ) : (
-          <div className="space-y-1">
-            {files.map((f) => {
-              const isOpen = open[f.name] ?? false; // collapsed by default; expand on click
-              return (
-                <Collapsible key={f.name} open={isOpen} onOpenChange={(v) => setOpen((s) => ({ ...s, [f.name]: v }))}>
-                  <CollapsibleTrigger asChild>
-                    <button className="w-full flex items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium hover:bg-muted/50">
-                      {icon(f)}
-                      <span>{f.label}</span>
-                      <span className="truncate font-mono text-[.6rem] text-muted-foreground">{f.path.split("/").pop()}</span>
-                      {isOpen ? <ChevronUp className="h-3.5 w-3.5 ml-auto" /> : <ChevronDown className="h-3.5 w-3.5 ml-auto" />}
-                    </button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="px-1 pb-3 space-y-2">
-                    <div className="flex items-center gap-1.5 text-[.65rem] text-muted-foreground truncate">
-                      <FolderOpen className="h-3 w-3 shrink-0" />
-                      <span className="truncate font-mono">{f.path}</span>
-                    </div>
-                    <textarea
-                      value={draft(f)}
-                      onChange={(e) => setDrafts((d) => ({ ...d, [f.name]: e.target.value }))}
-                      spellCheck={false}
-                      className={cn(
-                        "w-full min-h-24 resize-y rounded-xl border border-input bg-background px-3 py-2",
-                        "text-xs font-mono outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto p-4">
+      {!agent ? (
+        <Empty text="Select an agent to edit its config, skill, and memory." />
+      ) : loading ? (
+        <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" /> Loading files…
+        </div>
+      ) : files.length === 0 ? (
+        <Empty text="No editable files found for this agent." />
+      ) : (
+        <>
+          <p className="mb-3 text-xs text-muted-foreground">
+            These files belong to the agent on the host, not to this conversation.
+          </p>
+          <ul className="divide-y divide-border rounded-md border border-border">
+            {files.map((f) => (
+              <li key={f.name}>
+                <button
+                  type="button"
+                  onClick={() => setOpenName(f.name)}
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{f.label}</span>
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[.6rem] uppercase text-muted-foreground">
+                        {f.format === "text" ? f.kind : f.format}
+                      </span>
+                      {!f.exists && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-[.6rem] text-muted-foreground">
+                          not created yet
+                        </span>
                       )}
-                    />
-                    <div className="flex justify-end">
-                      <Button size="sm" className="gap-1.5" onClick={() => onSave(f)} disabled={saving}>
-                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                        Save
-                      </Button>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                    <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">{f.description}</p>
+                    <p className="truncate font-mono text-[.6rem] text-muted-foreground" title={f.path}>
+                      {f.path}
+                    </p>
+                  </div>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
-      <Dialog open={!!confirm} onOpenChange={() => setConfirm(null)}>
+      <AgentFileEditorDialog
+        file={openFile}
+        draft={draft}
+        dirty={dirty}
+        busy={saving}
+        warning={warning}
+        tooLarge={tooLarge}
+        onOpenChange={(open) => { if (!open) setOpenName(null); }}
+        onChange={(v) => openFile && setDrafts((d) => ({ ...d, [openFile.name]: v }))}
+        onSave={() => openFile && onSave(openFile)}
+      />
+
+      {/* Confirmation for the real home-dir config, which the backend overwrites in place. */}
+      <Dialog open={!!confirming} onOpenChange={() => setConfirming(null)}>
         <DialogContent>
-          <DialogTitle>Edit {confirm?.path}</DialogTitle>
-          <DialogDescription>
-            This edits a real config file in your home directory. The previous version is backed up
-            as <span className="font-mono">{confirm?.path}.bak</span>. Save anyway?
+          <DialogTitle>Edit {confirming?.label}?</DialogTitle>
+          <DialogDescription className="leading-relaxed">
+            This overwrites <span className="font-mono text-xs">{confirming?.path}</span> — the real
+            config read by the CLI. The previous version is backed up as{" "}
+            <span className="font-mono text-xs">.bak</span>.
           </DialogDescription>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirm(null)}>Cancel</Button>
-            <Button onClick={() => confirm && doSave(confirm)} disabled={saving}>Save</Button>
+            <Button variant="outline" onClick={() => setConfirming(null)}>Cancel</Button>
+            <Button disabled={saving} onClick={() => confirming && doSave(confirming)}>
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Save"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function Empty({ text }: { text: string }) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center text-center text-sm text-muted-foreground">
+      {text}
     </div>
   );
 }

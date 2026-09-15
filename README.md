@@ -12,7 +12,7 @@ usage from one workspace across local and cloud environments.
     <img src="https://img.shields.io/badge/development-active-green" />
   </a>
   <a href="https://github.com/lm-webui/lm-webui/releases">
-    <img src="https://img.shields.io/badge/release-v0.8.5-blue" />
+    <img src="https://img.shields.io/github/v/release/lm-webui/lm-webui?color=blue" />
   </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/badge/license-MIT-black" />
@@ -62,10 +62,6 @@ Run locally when you want, connect cloud APIs when you need, and keep control of
 
 Built open-source for developers, system integrators, and organizations that want **easy local inference, reproducibility, and infrastructure-level control** without the usual setup overhead.
 
-<p align="center">
-  <img src="./assets/demo.png" width="1080" />
-</p>
-
 ---
 
 ## 🚀 Quick Start
@@ -98,7 +94,7 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 | **Chat** | Chat with local or cloud AI models from one interface. Supports GGUF/llama.cpp, MLX, Ollama, vLLM, OpenAI, Gemini, Anthropic, DeepSeek, Grok, and more. Includes streaming, code rendering, Mermaid diagrams, tables, conversations, and web search.|
 | **Image Generation** | Dedicated Image Studio with prompt, size, quality, and seed controls. Gallery for browsing and reuse. Supports OpenAI, Google Gemini, and local ComfyUI runtimes. |
 | **Projects** | Group related conversations with reusable custom system prompts. Ideal for recurring workflows like code review, research, or team-specific assistant configurations. |
-| **Agent Hub** | Chat with host CLI agents — Claude Code, Codex, OpenCode, Hermes — in multi-turn, resumable sessions. Reopen any past session from the rail to continue it, run the CLI's real commands via the `/` menu, and manage each agent's config/skill/memory. Backed by the installed CLI, not a wrapper. |
+| **Agent Hub** | Chat with host CLI agents — Claude Code, Codex, OpenCode, Hermes — in multi-turn, resumable sessions. Reopen any past session from the rail to continue it, and manage each agent's config/skill/memory. Backed by the installed CLI, not a wrapper. |
 | **Voice & Video** | Transcribe voice notes and audio (ASR → text into the retrieval index) and summarize linked YouTube videos — queried just like documents. |
 | **Hardware Detection** | Automatic detection of CPU, CUDA, ROCm, and Apple Metal with dynamic memory and layer optimization for efficient local execution. |
 | **GGUF / llama.cpp** | Built-in GGUF model lifecycle, download from HuggingFace, upload, validate, and serve models locally via the llama.cpp engine. Vision through `llama-server`. Background, single-flight download queue that survives closing the UI. |
@@ -139,6 +135,8 @@ For detailed documentation, see the [`docs/`](./docs/) directory:
 - **[Architecture](./docs/architecture.md)** — Backend, frontend, provider, and runtime design
 - **[Deployment](./docs/DEPLOYMENT.md)** — Production deployment guides
 - **[CLI](./docs/cli.md)** — Host CLI reference
+- **[Troubleshooting](./docs/troubleshooting.md)** — Common issues and how to fix them
+- **[API Reference](./docs/api-reference.md)** — HTTP endpoints and payloads
 - **[Contributing](./CONTRIBUTING.md)** — How to contribute to the project
 - **[Security](./SECURITY.md)** — Security policy and practices
 
@@ -203,8 +201,8 @@ Open `http://localhost:7070`.
 
 | Data | Location |
 |---|---|
-| SQLite / application data | Docker volume → `/backend/data` |
-| Generated media / uploads | Docker volume → `/backend/media` |
+| SQLite / application data | `./.lmwebui/data` → `/backend/data` |
+| Generated media / uploads | `./.lmwebui/media` → `/backend/media` |
 | Local models | `./.lmwebui/models` → `/backend/models` |
 | Secrets | `./.lmwebui/secrets` → `/backend/.secrets` |
 
@@ -225,6 +223,7 @@ Please see our [Contributing Guide](./CONTRIBUTING.md) for details.
 5. Submit a pull request
 
 Not ready to code? Bug reports, feature ideas, documentation improvements, and real-world testing are also valuable contributions. 🙏
+
 ---
 
 ## 📄 License
@@ -239,6 +238,13 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 - **GitHub**: [github.com/lm-webui/lm-webui](https://github.com/lm-webui/lm-webui)
 - **Issues**: [GitHub Issues](https://github.com/lm-webui/lm-webui/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/lm-webui/lm-webui/discussions)
+
+---
+
+## 🙏 Acknowledgments
+   
+LM-WebUI is a thin layer standing on a very tall AI stack. None of this would exist without the
+people who built the foundations, shout-out to [llama.cpp](https://github.com/ggml-org/llama.cpp)[MLX](https://github.com/ml-explore/mlx), [huggingface](https://huggingface.co), [ComfyUI](https://github.com/comfy-org/comfyui), and other foundational open source library that make LM-WebUI posible.  
 
 ---
 

@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { LogOut, Users, BarChart3, Settings2 } from "lucide-react";
+import { LogOut, Users, BarChart3, Settings2, Smartphone } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserManagementModal } from "@/components/auth/UserManagementModal";
 import { UsageAnalyticsModal } from "@/components/auth/UsageAnalyticsModal";
 import { PreferencesModal } from "./PreferencesModal";
+import { MobilePairingModal } from "@/components/auth/MobilePairingModal";
 
 export function ProfilePopover() {
   const [open, setOpen] = useState(false);
@@ -12,6 +13,7 @@ export function ProfilePopover() {
   const [userManagementOpen, setUserManagementOpen] = useState(false);
   const [usageOpen, setUsageOpen] = useState(false);
   const [preferencesOpen, setPreferencesOpen] = useState(false);
+  const [mobilePairingOpen, setMobilePairingOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -42,6 +44,7 @@ export function ProfilePopover() {
           <button onClick={() => { setPreferencesOpen(true); setOpen(false); }} className={menuItemClass}>
             <Settings2 className="h-4 w-4" /><span>Preference</span>
           </button>
+          {user?.role === "admin" && <button onClick={() => { setMobilePairingOpen(true); setOpen(false); }} className={menuItemClass}><Smartphone className="h-4 w-4" /><span>Connect mobile</span></button>}
           {user?.role === "admin" && <button onClick={() => { setUserManagementOpen(true); setOpen(false); }} className={menuItemClass}><Users className="h-4 w-4" /><span>User management</span></button>}
           {user?.role === "admin" && <button onClick={() => { setUsageOpen(true); setOpen(false); }} className={menuItemClass}><BarChart3 className="h-4 w-4" /><span>Usage analytics</span></button>}
           <button
@@ -56,6 +59,7 @@ export function ProfilePopover() {
       <PreferencesModal open={preferencesOpen} onOpenChange={setPreferencesOpen} />
       <UserManagementModal open={userManagementOpen} onOpenChange={setUserManagementOpen} />
       <UsageAnalyticsModal open={usageOpen} onOpenChange={setUsageOpen} />
+      <MobilePairingModal open={mobilePairingOpen} onOpenChange={setMobilePairingOpen} />
     </Popover>
   );
 }

@@ -72,14 +72,21 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
 
   try {
     const response = await fetch(url, fetchOptions);
-    
-    // Handle 401 Unauthorized - attempt token refresh
+
+    // Handle 401 Unauthorized - attempt token refresh, then retry once.
+    // The retry must go back through parseResponse: returning the raw Response meant every
+    // caller read `d.agents`/`d.sessions` as undefined right after a refresh, and a still-401
+    // retry looked like success (an expired pairing link redirected as if it had worked).
     if (response.status === 401) {
       await handleTokenRefresh();
-      // Retry the original request with fresh token
-      return fetch(url, fetchOptions);
+      const retried = await fetch(url, fetchOptions);
+      if (!retried.ok) {
+        const detail = await retried.json().catch(() => ({}));
+        throw new Error(detail?.detail || detail?.message || `HTTP ${retried.status}: ${retried.statusText}`);
+      }
+      return await parseResponse(retried, url);
     }
-    
+
     // Handle non-401 errors
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
@@ -253,6 +260,8 @@ export interface AgentStreamCallbacks {
   onRun?: (run: any) => void;
   onError?: (err: Error) => void;
   onInstall?: (install: { agent: string; command: string }) => void;
+  /** Always fires last, on success or failure. The only reliable "this run is over" signal. */
+  onComplete?: () => void;
 }
 
 // SSE chat with a host CLI agent (Agent Hub). Frames: status, output, prompt, run, complete, error.
@@ -289,6 +298,11 @@ export async function streamAgent(
         case 'error':
           cb.onError?.(new Error(ev.content || 'Agent run failed'));
           break;
+        case 'complete':
+          // The backend always ends a stream with this. Without it, a run that emitted no
+          // `run` frame (agent not installed, or end_run returning null) left the UI spinning.
+          cb.onComplete?.();
+          break;
         default:
           break;
       }
@@ -298,6 +312,32 @@ export async function streamAgent(
   }
 }
 
+export interface AgentFileRow {
+  name: string;
+  label: string;
+  path: string;
+  kind: string;
+  exists: boolean;
+  content: string;
+}
+
+// Installed CLI agents on the backend's own machine. `refresh` bypasses the backend's 24h
+// detect cache — needed after an install, otherwise the list keeps reporting "missing".
+export async function getAgents(refresh = false): Promise<{ agents: any[] }> {
+  return authFetch(`${API_BASE_URL}/api/agents${refresh ? '?refresh=true' : ''}`);
+}
+
+// Backend-authoritative per-agent profile: the run/install commands live in the agent registry,
+// so the UI reads them instead of keeping its own copy.
+export async function getAgentProfile(agent: string): Promise<{
+  config: { id: string; installed: boolean; version?: string; path?: string; run: string[]; install: string };
+  install_cmd: string;
+  accepts_model: boolean;
+  accepts_skill: boolean;
+}> {
+  return authFetch(`${API_BASE_URL}/api/agents/${agent}/profile`);
+}
+
 export async function installAgent(agent: string, update?: boolean): Promise<{
   launched: boolean; installed?: boolean; agent: string; command?: string;
 }> {
@@ -305,34 +345,12 @@ export async function installAgent(agent: string, update?: boolean): Promise<{
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/install${q}`, { method: 'POST' });
 }
 
-// Answer an interactive tool-use permission ask (approve/deny) for the agent's live session.
-export async function answerAgent(agent: string, promptId: string, approve: boolean): Promise<void> {
-  await authFetch(`${API_BASE_URL}/api/agents/${agent}/answer`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt_id: promptId, approve }),
-  });
-}
-
-// Native "allow for this session" — auto-approve subsequent tool asks for the live session.
-export async function autoApproveAgent(agent: string): Promise<void> {
-  await authFetch(`${API_BASE_URL}/api/agents/${agent}/auto-approve`, { method: 'POST' });
-}
-
 // Read/write an agent's config/skill/memory files.
-export async function getAgentFiles(agent: string): Promise<{ dir: string; files: any[] }> {
+export async function getAgentFiles(agent: string): Promise<{ dir: string; files: AgentFileRow[] }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/files`);
-}
-export async function getAgentTranscript(agent: string, sessionId: string): Promise<{
-  session_id: string; transcript: { role: string; content: string }[];
-}> {
-  return authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions/${sessionId}`);
 }
 export async function getAgentSessions(agent: string): Promise<{ sessions: any[] }> {
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/sessions`);
-}
-export async function getAgentCommands(agent: string): Promise<{ skills: { id: string; label: string; hint?: string }[] }> {
-  return authFetch(`${API_BASE_URL}/api/agents/${agent}/commands`);
 }
 export async function getAgentUsage(agent: string): Promise<{
   run_count: number; last_run_at?: string;

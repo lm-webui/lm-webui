@@ -13,10 +13,13 @@ def spawn(cwd: str, model: str, skill: str, resume_id: str = "") -> list[str]:
     return cmd
 
 def prepare_workspace(cwd: str) -> None:
+    """Seed the session workspace's claude settings, without clobbering an existing one."""
     try:
         d = Path(cwd) / ".claude"
         d.mkdir(parents=True, exist_ok=True)
-        (d / "settings.json").write_text(json.dumps({"permissions": {"defaultMode": "default"}}), encoding="utf-8")
+        settings = d / "settings.json"
+        if not settings.exists():
+            settings.write_text(json.dumps({"permissions": {"defaultMode": "default"}}), encoding="utf-8")
     except OSError:
         pass
 

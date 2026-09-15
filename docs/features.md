@@ -98,14 +98,6 @@ the agent's own transcript — no manual context re-injection. The **Sessions** 
 lists your past sessions; clicking one reopens it, loads its transcript, and you keep chatting right
 where you left off.
 
-### Real CLI `/` command menu
-
-Typing `/` in the composer lists the installed CLI's **actual commands**, parsed live from the
-agent's `--help` (flags like `--model`, `--resume` for Claude Code; subcommands like `exec`,
-`review`, `doctor` for Codex). Arrow keys and Tab/Shift+Tab cycle the list, Enter inserts the chosen
-command as literal text into the input, and `@` mentions installed agents. This is the real CLI
-surface, not a hand-curated wrapper.
-
 ### Activity and files
 
 - **Activity** — per-run history with status, duration, and token/cost estimates.

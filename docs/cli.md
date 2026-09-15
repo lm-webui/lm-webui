@@ -2,7 +2,7 @@
 
 LM-WebUI ships two command-line tools:
 
-- **`lm-webui`** — the service manager for a native install (start/stop/restart/status/logs/update). Installed by `install.sh` and symlinked to `/usr/local/bin/lm-webui`.
+- **`lm-webui`** — the service manager for a native install (start/stop/restart/status/logs/update). Installed by `install.sh` and symlinked to `/usr/local/bin/lm-webui`. The installer publishes this script from the tree it came from — release tarball or git checkout — and there is deliberately no second copy, so the installed CLI cannot drift from the one in the repository.
 - **`lm-webui-host`** — the host-runtime helper that installs and checks hardware-specific runtimes (MLX, ComfyUI) without giving the app host-level privileges.
 
 ## Service CLI (`lm-webui`)
@@ -10,13 +10,33 @@ LM-WebUI ships two command-line tools:
 The native install uses a service manager for the application:
 
 ```bash
-lm-webui start       # Start the service (systemd on Linux, launchd on macOS)
+lm-webui start       # Start the service, wait for it, then print health + the URL to open
 lm-webui stop        # Stop the service
-lm-webui restart     # Restart the service
-lm-webui status      # Show health (checks GET /api/health)
+lm-webui restart     # Restart the service (same output as start)
+lm-webui status      # Show health (checks GET /api/health) + the URL to open
+lm-webui open        # Open the dashboard in this machine's browser
 lm-webui logs        # Follow service logs
 lm-webui update      # Pull latest code, rebuild frontend, restart (preserves data)
 ```
+
+`start` and `status` print an `Open:` line with the dashboard address. The service binds
+`0.0.0.0:7070`, so the CLI reports this machine's LAN IPv4 (e.g. `http://192.168.1.20:7070`) and
+`http://localhost:7070` together — the LAN address is the one that works from another device.
+`open` targets `localhost` rather than the LAN address: the browser is on this machine, and the
+LAN address may be a VPN or virtual interface.
+
+When the service does not answer, `status` prints why instead of only reporting failure: whether
+an uvicorn process is running, whether port `7070` is free and who holds it if not, whether
+`.venv/bin/uvicorn` exists, whether `config.yaml` parses, and the last lines of the service log.
+Same for a failed `start`, which calls `status` after its wait.
+
+`status` also warns when no account exists yet — `/api/auth/status` reports that unauthenticated,
+and the first user to register becomes admin, so an operator on an untrusted network wants to
+know before someone else registers first. There is no setup token.
+
+The port is fixed at `7070` in the service definition (systemd unit / launchd plist) and in this
+CLI. `server.host`/`server.port` in `config.yaml` are not read by anything — edit the service
+definition instead (or re-run `install.sh` to regenerate it).
 
 Data lives in `~/.lmwebui/` (configurable via `LMWEBUI_HOME`): application code under `app/`/`web/`, data in `data/`, models in `models/`, logs in `logs/`.
 
@@ -33,17 +53,24 @@ python -m pip install -e cli
 Verify it:
 
 ```bash
-lm-webui-host status
-lm-webui-host doctor
+lm-webui-host status                        # JSON inventory of this host, no network calls
+lm-webui-host doctor                        # check the running app, then the host inventory
+lm-webui-host doctor --url http://host:7070 # or set LMWEBUI_APP_URL
 ```
 
-## Runtime commands (MLX only)
+`doctor` checks the app is reachable, prints its health status and the reason for a failed
+startup, and warns when no account exists yet. Pass `--url` (or `LMWEBUI_APP_URL`) when the app is
+not on this machine — in Docker behind `host.docker.internal`, or on another host entirely. Exit
+codes: `0` healthy, `1` unreachable, `2` malformed URL. `status` stays purely local so scripts can
+consume its JSON.
 
-MLX runs as an external server on macOS hosts. The CLI can install and manage it:
+## Runtime commands
+
+`runtime install` accepts the runtimes in the table below; the app's host bridge uses the same
+list, so a runtime the bridge can install is never rejected by the CLI.
 
 ```bash
 lm-webui-host runtime install mlx
-lm-webui-host runtime list
 lm-webui-host runtime test http://127.0.0.1:8090
 ```
 
@@ -53,7 +80,16 @@ Preview without changing the host:
 lm-webui-host runtime install mlx --dry-run
 ```
 
-**Other runtimes**: ComfyUI is installed by cloning its repository. Ollama and vLLM are configured as API providers in Settings → API Providers (no CLI needed). GGUF (llama.cpp) is bundled in-container — no host installation required.
+| Runtime | What it installs | When you need it |
+| --- | --- | --- |
+| `mlx` | `mlx`, `mlx-lm`, `mlx-optiq` into the active Python | Apple Silicon hosts; MLX runs as an external server on macOS |
+| `ollama` | Ollama via its install script | Hosting models through Ollama |
+| `vllm` | `vllm` into the active Python | Hosting models through vLLM |
+| `gguf` | `llama-cpp-python` into the active Python | GGUF/llama.cpp on the host |
+| `comfyui` | clones ComfyUI to `~/ComfyUI` and installs its requirements | Image generation on the host |
+
+Ollama and vLLM can also be configured as API providers in Settings → API Providers without the
+CLI; GGUF (llama.cpp) is bundled in-container, so no host installation is required there.
 
 The CLI does not install NVIDIA, AMD, Intel, or operating-system kernel drivers. Install those through the host operating system's supported vendor process.
 

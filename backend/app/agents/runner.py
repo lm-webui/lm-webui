@@ -28,6 +28,7 @@ class InteractiveSession:
         self._reader_task: asyncio.Task | None = None
         self._auto_approve = False
         self._session_id = resume_id  # starts as the id we resumed from; updated by the system frame
+        self._terminated = False  # a complete/error frame has been queued
 
     def auto_approve(self) -> None:
         """Native 'allow for this session': auto-approve subsequent tool permission asks."""
@@ -42,9 +43,12 @@ class InteractiveSession:
         return self._session_id or ""
 
     async def start(self) -> None:
+        cmd = self._cmd()
+        if not cmd:
+            raise RuntimeError(f"No spawn command for agent '{self._agent}'")
         prepare_workspace(self._agent, self._cwd)
         self._proc = await asyncio.create_subprocess_exec(
-            *self._cmd(),
+            *cmd,
             cwd=self._cwd,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
@@ -53,7 +57,13 @@ class InteractiveSession:
         self._reader_task = asyncio.create_task(self._read())
 
     async def _read(self) -> None:
-        """Read stdout JSONL, normalize each frame into the queue."""
+        """Read stdout JSONL, normalize each frame into the queue.
+
+        Always leaves a terminal event behind. If the process exits without emitting a `result`
+        frame — crash, OOM, a bad `--resume` id, an expired login — stdout just closes, and
+        without this `events()` would block on an empty queue forever: the SSE stream never
+        finishes, the run stays `running`, and `_live_sessions` is never released.
+        """
         assert self._proc and self._proc.stdout
         try:
             async for raw in self._proc.stdout:
@@ -63,6 +73,9 @@ class InteractiveSession:
                 try:
                     ev = json.loads(raw)
                 except json.JSONDecodeError:
+                    # Not a stream-json frame — the CLI is talking in plain text (usually an
+                    # error). Surface it rather than dropping it into a silent hang.
+                    await self._push([{"type": "output", "content": raw + "\n"}])
                     continue
                 # The stream-json `system` init frame carries claude's session id — needed to resume.
                 if ev.get("type") == "system" and ev.get("session_id"):
@@ -76,12 +89,35 @@ class InteractiveSession:
                     events = [e for e in events if e["type"] != "prompt"]
                 await self._push(events)
         except asyncio.CancelledError:
-            pass
+            return
+        except Exception as exc:
+            await self._push([{"type": "error", "content": f"{self._agent} stream failed: {exc}"}])
+            return
+
+        # stdout closed. If no complete/error frame was seen, the CLI died mid-turn.
+        if not self._terminated:
+            rc = await self._wait_rc()
+            await self._push([{
+                "type": "error",
+                "content": f"{self._agent} exited before finishing (exit code {rc}).",
+                "exit_code": rc,
+            }])
+
+    async def _wait_rc(self) -> int:
+        """Exit code of the process, or -1 if it cannot be read."""
+        if not self._proc:
+            return -1
+        try:
+            return await asyncio.wait_for(self._proc.wait(), timeout=5)
+        except (asyncio.TimeoutError, ProcessLookupError):
+            return -1
 
     async def _push(self, events: list[dict] | None) -> None:
         if not events:
             return
         for e in events:
+            if e.get("type") in ("complete", "error"):
+                self._terminated = True
             await self._queue.put(e)
 
     async def events(self) -> AsyncIterator[dict]:
@@ -131,7 +167,12 @@ async def run(agent: str, prompt: str, cwd: str, holder: dict | None = None) -> 
     `holder` (if given) receives `{"returncode": <int>}` on exit, so the caller can read the
     process status after consuming the stream.
     """
-    cmd = [*AGENTS[agent]["run"], prompt]
+    cmd = [*AGENTS[agent]["run"]]
+    # A prompt starting with "-" would otherwise be read as a flag by the CLI.
+    # ponytail: argv stays the transport; move to stdin if a prompt ever approaches ARG_MAX.
+    if prompt.startswith("-"):
+        cmd.append("--")
+    cmd.append(prompt)
     proc = await asyncio.create_subprocess_exec(
         *cmd, cwd=cwd,
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
@@ -141,11 +182,3 @@ async def run(agent: str, prompt: str, cwd: str, holder: dict | None = None) -> 
     rc = await proc.wait()
     if holder is not None:
         holder["returncode"] = rc
-
-
-async def run_collect(agent: str, prompt: str, cwd: str) -> str:
-    """Run the agent once and return the full output as text (non-streaming)."""
-    parts: list[str] = []
-    async for line in run(agent, prompt, cwd):
-        parts.append(line)
-    return "".join(parts)

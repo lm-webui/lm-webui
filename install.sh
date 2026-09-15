@@ -142,6 +142,13 @@ setup_repository() {
     fi
   fi
   stage_config_template
+  # Publish the service CLI from the tree the app came from — tarball puts it at $SRC_DIR/lmwebui,
+  # a git clone at $SRC_DIR/scripts/lmwebui. Done here because the temp dirs are removed before
+  # install_cli() runs. This is the only place the CLI is written: a second inline copy is exactly
+  # how the two drifted apart.
+  for _cli in "$SRC_DIR/scripts/lmwebui" "$SRC_DIR/lmwebui"; do
+    [ -f "$_cli" ] && cp "$_cli" "$LMWEBUI_HOME/lmwebui" && break
+  done
   if [ -f "$LMWEBUI_HOME/app/main.py" ]; then
     OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
     if [ "$OWNER" = "root" ]; then
@@ -151,7 +158,6 @@ setup_repository() {
     fi
     if [ -d "$SRC_DIR/backend" ]; then
       cp "$SRC_DIR/web/vite.config.ts" "$LMWEBUI_HOME/web/vite.config.ts" 2>/dev/null || true
-      cp "$SRC_DIR/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || true
     else
       clean_stale_clone_layout
       # tarball owns complete app/ + web/dist; replace wholesale so removed
@@ -342,41 +348,12 @@ PLISTEOF
 }
 
 install_cli() {
-  if [ -f "scripts/lmwebui" ]; then
-    cp "scripts/lmwebui" "$LMWEBUI_HOME/lmwebui"
-  else
-    cp "$LMWEBUI_HOME/lmwebui" "$LMWEBUI_HOME/lmwebui" 2>/dev/null || cat > "$LMWEBUI_HOME/lmwebui" << 'CLIEOF'
-#!/bin/bash
-LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
-case "${1:-status}" in
-  start) case "$(uname)" in Linux) sudo systemctl start lmwebui 2>/dev/null || true ;;
-    Darwin) launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || true ;; esac ;;
-  stop) case "$(uname)" in Linux) sudo systemctl stop lmwebui 2>/dev/null || true ;;
-    Darwin) launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || true ;; esac ;;
-  restart) "$0" stop 2>/dev/null; sleep 2; "$0" start 2>/dev/null ;;
-  status) curl -sf http://localhost:7070/api/health | python3 -c "import sys,json; d=json.load(sys.stdin); print('ready' if d.get('ready') else d.get('status','unknown'))" 2>/dev/null || echo "offline" ;;
-  logs) case "$(uname)" in Linux) journalctl -u lmwebui -f 2>/dev/null || true ;;
-    Darwin) tail -f "$LMWEBUI_HOME/logs/stdout.log" 2>/dev/null || true ;; esac ;;
-  update)
-    echo "Updating LM-WebUI..."
-    OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
-    [ "$OWNER" = "root" ] && chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || true
-    TMP="/tmp/lmwebui-update-$$"
-    git clone --depth 1 https://github.com/lm-webui/lm-webui.git "$TMP"
-    rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
-    cp -r "$TMP/backend/"* "$LMWEBUI_HOME/"
-    cp -r "$TMP/web" "$LMWEBUI_HOME/web"
-    cp "$TMP/package.json" "$LMWEBUI_HOME/package.json"
-    cp "$TMP/scripts/lmwebui" "$LMWEBUI_HOME/lmwebui"
-    rm -rf "$TMP"
-    source "$LMWEBUI_HOME/.venv/bin/activate" 2>/dev/null
-    pip install --upgrade pip --quiet 2>&1 || log_info "pip upgrade skipped (non-critical)"
-    pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet 2>/dev/null
-    command -v npm &>/dev/null && cd "$LMWEBUI_HOME/web" && rm -rf node_modules && npm install --quiet && npm run build
-    "$0" restart 2>/dev/null; echo "✅ Updated" ;;
-  *) echo "Usage: lm-webui <start|stop|restart|status|logs|update>" ;;
-esac
-CLIEOF
+  # The script itself is published in setup_repository(), from the tree the app came from. There is
+  # deliberately no inline fallback: a second copy is what let the installed CLI drift from the one
+  # in the repo. If it is missing, say so instead of writing a reduced version.
+  if [ ! -f "$LMWEBUI_HOME/lmwebui" ]; then
+    log_warning "Service CLI not found in the source tree — skipping CLI install."
+    return 0
   fi
   chmod +x "$LMWEBUI_HOME/lmwebui"
   if [ -d "/usr/local/bin" ]; then
@@ -410,9 +387,10 @@ show_instructions() {
   echo -e "${GREEN}🚀 LM-WebUI Installation Complete!${NC}"
   echo -e "${GREEN}========================================${NC}"
   echo ""
-  echo -e "  ${YELLOW}http://localhost:7070${NC}"
+  # The CLI owns the URL line, the LAN address and the first-run notice — don't duplicate it here.
+  "$LMWEBUI_HOME/lmwebui" status 2>/dev/null || echo -e "  ${YELLOW}http://localhost:7070${NC}"
   echo ""
-  echo -e "${BLUE}CLI:${NC}  ${YELLOW}lm-webui status | start | stop | restart | logs | update${NC}"
+  echo -e "${BLUE}CLI:${NC}  ${YELLOW}lm-webui status | start | stop | restart | open | logs | update${NC}"
   echo -e "${BLUE}Data:${NC} ${YELLOW}$LMWEBUI_HOME${NC}"
   echo -e "${BLUE}Next:${NC} Download GGUF models in Runtime Manager → Settings"
   echo -e "${GREEN}Enjoy! 🤖${NC}"

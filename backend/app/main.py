@@ -194,6 +194,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+def _startup_error() -> str | None:
+    """Short reason for a failed boot, for /api/health.
+
+    This endpoint is unauthenticated and StartupGuard renders the value before login, so it
+    carries the exception class and the first line only — no traceback, no config values, no
+    absolute paths. The full exception still goes to the log via the print below it.
+    """
+    exc = app_state.get("error")
+    if app_state.get("status") != InitStatus.ERROR or exc is None:
+        return None
+    line = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+    return f"{type(exc).__name__}: {re.sub(r'(/[\w.\-]+){2,}', '<path>', line)[:200]}"
+
+
 # Health check shortcut at /api/health (used by StartupGuard)
 @app.get("/api/health")
 async def health():
@@ -203,6 +217,7 @@ async def health():
         "message": app_state.get("message", "Starting..."),
         "progress": app_state.get("progress", 0),
         "version": _APP_VERSION,
+        "error": _startup_error(),
     }
 
 
@@ -355,7 +370,7 @@ async def initialize_app():
     except Exception as e:
         app_state["status"] = InitStatus.ERROR
         app_state["message"] = "Startup Failed"
-        app_state["error"] = str(e)
+        app_state["error"] = e  # Kept as the object so /api/health can name the exception class.
         app_state["progress"] = 0
         print(f"❌ CRITICAL INIT ERROR: {e}")
 

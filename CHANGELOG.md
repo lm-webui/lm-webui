@@ -8,13 +8,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **`/api/health` reports the startup error** (exception class + first line, absolute paths
+  collapsed) so the CLI *and* the web startup screen can name the cause instead of showing a bare
+  "Startup Failed". It stays `null` unless init actually failed.
 - **Agent Hub** — a workspace to chat with host CLI agents (Claude Code, Codex, OpenCode, Hermes).
   - **Resumable sessions** via the CLI's native resume (`--resume`), so sessions carry context across
     turns and survive backend restarts; a **Sessions** rail lets you reopen any past session.
-  - **Real CLI `/` command menu** — typing `/` lists the installed CLI's actual commands (parsed live
-    from `--help`); Tab/Shift+Tab cycle and Enter inserts the flag as literal text.
   - **Activity** run history with status, duration, and token/cost estimates.
   - **Per-agent files** — config/skill/memory editor with backup.
+
+### Changed
+- **CLI surface audited end to end.** `install.sh` now publishes the real `lm-webui` script from the
+  tree it installed from, instead of writing a reduced inline copy — the two had drifted, so the
+  installed CLI was missing `runtime`, `version` and `help` on the documented `curl … | bash` path.
+- **`lm-webui status` explains failures.** When the service doesn't answer it prints a diagnosis
+  (uvicorn process, port `7070` free or held and by whom, virtualenv, `config.yaml` validity, last
+  log lines) rather than only reporting "not reachable"; a reachable-but-broken service now names
+  the startup exception.
+- **`lm-webui open`** opens the dashboard in this machine's browser.
+- **First-run warning.** `lm-webui status` and `lm-webui-host doctor` warn when no account exists:
+  there is no setup token, and the first user to register becomes admin.
+- **`lm-webui-host doctor`** is real — it checks a running app at `--url` / `LMWEBUI_APP_URL`, prints
+  its health, the reason for a failed startup and the host inventory, with distinct exit codes.
+- **One runtime table** shared by `lm-webui-host` and the app's host bridge, so `runtime install
+  comfyui` (previously rejected by the CLI though the bridge supported it) now works.
+
+### Removed
+- **`lm-webui-host runtime register` / `uninstall` / `list` / `detect`** — each printed text and did
+  nothing.
+
+### Fixed
+- The desktop app's backend stderr went to `Stdio::null()`, making a failed boot undiagnosable;
+  it is now written to `$APPDATA/logs/stderr.log`.
+- `lm-webui logs` on macOS tailed `stdout.log` only — uvicorn and the app both log to stderr.
+- `docs/troubleshooting.md` told users to change the port in `config.yaml` (which does nothing) and
+  gave the wrong log path. `ServerConfig.host`/`port` have no consumer and are now documented as
+  such — the bind comes from the service definition.
 
 ## [0.7.0] — 2026-08-08
 

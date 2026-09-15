@@ -6,6 +6,91 @@ set -e
 
 LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
 
+# The service definition (systemd unit / launchd plist) pins the bind address; config.yaml's
+# server.host/port are not read by anything, so this is the one place the port is decided.
+PORT=7070
+LOCAL_URL="http://localhost:$PORT"
+API="$LOCAL_URL"
+
+# ── Dashboard address ────────────────────────────────────────────────────
+# The service binds 0.0.0.0:7070, so on a headless or LAN box the address you actually open is
+# this machine's own IPv4. python3 is already required by this script, so it does the detection
+# (a UDP connect picks the default route's interface and sends nothing).
+lan_ip() {
+  python3 - <<'PY' 2>/dev/null || true
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+try:
+    s.connect(("8.8.8.8", 80))
+    print(s.getsockname()[0])
+except OSError:
+    print("")
+finally:
+    s.close()
+PY
+}
+
+show_url() {
+  local ip="$(lan_ip)"
+  if [ -n "$ip" ] && [ "$ip" != "127.0.0.1" ]; then
+    echo "Open: http://$ip:$PORT  (this machine: $LOCAL_URL)"
+  else
+    echo "Open: $LOCAL_URL"
+  fi
+}
+
+# ── Diagnostics ──────────────────────────────────────────────────────────
+# Only printed when the service is not answering, so every line here is a reason it might not be.
+diagnose() {
+  echo "   Diagnosing:"
+  if pgrep -f "uvicorn app.main:app" >/dev/null 2>&1; then
+    echo "   • an uvicorn process is running (still starting up, or stuck)"
+  else
+    echo "   • no uvicorn process — the service is not running"
+  fi
+  if python3 -c "import socket,sys; s=socket.socket(); sys.exit(0 if s.connect_ex(('127.0.0.1',$PORT))==0 else 1)" 2>/dev/null; then
+    echo "   • port $PORT is in use, but not by a healthy LM-WebUI"
+    if command -v lsof >/dev/null 2>&1; then
+      lsof -nP -iTCP:$PORT -sTCP:LISTEN 2>/dev/null | tail -n +2 | awk '{print "     held by PID " $2 " (" $1 ")"}'
+    fi
+  else
+    echo "   • port $PORT is free"
+  fi
+  if [ -x "$LMWEBUI_HOME/.venv/bin/uvicorn" ]; then
+    echo "   • $LMWEBUI_HOME/.venv/bin/uvicorn present"
+  else
+    echo "   • $LMWEBUI_HOME/.venv/bin/uvicorn is missing — re-run the installer"
+  fi
+  if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
+    echo "   • $LMWEBUI_HOME/config.yaml is missing"
+  elif [ ! -x "$LMWEBUI_HOME/.venv/bin/python" ]; then
+    echo "   • config.yaml not checked (no venv python to parse it with)"
+  elif "$LMWEBUI_HOME/.venv/bin/python" -c 'import sys,yaml; yaml.safe_load(open(sys.argv[1]))' "$LMWEBUI_HOME/config.yaml" 2>/dev/null; then
+    echo "   • config.yaml parses"
+  else
+    echo "   • config.yaml does not parse — see logs below"
+  fi
+  local log="$LMWEBUI_HOME/logs/stderr.log"
+  [ -s "$log" ] || log="$LMWEBUI_HOME/logs/stdout.log"
+  if [ -s "$log" ]; then
+    echo "   Last lines of $(basename "$log"):"
+    tail -n 15 "$log" | sed 's/^/     /'
+  fi
+}
+
+# Warn-only: /api/auth/status reports whether any user exists yet. There is no setup token, and
+# the first registrant becomes admin, so an operator on an open LAN needs to know.
+first_run_notice() {
+  local has
+  has="$(curl -sf --max-time 5 "$API/api/auth/status" 2>/dev/null \
+    | python3 -c 'import sys,json; print(json.load(sys.stdin).get("hasUser"))' 2>/dev/null)" || true
+  if [ "$has" = "False" ]; then
+    echo "⚠️  No account yet — the first user to register at $LOCAL_URL becomes admin."
+    echo "    Register now if this machine is reachable from an untrusted network."
+  fi
+  return 0
+}
+
 # ── Runtime ensure helpers (mirror install.sh; idempotent) ───────────────
 ensure_llama_server() {
   # llama-server is the multimodal (Vision) engine; ensure it's available.
@@ -82,7 +167,7 @@ User=$USER
 WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7070
+ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -95,13 +180,14 @@ SERVICEEOF
       fi ;;
     Darwin)
       PLIST_PATH="$HOME/Library/LaunchAgents/com.lmwebui.server.plist"
-      mkdir -p "$HOME/Library/LaunchAgents"
+      # launchd silently fails to start the job if the log paths don't exist.
+      mkdir -p "$HOME/Library/LaunchAgents" "$LMWEBUI_HOME/logs"
       cat > "$PLIST_PATH" << PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>com.lmwebui.server</string>
-<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
+<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>$PORT</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
 <key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
@@ -126,6 +212,13 @@ case "${1:-status}" in
         launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Failed to start"
         ;;
     esac
+    # Wait (bounded) so the URL printed below is one that is actually answering.
+    tries=0
+    while [ "$tries" -lt 30 ] && ! curl -sf --max-time 5 "$API/api/health" >/dev/null 2>&1; do
+      tries=$((tries + 1))
+      sleep 1
+    done
+    status
     ;;
 
   stop)
@@ -146,8 +239,14 @@ case "${1:-status}" in
     ;;
 
   status)
-    echo "Checking LM-WebUI at http://localhost:7070 ..."
-    curl -sf http://localhost:7070/api/health 2>/dev/null | python3 -c "
+    echo "Checking LM-WebUI at $LOCAL_URL ..."
+    body="$(curl -sf --max-time 5 "$API/api/health" 2>/dev/null)" || true
+    if [ -z "$body" ]; then
+      # No HTTP at all: this is where the useful diagnostics live.
+      echo "❌ Service is not reachable at $LOCAL_URL"
+      diagnose
+    else
+      printf '%s' "$body" | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -157,12 +256,29 @@ try:
         print('✅ Service is healthy')
     elif s == 'error':
         print('❌ Service error:', d.get('message', ''))
+        if d.get('error'):
+            print('   Reason:', d['error'])
     else:
         print('⏳ Starting up...')
 except Exception:
-    print('❌ Not reachable')
-" 2>/dev/null || echo "❌ Not reachable"
+    print('❌ Reachable, but the health response did not parse')
+" 2>/dev/null || true
+      first_run_notice
+    fi
+    show_url
     echo "Data directory: $LMWEBUI_HOME/data/"
+    ;;
+
+  open)
+    # The browser is on this machine, so localhost is the right target (lan_ip() can pick a
+    # VPN/VirtualBox address). show_url below covers the open-it-from-another-device case.
+    if command -v open >/dev/null 2>&1; then
+      open "$LOCAL_URL"
+    elif command -v xdg-open >/dev/null 2>&1; then
+      xdg-open "$LOCAL_URL"
+    else
+      echo "No browser launcher here — open $LOCAL_URL"
+    fi
     ;;
 
   logs)
@@ -171,7 +287,10 @@ except Exception:
         journalctl -u lmwebui -f 2>/dev/null || echo "Try: sudo journalctl -u lmwebui -f"
         ;;
       Darwin)
-        tail -f "$LMWEBUI_HOME/logs/stdout.log" 2>/dev/null || echo "No logs yet"
+        # uvicorn and logging.basicConfig() both write to stderr, so stdout.log alone shows
+        # nothing useful on a failure.
+        mkdir -p "$LMWEBUI_HOME/logs"
+        tail -f "$LMWEBUI_HOME/logs/stdout.log" "$LMWEBUI_HOME/logs/stderr.log" 2>/dev/null || echo "No logs yet"
         ;;
     esac
     ;;
@@ -258,7 +377,7 @@ except Exception:
     ;;
 
   version)
-    curl -sf http://localhost:7070/api/health 2>/dev/null | python3 -c "
+    curl -sf --max-time 5 "$API/api/health" 2>/dev/null | python3 -c "
 import sys, json
 try:
     d = json.load(sys.stdin)
@@ -275,7 +394,8 @@ except Exception:
     echo "  start     Start the LM-WebUI service"
     echo "  stop      Stop the LM-WebUI service"
     echo "  restart   Restart the LM-WebUI service"
-    echo "  status    Show service health and status"
+    echo "  status    Show service health, the dashboard URL to open"
+    echo "  open      Open the dashboard in your browser"
     echo "  logs      Follow service logs"
     echo "  runtime   Show GGUF/llama-server/Vision runtime health"
     echo "  version   Show the installed version"
@@ -287,7 +407,7 @@ except Exception:
 
   *)
     echo "Unknown command: $1"
-    echo "Usage: lm-webui <start|stop|restart|status|logs|runtime|version|update>"
+    echo "Usage: lm-webui <start|stop|restart|status|open|logs|runtime|version|update>"
     exit 1
     ;;
 esac

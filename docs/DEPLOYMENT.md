@@ -66,12 +66,13 @@ The container serves both the frontend and API. It does not install host drivers
 
 ## Persistence
 
-Native install keeps data on the host under `~/.lmwebui/`. Docker uses volumes mounted into the container:
+Native install keeps data on the host under `~/.lmwebui/`. Docker bind-mounts the same directories
+from the repository checkout into the container (`docker-compose.yml`):
 
 | Data | Native | Docker |
 | --- | --- | --- |
-| SQLite/application data | `~/.lmwebui/data` | volume `app_data` → `/backend/data` |
-| Generated media/uploads | `~/.lmwebui/data` | volume `app_media` → `/backend/media` |
+| SQLite/application data | `~/.lmwebui/data` | `./.lmwebui/data` → `/backend/data` |
+| Generated media/uploads | `~/.lmwebui/media` | `./.lmwebui/media` → `/backend/media` |
 | Local models | `~/.lmwebui/models` | `./.lmwebui/models` → `/backend/models` |
 | Secrets | `~/.lmwebui/.secrets` | `./.lmwebui/secrets` → `/backend/.secrets` |
 
@@ -104,6 +105,34 @@ http://localhost:7070`). Browsers reject `*` together with credentials, so add y
 
 ## External runtimes
 
+### Docker host bridge
+
+Docker cannot safely run host CLIs or access host hardware directly. Install the host helper on
+the native machine and keep it bound to loopback:
+
+```bash
+export LMWEBUI_HOST_AGENT_TOKEN="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+lm-webui-host runtime serve --host 127.0.0.1 --port 8765
+```
+
+Set these variables for the web container:
+
+```bash
+LMWEBUI_HOST_AGENT_URL=http://host.docker.internal:8765
+LMWEBUI_HOST_AGENT_TOKEN=<same-token>
+```
+
+The bridge requires the bearer token and exposes only explicitly supported host operations. Keep it
+on loopback unless a separately authenticated private network is required.
+
+**The bridge covers external inference runtimes only — not the Agent Hub.** Agent install, config
+editing, chat and the interactive terminal all run where the *backend* runs. In Docker that is the
+container, so the app will report an agent as not installed unless its CLI is installed inside the
+container, and the install button has no terminal to open (it returns 409 and shows the command to
+copy instead). To reuse host credentials from the container, uncomment the four `~/.claude`,
+`~/.codex`, `~/.config/opencode` and `~/.hermes` mounts in `docker-compose.yml` — they expose your
+real credentials to the container, so they are opt-in on purpose.
+
 Install host runtimes for hardware-accelerated local inference. The app connects to them via `localhost` (native) or `host.docker.internal` (Docker):
 
 **MLX** (Apple Silicon macOS only):
@@ -121,7 +150,7 @@ python main.py --port 8188 --listen 0.0.0.0
 
 **Ollama / vLLM** — configured as API providers in Settings → API Providers. No Runtime Manager integration needed. Enter the endpoint URL, test, and save.
 
-The Runtime Manager auto-detects running external services via HTTP probes on `localhost` (native install) or `host.docker.internal` (Docker). No host agent, no Docker socket needed.
+The Runtime Manager auto-detects running external services via HTTP probes on `localhost` (native install) or `host.docker.internal` (Docker). No host agent, no Docker socket needed for detection. Only *installing* a runtime goes through the host bridge (see above), and only from Docker.
 
 ## Office deployment
 

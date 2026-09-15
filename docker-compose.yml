@@ -10,6 +10,14 @@ services:
       - ./.lmwebui/media:/backend/media
       - ./.lmwebui/models:/backend/models
       - ./.lmwebui/secrets:/backend/.secrets
+      # Agent Hub: the agent CLIs must be installed inside this container to be usable here.
+      # The bridge below does NOT cover them. The four lines below (opt-in — they mount your
+      # real ~/.claude, ~/.codex, ~/.config/opencode and ~/.hermes credentials into the
+      # container) let a container-side CLI reuse host config. Uncomment only if you accept that.
+      # - ${HOME}/.claude:/root/.claude
+      # - ${HOME}/.codex:/root/.codex
+      # - ${HOME}/.config/opencode:/root/.config/opencode
+      # - ${HOME}/.hermes:/root/.hermes
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -24,6 +32,9 @@ services:
       - GGUF_N_THREADS=0
       - GGUF_USE_MMAP=1
       - GGUF_USE_MLOCK=0
+      # Optional native host bridge for hardware and CLI operations.
+      - LMWEBUI_HOST_AGENT_URL=${LMWEBUI_HOST_AGENT_URL:-}
+      - LMWEBUI_HOST_AGENT_TOKEN=${LMWEBUI_HOST_AGENT_TOKEN:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import json,urllib.request; d=json.load(urllib.request.urlopen('http://127.0.0.1:7070/api/health')); raise SystemExit(0 if d.get('ready') else 1)"]

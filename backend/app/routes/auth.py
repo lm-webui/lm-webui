@@ -9,6 +9,8 @@ This module provides the FastAPI routes for authentication including:
 
 from fastapi import APIRouter, HTTPException, Response, Depends, Cookie, Request
 import os
+import secrets
+import time
 from pydantic import BaseModel
 from app.database import get_db
 from app.security.auth.core import create_access_token, create_refresh_token, verify_token, pwd_context, hash_password, verify_password
@@ -17,10 +19,45 @@ from app.services.audit import log_action
 
 router = APIRouter(prefix="/api/auth")
 
+_pairing_tokens: dict[str, tuple[int, str]] = {}
+
 class LoginRequest(BaseModel):
     email: str
     password: str
     remember_me: bool = True
+
+
+@router.post("/pairing/create")
+async def create_pairing(request: Request, user: dict = Depends(get_current_user)):
+    """Create a single-use five-minute mobile pairing link."""
+    if user.get("role") != "admin":
+        raise HTTPException(403, "Admin access required")
+    token = secrets.token_urlsafe(32)
+    _pairing_tokens[token] = (int(user["id"]), time.time() + 300)
+    origin = str(request.base_url).rstrip("/")
+    return {"url": f"{origin}/pair#token={token}", "expires_in": 300}
+
+
+@router.post("/pairing/exchange")
+async def exchange_pairing(token: str, response: Response):
+    """Exchange a one-time pairing token for normal auth cookies."""
+    entry = _pairing_tokens.pop(token, None)
+    if not entry or entry[1] < time.time():
+        raise HTTPException(401, "Pairing link expired or already used")
+    user_id = entry[0]
+    db = get_db()
+    try:
+        user = db.execute("SELECT email, role FROM users WHERE id = ?", (user_id,)).fetchone()
+    finally:
+        db.close()
+    if not user:
+        raise HTTPException(401, "Pairing user no longer exists")
+    permissions = get_permissions_for_role(user[1])
+    access = create_access_token(user_id, role=user[1], permissions=permissions)
+    refresh = create_refresh_token(user_id, role=user[1], permissions=permissions)
+    response.set_cookie("access_token", access, httponly=True, samesite="lax", path="/", max_age=3600)
+    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", path="/", max_age=604800)
+    return {"user": {"id": user_id, "email": user[0], "role": user[1]}}
 
 @router.post("/login")
 async def login(req: LoginRequest, response: Response):

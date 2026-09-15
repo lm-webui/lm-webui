@@ -16,6 +16,8 @@ from app.core.config_manager import get_data_dir
 
 # Bound the retained run history per session.
 _MAX_RUNS = 20
+# Bound a single in-flight run's captured output (chars).
+_MAX_OUTPUT_CHARS = 200_000
 
 
 class AgentSessions:
@@ -48,13 +50,21 @@ class AgentSessions:
             pass
 
     def _load(self) -> None:
+        p = self._index_path()
         try:
-            p = self._index_path()
             if p.exists():
                 data = json.loads(p.read_text(encoding="utf-8"))
                 self._sessions = {sid: {**s, "active_run": None} for sid, s in data.items()}
-        except (OSError, ValueError):
+        except OSError:
             self._sessions = {}
+        except ValueError:
+            # Corrupt index. Keep the file — it is the only copy of the transcripts — and start
+            # empty, rather than overwriting it on the next persist.
+            self._sessions = {}
+            try:
+                p.rename(p.with_name(f"index.json.corrupt-{int(datetime.now().timestamp())}"))
+            except OSError:
+                pass
 
     def create(self, agent: str) -> str:
         sid = uuid.uuid4().hex[:8]
@@ -126,7 +136,10 @@ class AgentSessions:
     def append_output(self, sid: str, text: str) -> None:
         s = self._sessions.get(sid)
         if s and s["active_run"]:
-            s["active_run"]["output"] += text
+            # Keep the tail; a long run's output is otherwise retained in full until the process
+            # ends, with no cap at all (only the run *list* is bounded).
+            # ponytail: the transcript only ever reads the last block, so the tail is enough.
+            s["active_run"]["output"] = (s["active_run"]["output"] + text)[-_MAX_OUTPUT_CHARS:]
 
     def end_run(self, sid: str, exit_code: int, usage: dict | None = None,
                 cost_usd: float | None = None, context_window: int | None = None) -> dict | None:
