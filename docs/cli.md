@@ -2,7 +2,7 @@
 
 LM-WebUI ships two command-line tools:
 
-- **`lm-webui`** — the service manager for a native install (start/stop/restart/status/logs/update). Installed by `install.sh` and symlinked to `/usr/local/bin/lm-webui`. The installer publishes this script from the tree it came from — release tarball or git checkout — and there is deliberately no second copy, so the installed CLI cannot drift from the one in the repository.
+- **`lm-webui`** — the service manager for a native install (start/stop/restart/status/logs/update). Installed by `install.sh` and symlinked to `/usr/local/bin/lm-webui`. The installer publishes this script from the release tarball, and there is deliberately no second copy, so the installed CLI cannot drift from the one in the repository. It also owns `__install-tree`, the routine that lays a release down over an existing install; `install.sh` calls it rather than keeping its own copy — that duplication is exactly how a release tarball's `config.yaml` came to overwrite a live one on `update` while the installer guarded against it.
 - **`lm-webui-host`** — the host-runtime helper that installs and checks hardware-specific runtimes (MLX, ComfyUI) without giving the app host-level privileges.
 
 ## Service CLI (`lm-webui`)
@@ -16,8 +16,13 @@ lm-webui restart     # Restart the service (same output as start)
 lm-webui status      # Show health (checks GET /api/health) + the URL to open
 lm-webui open        # Open the dashboard in this machine's browser
 lm-webui logs        # Follow service logs
-lm-webui update      # Pull latest code, rebuild frontend, restart (preserves data)
+lm-webui update      # Download the latest release, install it, restart (preserves data)
 ```
+
+`update` installs the latest release tarball and restarts the service. The frontend ships prebuilt
+inside that tarball, so nothing is compiled on your machine. Your `data/`, `media/`, `models/`,
+`cache/`, `secrets/`, `logs/`, `.venv/` and `config.yaml` are left untouched — `config.yaml` is
+only ever created when missing, or migrated after a backup when it is in an old format.
 
 `start` and `status` print an `Open:` line with the dashboard address. The service binds
 `0.0.0.0:7070`, so the CLI reports this machine's LAN IPv4 (e.g. `http://192.168.1.20:7070`) and

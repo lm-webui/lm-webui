@@ -12,8 +12,9 @@ log_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
 log_error()   { echo -e "${RED}[ERROR]${NC} $1"; }
 
 LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
-BRANCH="${BRANCH:-main}"
-REPO_URL="https://github.com/lm-webui/lm-webui.git"
+# The one source: a release tarball. There is no git-clone path — two source layouts meant every
+# consumer branched on them, and the branches drifted apart.
+RELEASE_URL="https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"
 
 print_banner() {
   echo -e "${BLUE}"
@@ -56,7 +57,6 @@ check_prerequisites() {
     $PYTHON -m ensurepip --upgrade 2>/dev/null || true
     if ! $PYTHON -m pip --version &>/dev/null; then log_error "pip not available"; exit 1; fi
   fi
-  if ! command -v git &>/dev/null; then log_error "git required"; exit 1; fi
   log_success "All prerequisites satisfied"
 }
 
@@ -83,117 +83,57 @@ setup_environment() {
   log_success "Directory structure created"
 }
 
-ensure_config() {
-  # Create/upgrade config.yaml from the canonical template shipped in the release
-  # (backend/config.yaml), pointing its ~/.lmwebui paths at the real install dir.
-  local cfg="$LMWEBUI_HOME/config.yaml"
-  local tpl="$LMWEBUI_HOME/config.yaml.template"
-  local needs=false
-  if [ ! -f "$cfg" ]; then
-    needs=true
-  elif grep -q "app_config\|port: 8000\|llm_config" "$cfg" 2>/dev/null; then
-    log_warning "Detected old config format. Backing up to config.yaml.bak..."
-    cp "$cfg" "$cfg.bak"; needs=true
-  fi
-  if [ "$needs" = true ] && [ -f "$tpl" ]; then
-    sed "s|~/.lmwebui|$LMWEBUI_HOME|g" "$tpl" > "$cfg.new" && mv "$cfg.new" "$cfg"
-    log_success "Created config.yaml from canonical template"
-  fi
-  rm -f "$tpl"
-}
-
-clean_stale_clone_layout() {
-  # Remove dirs/files a git-clone install creates that the release tarball never does.
-  # Keeps a prior clone -> tarball upgrade from leaving a half-src/half-dist tree.
-  # Runtime state (cache/, logs/, secrets/, config.yaml) is left untouched.
-  for p in .git backend scripts web/src web/node_modules web/vite.config.ts; do
-    rm -rf "$LMWEBUI_HOME/$p" 2>/dev/null || true
-  done
-}
-
-stage_config_template() {
-  # Stage the canonical config as a template and remove it from $SRC_DIR so the
-  # bulk copy below can't clobber a user's live config.yaml on update.
-  if [ -f "$SRC_DIR/config.yaml" ]; then           # release tarball
-    cp "$SRC_DIR/config.yaml" "$LMWEBUI_HOME/config.yaml.template"
-    rm -f "$SRC_DIR/config.yaml"
-  elif [ -f "$SRC_DIR/backend/config.yaml" ]; then # git-clone fallback
-    cp "$SRC_DIR/backend/config.yaml" "$LMWEBUI_HOME/config.yaml.template"
-    rm -f "$SRC_DIR/backend/config.yaml"
-  fi
-}
-
 setup_repository() {
+  # Resolve ONE source — a release tarball — and hand it to the CLI's __install-tree, which is the
+  # only implementation of "replace the code, keep the user's data" (and holds the config.yaml
+  # guard). This function used to hold a second implementation plus a git-clone path; the two
+  # copies drifted, and this one's config guard was missing from the CLI's.
   log_info "Setting up application code..."
-  SRC_DIR=""; SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  if [ -f "$SCRIPT_DIR/package.json" ] && { [ -f "$SCRIPT_DIR/web/vite.config.ts" ] || [ -f "$SCRIPT_DIR/web/dist/index.html" ]; }; then
-    SRC_DIR="$SCRIPT_DIR"; log_info "Using local installation at $SRC_DIR"
+  local tmp="/tmp/lmwebui-release-$$" tgz="" downloaded=""
+  rm -rf "$tmp"; mkdir -p "$tmp"
+
+  # A local tarball first, so a hand-built or already-downloaded one works offline.
+  if [ -f "./lm-webui.tar.gz" ]; then
+    log_info "Using local ./lm-webui.tar.gz"
+    tgz="./lm-webui.tar.gz"
   else
     log_info "Downloading latest release..."
-    if curl -fsSL --retry 3 --retry-delay 2 -o /tmp/lmwebui.tar.gz "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
-      if ! tar -tzf /tmp/lmwebui.tar.gz >/dev/null 2>&1; then
-        log_error "Downloaded archive is corrupt"; return 1
-      fi
-      mkdir -p /tmp/lmwebui-tar && tar -xzf /tmp/lmwebui.tar.gz -C /tmp/lmwebui-tar --strip-components=1
-      SRC_DIR="/tmp/lmwebui-tar"
-    else
-      log_warning "Release download failed — falling back to git clone"
-      git clone --branch "$BRANCH" --depth 1 "$REPO_URL" /tmp/lmwebui-clone; SRC_DIR="/tmp/lmwebui-clone"
+    tgz="/tmp/lmwebui-$$.tar.gz"; downloaded="$tgz"
+    if ! curl -fsSL --retry 3 --retry-delay 2 -o "$tgz" "$RELEASE_URL"; then
+      log_error "Could not download $RELEASE_URL"
+      log_error "Fetch it manually, then re-run this installer from that directory."
+      exit 1
     fi
   fi
-  stage_config_template
-  # Publish the service CLI from the tree the app came from — tarball puts it at $SRC_DIR/lmwebui,
-  # a git clone at $SRC_DIR/scripts/lmwebui. Done here because the temp dirs are removed before
-  # install_cli() runs. This is the only place the CLI is written: a second inline copy is exactly
-  # how the two drifted apart.
-  for _cli in "$SRC_DIR/scripts/lmwebui" "$SRC_DIR/lmwebui"; do
-    [ -f "$_cli" ] && cp "$_cli" "$LMWEBUI_HOME/lmwebui" && break
-  done
-  if [ -f "$LMWEBUI_HOME/app/main.py" ]; then
-    OWNER=$(stat -f '%Su' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || stat -c '%U' "$LMWEBUI_HOME/app/main.py" 2>/dev/null || echo "")
-    if [ "$OWNER" = "root" ]; then
-      log_warning "Fixing root ownership..."
-      chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
-        log_error "Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
-    fi
-    if [ -d "$SRC_DIR/backend" ]; then
-      cp "$SRC_DIR/web/vite.config.ts" "$LMWEBUI_HOME/web/vite.config.ts" 2>/dev/null || true
-    else
-      clean_stale_clone_layout
-      # tarball owns complete app/ + web/dist; replace wholesale so removed
-      # modules and stale hashed assets don't linger across updates
-      rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web/dist"
-      cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
-    fi
-    cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json" 2>/dev/null || true
-    rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz 2>/dev/null || true
-    log_info "Application code updated at $LMWEBUI_HOME"; return
-  fi
-  if [ -d "$SRC_DIR/backend" ]; then
-    cp -r "$SRC_DIR/backend/"* "$LMWEBUI_HOME/"
-    cp -r "$SRC_DIR/web" "$LMWEBUI_HOME/web"
-  else
-    # release tarball: app/, web/dist/ already in target layout
-    clean_stale_clone_layout
-    # tarball owns complete app/ + web/dist; replace wholesale so removed
-    # modules and stale hashed assets don't linger across updates
-    rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web/dist"
-    cp -r "$SRC_DIR/." "$LMWEBUI_HOME/"
-  fi
-  cp "$SRC_DIR/package.json" "$LMWEBUI_HOME/package.json"
-  rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz 2>/dev/null || true
-  log_success "Application code installed"
-}
 
-build_frontend() {
-  log_info "Building frontend..."
-  if [ -f "$LMWEBUI_HOME/web/dist/index.html" ]; then log_info "Frontend already built"; return; fi
-  if ! command -v npm &>/dev/null || ! command -v node &>/dev/null; then
-    log_warning "Node.js/npm not found. Install Node.js from https://nodejs.org/"
-    log_warning "Then: cd $LMWEBUI_HOME/web && npm install && npm run build"; return
+  if ! tar -tzf "$tgz" >/dev/null 2>&1; then
+    log_error "Not a readable .tar.gz archive: $tgz"; exit 1
   fi
-  cd "$LMWEBUI_HOME/web" && npm install --quiet && npm run build
-  log_success "Frontend built at $LMWEBUI_HOME/web/dist"
+  tar -xzf "$tgz" -C "$tmp" --strip-components=1
+  # Only ever delete what we downloaded — never the user's own ./lm-webui.tar.gz.
+  if [ -n "$downloaded" ]; then rm -f "$downloaded"; fi
+
+  # Fail here rather than half-way through replacing an install. The release workflow asserts the
+  # same two files before uploading, so this only fires on a corrupt or truncated download.
+  if [ ! -f "$tmp/app/main.py" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
+    log_error "Release archive is missing app/main.py or web/dist/index.html"
+    rm -rf "$tmp"; exit 1
+  fi
+
+  # Publish the CLI, then let it do the replacement — so the CLI that mutates the install is
+  # byte-identical to the one that will later run `lm-webui update`.
+  if ! cp "$tmp/lmwebui" "$LMWEBUI_HOME/lmwebui"; then
+    log_error "No lmwebui in the release archive"; rm -rf "$tmp"; exit 1
+  fi
+  # LMWEBUI_HOME is assigned, not exported, in this script: pass it explicitly or the child
+  # silently targets ~/.lmwebui. `bash <path>` so this doesn't depend on the exec bit, which
+  # install_cli() only sets later.
+  if ! LMWEBUI_HOME="$LMWEBUI_HOME" bash "$LMWEBUI_HOME/lmwebui" __install-tree "$tmp"; then
+    log_error "Installing the release tree failed"; rm -rf "$tmp"; exit 1
+  fi
+
+  rm -rf "$tmp"
+  log_success "Application code installed at $LMWEBUI_HOME"
 }
 
 install_dependencies() {
@@ -238,7 +178,9 @@ ensure_llama_server() {
     return
   fi
   log_info "Installing llama-server..."
-  local bin_dir="$HOME/.lmwebui/bin"
+  # $LMWEBUI_HOME, not $HOME/.lmwebui — the service units put $LMWEBUI_HOME/bin on PATH, so
+  # hardcoding the default home downloads the binary somewhere the service cannot see it.
+  local bin_dir="$LMWEBUI_HOME/bin"
   mkdir -p "$bin_dir"
   # macOS: brew formula if present
   if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
@@ -348,9 +290,10 @@ PLISTEOF
 }
 
 install_cli() {
-  # The script itself is published in setup_repository(), from the tree the app came from. There is
+  # The script itself is published in setup_repository(), from the release tarball. There is
   # deliberately no inline fallback: a second copy is what let the installed CLI drift from the one
-  # in the repo. If it is missing, say so instead of writing a reduced version.
+  # in the repo. setup_repository() already fails if the archive has no lmwebui, so this is only a
+  # belt-and-braces guard against writing a reduced version.
   if [ ! -f "$LMWEBUI_HOME/lmwebui" ]; then
     log_warning "Service CLI not found in the source tree — skipping CLI install."
     return 0
@@ -398,7 +341,7 @@ show_instructions() {
 
 cleanup() { log_warning "Installation interrupted"; exit 1; }
 trap cleanup INT TERM
-trap 'rm -rf /tmp/lmwebui-clone /tmp/lmwebui-tar /tmp/lmwebui.tar.gz' EXIT
+trap 'rm -rf /tmp/lmwebui-release-$$ /tmp/lmwebui-$$.tar.gz' EXIT
 
 main() {
   print_banner
@@ -406,9 +349,9 @@ main() {
   check_prerequisites
   check_sudo
   setup_environment
+  # setup_repository lays the tree down and consumes the config template, so it owns config
+  # creation too — there is no separate ensure_config step any more.
   setup_repository
-  ensure_config
-  build_frontend
   install_dependencies
   install_llamacpp
   ensure_llama_server

@@ -9,7 +9,13 @@ import { addApiKey, deleteApiKey, listApiKeys, testApiKey, testSearxngUrl, fetch
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 
-export function SettingsSearch() {
+export function SettingsSearch({ engine, setEngine }: {
+  // Controlled by the parent dialog: the Inference tab's "Default Web Search" select edits the same
+  // setting, and the dialog's Save writes it back. Two local copies meant whichever the user did
+  // not touch last would overwrite the other on save.
+  engine: string;
+  setEngine: (id: string) => void;
+}) {
   const searchEngines = [
     { id: "duckduckgo", name: "DuckDuckGo", icon: Globe, needsKey: false },
     { id: "searxng", name: "SearXNG", icon: Globe, needsKey: false },
@@ -17,12 +23,16 @@ export function SettingsSearch() {
     { id: "perplexity", name: "Perplexity", icon: Globe, needsKey: true },
   ];
 
-  const [selectedProvider, setSelectedProvider] = useState("duckduckgo");
+  const selectedProvider = engine;
   const [apiKey, setApiKey] = useState("");
   const [cx, setCx] = useState("");
   const [searxngUrl, setSearxngUrl] = useState("");
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
-  const [, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
+  // The SearXNG probe result, and only that — a well-formed URL is not evidence that anything is
+  // listening on it, so the badge must show this rather than the URL's shape. Do not write it from
+  // the API-key paths: they run on mount and on every engine switch, and would overwrite a real
+  // verdict with an "is a key stored" answer that means nothing for SearXNG.
+  const [searxngStatus, setSearxngStatus] = useState<"connected" | "disconnected" | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
 
@@ -34,7 +44,6 @@ export function SettingsSearch() {
         const keysMap: Record<string, boolean> = {};
         keys.forEach((key: any) => { keysMap[key.provider] = true; });
         setStoredApiKeys(keysMap);
-        setConnectionStatus(keysMap[selectedProvider] ? "connected" : "disconnected");
       } catch (error) {
         console.error("Failed to load API keys:", error);
       } finally {
@@ -63,7 +72,6 @@ export function SettingsSearch() {
       setStoredApiKeys(prev => ({ ...prev, [selectedProvider]: true }));
       setApiKey("");
       setCx("");
-      setConnectionStatus("connected");
       toast.success(`${currentEngine?.name} key saved`);
     } catch (error: any) {
       toast.error(`Failed to save ${currentEngine?.name} key`);
@@ -74,29 +82,29 @@ export function SettingsSearch() {
     try {
       await deleteApiKey(selectedProvider);
       setStoredApiKeys(prev => { const n = { ...prev }; delete n[selectedProvider]; return n; });
-      setConnectionStatus("disconnected");
       toast.success(`${currentEngine?.name} key deleted`);
     } catch (error) {
       toast.error(`Failed to delete ${currentEngine?.name} key`);
     }
   };
 
-  // Load the saved engine default + SearXNG URL for the current user.
+  // Load the SearXNG URL for the current user. The engine itself comes from the parent dialog.
   useEffect(() => {
     fetchSettings().then((s: any) => {
       setSearxngUrl(s.searxngUrl || "");
-      if (s.selectedSearchEngine) setSelectedProvider(s.selectedSearchEngine);
     }).catch(() => {});
   }, []);
 
   const handleEngineChange = (id: string) => {
-    setSelectedProvider(id);
+    setEngine(id);           // keeps the Inference tab's select and the dialog's Save in step
+    setSearxngStatus(null);  // a verdict from the previous engine's probe doesn't carry over
     updateSettings({ selectedSearchEngine: id }).catch(() => {});
   };
 
   const handleSaveSearxngUrl = async () => {
     try {
       await updateSettings({ searxngUrl: searxngUrl.trim() });
+      setSearxngStatus(null);  // the saved URL has not been probed
       toast.success("SearXNG URL saved");
     } catch (error) {
       toast.error("Failed to save SearXNG URL");
@@ -109,14 +117,13 @@ export function SettingsSearch() {
       return;
     }
     setIsTesting(true);
-    setConnectionStatus("testing");
     try {
       const result = await testSearxngUrl(searxngUrl.trim());
-      setConnectionStatus(result.valid ? "connected" : "disconnected");
+      setSearxngStatus(result.valid ? "connected" : "disconnected");
       if (result.valid) toast.success(result.message || "SearXNG reachable");
       else toast.error(result.message || "SearXNG not reachable");
     } catch (error) {
-      setConnectionStatus("disconnected");
+      setSearxngStatus("disconnected");
       toast.error("Failed to reach SearXNG");
     } finally {
       setIsTesting(false);
@@ -133,7 +140,6 @@ export function SettingsSearch() {
       return;
     }
     setIsTesting(true);
-    setConnectionStatus("testing");
     try {
       if (!isConfigured && apiKey) {
         await addApiKey(selectedProvider, apiKey, isGoogle ? cx.trim() : undefined);
@@ -141,10 +147,8 @@ export function SettingsSearch() {
       }
       const result = await testApiKey(selectedProvider);
       if (result.valid) {
-        setConnectionStatus("connected");
         toast.success(`${currentEngine?.name} key is valid`);
       } else {
-        setConnectionStatus("disconnected");
         toast.error(result.message || "Connection failed");
         if (!isConfigured && apiKey) {
           await deleteApiKey(selectedProvider).catch(() => {});
@@ -152,7 +156,6 @@ export function SettingsSearch() {
         }
       }
     } catch (error) {
-      setConnectionStatus("disconnected");
       toast.error(`Failed to connect to ${currentEngine?.name}`);
       if (!isConfigured && apiKey) {
         await deleteApiKey(selectedProvider).catch(() => {});
@@ -213,10 +216,23 @@ export function SettingsSearch() {
                           <RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Testing...
                         </Badge>
                       ) : currentEngine?.id === "searxng" ? (
-                        <Badge variant={isSearxngConfigured ? "default" : "secondary"} className="text-xs">
-                          {isSearxngConfigured ? <Wifi className="h-3 w-3 mr-1" /> : <WifiOff className="h-3 w-3 mr-1" />}
-                          {isSearxngConfigured ? "Connected" : "Not configured"}
-                        </Badge>
+                        !isSearxngConfigured ? (
+                          <Badge variant="secondary" className="text-xs">
+                            <WifiOff className="h-3 w-3 mr-1" /> Not configured
+                          </Badge>
+                        ) : searxngStatus === "connected" ? (
+                          <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                            <Wifi className="h-3 w-3 mr-1" /> Connected
+                          </Badge>
+                        ) : searxngStatus === "disconnected" ? (
+                          <Badge variant="destructive" className="text-xs">
+                            <WifiOff className="h-3 w-3 mr-1" /> Not reachable
+                          </Badge>
+                        ) : (
+                          <Badge variant="secondary" className="text-xs">
+                            <Wifi className="h-3 w-3 mr-1" /> Configured
+                          </Badge>
+                        )
                       ) : !currentEngine?.needsKey ? (
                         <Badge className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
                           <Wifi className="h-3 w-3 mr-1" /> Always connected
@@ -258,7 +274,8 @@ export function SettingsSearch() {
                   <Label className="text-sm">SearXNG URL</Label>
                   <div className="flex gap-2">
                     <Input type="text" placeholder="http://127.0.0.1:8080" value={searxngUrl}
-                      onChange={(e) => setSearxngUrl(e.target.value)} className="text-sm" />
+                      onChange={(e) => { setSearxngUrl(e.target.value); setSearxngStatus(null); }}
+                      className="text-sm" />
                     <Button variant="outline" size="sm" onClick={handleSaveSearxngUrl} className="text-xs shrink-0">Save</Button>
                   </div>
                   <div className="text-xs text-zinc-500 dark:text-zinc-400">

@@ -7,6 +7,7 @@ class SearchResult:
     title: str
     url: str
     snippet: str = ""
+    content: str = ""   # fetched page text; the prompt prefers it and falls back to the snippet
 
 
 class SearchProvider:

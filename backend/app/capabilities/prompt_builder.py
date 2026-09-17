@@ -5,7 +5,7 @@ import re
 from typing import Any, List
 
 from .results import FileResult, MultimodalResult, RetrievalResult, SearchResult, VisionResult
-from app.core.prompts import CONTEXT_INTRO, VISION_SECTION, SEARCH_HEADER
+from app.core.prompts import CONTEXT_INTRO, VISION_SECTION, SEARCH_HEADER, SEARCH_INTRO
 
 
 def _vision_section(r: VisionResult) -> str:
@@ -34,12 +34,14 @@ def _retrieval_section(r: RetrievalResult) -> str:
 
 
 def _search_section(r: SearchResult) -> str:
-    lines = [SEARCH_HEADER]
+    lines = [SEARCH_INTRO, SEARCH_HEADER]
     for i, item in enumerate(r.items, 1):
         title = item.get("title", "")
         url = item.get("url", "")
-        snippet = item.get("snippet", "")
-        lines.append(f"[{i}] {title} ({url})" + (f" — {snippet}" if snippet else ""))
+        # Page text when it was fetched, else the provider's snippet — never both, the section is
+        # token-budgeted and the snippet only repeats the opening of the page.
+        text = item.get("content") or item.get("snippet") or ""
+        lines.append(f"[{i}] {title} ({url})\n{text}" if text else f"[{i}] {title} ({url})")
     return "\n".join(lines)
 
 

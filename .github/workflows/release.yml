@@ -36,6 +36,23 @@ jobs:
           cp scripts/lmwebui lm-webui/lmwebui
           tar -czf lm-webui.tar.gz lm-webui
 
+      # Before anything is published: does the archive actually contain what an install reads,
+      # and does installing it leave a user's config.yaml and data/ alone? The tarball is
+      # assembled by the hand-written cp list above, so a newly added runtime file can silently
+      # fail to ship without this.
+      - name: Smoke test tarball
+        run: bash ./scripts/smoke-tarball.sh lm-webui.tar.gz
+
+      # Hand the frontend to the desktop job so the release builds it exactly once. It lands at
+      # web/dist in that job because tauri's frontendDist (../../web/dist) and build-sidecar.sh
+      # both read that path.
+      - name: Upload frontend bundle for the desktop job
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+          retention-days: 1
+
       - name: Create release + upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,7 +85,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: web/package-lock.json
+          cache-dependency-path: desktop/package-lock.json
 
       - uses: actions/setup-python@v5
         with:
@@ -77,22 +94,32 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install frontend and desktop dependencies
+      # The frontend was built once, in the `build` job. Rebuilding it here would mean two builds
+      # of the same commit that can quietly diverge. The output is platform-independent JS/CSS —
+      # rollup's platform-specific binaries are build-time only, and nothing in web/vite.config.ts
+      # branches on platform.
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist
+
+      - name: Install desktop dependencies
         run: |
-          cd web
-          npm ci
-          cd ../desktop
+          cd desktop
           npm install
           python -m pip install --upgrade pip
           python -m pip install -r requirements-build.txt
 
       - name: Build macOS DMG
         run: |
+          test -f web/dist/index.html   # fail here, not 400 lines into tauri
           cd desktop
           npm run version:sync
-          # tauri's beforeBuildCommand already runs build:web + build:sidecar,
-          # so we only sync the version here (build:web would otherwise run twice).
-          npm run tauri -- build --bundles dmg
+          # Override beforeBuildCommand so tauri does not rebuild the frontend it was just given.
+          # build:sidecar must stay — it populates src-tauri/web-dist and
+          # src-tauri/binaries/lm-webui-backend, both bundle.resources.
+          npm run tauri -- build --bundles dmg \
+            --config '{"build":{"frontendDist":"../../web/dist","beforeBuildCommand":"npm run build:sidecar"}}'
 
       - name: Rename DMG to stable download name
         run: |

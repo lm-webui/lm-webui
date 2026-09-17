@@ -200,7 +200,97 @@ PLISTEOF
   esac
 }
 
+# ── Internal: installer plumbing ─────────────────────────────────────────
+# __install_tree is called by install.sh (`lm-webui __install-tree <release-tree>`) and by `update`
+# below. It is the single implementation of "replace the code, keep the user's data" — the second
+# copy that used to live in install.sh is what let a release tarball's config.yaml clobber a live
+# one on update, while install.sh's copy guarded against exactly that.
+#
+# Nothing here may use $0 or `source`: reached through the /usr/local/bin/lm-webui symlink, $0 is
+# the symlink, not this file.
+__install_tree() {
+  local src="${1:?__install-tree needs a release tree}"
+  [ -f "$src/app/main.py" ] || { echo "❌ $src is not a release tree (no app/main.py)"; exit 1; }
+
+  # 1. Stage the shipped config, then DELETE it from $src. This is the guard: once config.yaml is
+  #    out of the source tree, the bulk copy below cannot overwrite a live one.
+  local tpl="$LMWEBUI_HOME/config.yaml.template"
+  mkdir -p "$LMWEBUI_HOME"
+  if [ -f "$src/config.yaml" ]; then
+    cp "$src/config.yaml" "$tpl"
+    rm -f "$src/config.yaml"
+  fi
+
+  # 2. Ownership first, or cp/rm cannot write over root-owned leftovers from an old sudo run.
+  if [ -n "$(find "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web" ! -user "$(whoami)" 2>/dev/null | head -1)" ]; then
+    echo "   Fixing ownership (stale non-user files)..."
+    chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || \
+    sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
+      echo "❌ Could not fix ownership. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
+  fi
+
+  # 3. Replace web/ wholesale, not just web/dist: a tarball ships no web/src, so a leftover
+  #    web/src or web/vite.config.ts from a git-clone install would linger forever. The three
+  #    clone-only top-level entries are the one-shot clone -> tarball migration.
+  rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
+  for p in .git backend scripts; do rm -rf "$LMWEBUI_HOME/$p" 2>/dev/null || true; done
+
+  cp -r "$src/." "$LMWEBUI_HOME/"
+  __apply_config_template
+}
+
+__apply_config_template() {
+  # Consume $LMWEBUI_HOME/config.yaml.template: repair, create, or migrate the live config.
+  local cfg="$LMWEBUI_HOME/config.yaml" tpl="$LMWEBUI_HOME/config.yaml.template"
+  [ -f "$tpl" ] || return 0
+
+  # Repair a clobber the OLD update left behind. It copied the tarball's config.yaml raw, so that
+  # file still contains the un-substituted literal `~/.lmwebui` — a string a real install never
+  # retains, because config creation always seds it to the actual home. -F: the dot is literal.
+  if [ -f "$cfg.bak" ] && grep -qF '~/.lmwebui' "$cfg" 2>/dev/null; then
+    echo "   Restoring config.yaml from config.yaml.bak (a previous update had replaced it)"
+    cp "$cfg.bak" "$cfg"
+  fi
+
+  if [ ! -f "$cfg" ]; then
+    sed "s|~/.lmwebui|$LMWEBUI_HOME|g" "$tpl" > "$cfg.new" && mv "$cfg.new" "$cfg"
+    echo "   config.yaml created from the release template"
+  elif grep -q "app_config\|port: 8000\|llm_config" "$cfg" 2>/dev/null; then
+    echo "   Detected old config format. Backing up to config.yaml.bak..."
+    cp "$cfg" "$cfg.bak"
+    sed "s|~/.lmwebui|$LMWEBUI_HOME|g" "$tpl" > "$cfg.new" && mv "$cfg.new" "$cfg"
+    echo "   config.yaml upgraded from the release template"
+  fi
+  # Write-then-rename above: a truncated config.yaml is not recoverable. Both removals are only
+  # reached on success, since set -e aborts the arm first.
+  rm -f "$tpl" "$cfg.new"
+}
+
+__fetch_release() {
+  # $1 = destination directory. A private function rather than a subcommand: install.sh is the
+  # bootstrap and cannot call into the tarball it is fetching, so `update` is the only caller.
+  local dest="${1:?__fetch_release needs a destination directory}"
+  local tgz; tgz="$(mktemp)"
+  curl -fsSL --retry 3 --retry-delay 2 -o "$tgz" \
+    "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz" \
+    || { echo "❌ Release download failed"; rm -f "$tgz"; exit 1; }
+  tar -tzf "$tgz" >/dev/null 2>&1 || { echo "❌ Downloaded archive is corrupt"; rm -f "$tgz"; exit 1; }
+  mkdir -p "$dest" && tar -xzf "$tgz" -C "$dest" --strip-components=1
+  # Fail before touching the install, not half-way through replacing it.
+  if [ ! -f "$dest/app/main.py" ] || [ ! -f "$dest/web/dist/index.html" ]; then
+    echo "❌ Release archive is missing app/main.py or web/dist/index.html"
+    rm -f "$tgz"; exit 1
+  fi
+  rm -f "$tgz"
+}
+
 case "${1:-status}" in
+  __install-tree)
+    # Internal — install.sh publishes this script from the release tree and then calls this to lay
+    # that tree down. Not for humans; no stability promise, and deliberately absent from `help`.
+    __install_tree "${2:?usage: lm-webui __install-tree <release-tree>}"
+    ;;
+
   start)
     case "$(uname)" in
       Linux)
@@ -312,33 +402,15 @@ except Exception:
     # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
     sudo -v 2>/dev/null || true
 
-    # Fix ownership first so cp/rm can write — catches nested root-owned files too
-    if [ -n "$(find "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web" ! -user "$(whoami)" 2>/dev/null | head -1)" ]; then
-      echo "   Fixing ownership (stale non-user files)..."
-      chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || \
-      sudo chown -R "$(whoami)" "$LMWEBUI_HOME" 2>/dev/null || {
-        echo "❌ Could not fix ownership. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"
-        exit 1
-      }
-    fi
-
-    # Back up the live config, then bring the latest from the release tarball
-    [ -f "$LMWEBUI_HOME/config.yaml" ] && cp "$LMWEBUI_HOME/config.yaml" "$LMWEBUI_HOME/config.yaml.bak"
-
-    # Download + verify + extract the latest release tarball (same as installer)
-    TMP="/tmp/lmwebui-update-$$"
-    if curl -fsSL --retry 3 --retry-delay 2 -o /tmp/lmwebui-update.tar.gz \
-        "https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"; then
-      tar -tzf /tmp/lmwebui-update.tar.gz >/dev/null 2>&1 || { echo "❌ Downloaded archive is corrupt"; exit 1; }
-      mkdir -p "$TMP" && tar -xzf /tmp/lmwebui-update.tar.gz -C "$TMP" --strip-components=1
-    else
-      echo "❌ Release download failed"; exit 1
-    fi
-
-    # Replace app/ + web/ wholesale; the tarball ships a prebuilt web/dist
-    rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
-    cp -r "$TMP/." "$LMWEBUI_HOME/"
-    rm -rf "$TMP" /tmp/lmwebui-update.tar.gz
+    # Fetch the release, then hand it to the same routine install.sh uses. Ownership repair, the
+    # stale clone-layout cleanup and the config.yaml guard all live in there — this used to be a
+    # second copy, and that is exactly how it came to clobber config.yaml while install.sh did not.
+    TMP="$(mktemp -d)"
+    echo "   Downloading latest release..."
+    __fetch_release "$TMP"
+    echo "   Installing release tree (config.yaml preserved)..."
+    __install_tree "$TMP"
+    rm -rf "$TMP"
 
     # Update Python deps (including new ones added in update)
     if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **`lm-webui update` no longer overwrites `config.yaml`.** It copied the whole release tarball
+  over the install, and that tarball ships a `config.yaml` — so every update replaced a live config
+  with the shipped default. Only a `config.yaml.bak` survived it. The installer had always guarded
+  against exactly this; `update` had a second copy of the same code without the guard. There is now
+  one implementation, and the guard lives in it. **If you have already updated and lost settings,
+  `cp ~/.lmwebui/config.yaml.bak ~/.lmwebui/config.yaml` restores them** — and this release's first
+  update will do that automatically when it can see the signature of a clobbered config.
+- **`update` now migrates an old-format `config.yaml`.** The migration only ran from `install.sh`,
+  so a migration shipped in a release never reached an existing install through `update`.
+
+### Changed
+- **One source for installs and updates: the release tarball.** `install.sh` previously also
+  accepted a git checkout as its source, which meant two different tree layouts, and every consumer
+  branched on which one it had — branches that had drifted. A checkout source is gone; use
+  `npm run dev` in a clone for development. `install.sh` now accepts a local `./lm-webui.tar.gz` or
+  downloads the latest release, and fails clearly if neither is available.
+- **`install.sh` delegates the tree replacement to the CLI.** The "replace the code, keep the user's
+  data" routine existed twice (installer and CLI) and the copies had diverged — see the `config.yaml`
+  fix above. The CLI's `__install-tree` is now the only copy, and `install.sh` calls it.
+- **`install.sh` no longer tries to build the frontend.** The release tarball ships a prebuilt
+  `web/dist` and contains no `web/src`, so the build step could never have succeeded; it now fails
+  early with a clear message if the archive is missing either half.
+- **The release builds the frontend once, not twice.** The macOS DMG job used to rebuild it
+  independently from source; it now downloads the bundle the tarball job produced, so the DMG and
+  the tarball ship byte-identical frontends.
+- **The release smoke-tests its own tarball** before uploading: the archive's shape and contents,
+  that the shipped scripts parse, and that installing it leaves a live `config.yaml` and `data/`
+  intact. Previously nothing checked the artifact CI hand-assembles.
+
 ### Added
 - **`/api/health` reports the startup error** (exception class + first line, absolute paths
   collapsed) so the CLI *and* the web startup screen can name the cause instead of showing a bare

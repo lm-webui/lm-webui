@@ -54,17 +54,32 @@ The model list can be stale if it was fetched before the change. Use the **refre
 
 API keys are stored per user and require an authenticated session. A `403` usually means the session expired — **log out and back in**, then retry. Local providers also validate that the server URL is `http(s)://` on localhost or a private IP.
 
-## `lm-webui update` fails, or the frontend isn't rebuilt
+## `lm-webui update` fails
 
-The update script downloads the latest code, reinstalls Python deps, rebuilds the frontend, and restarts the service. Common failures:
+`update` downloads the latest release tarball and installs it over the current one. The frontend
+ships prebuilt inside that tarball, so **nothing is compiled on your machine** and `npm`/`node` are
+not required. Common failures:
 
-- **Root-owned files block the rebuild.** If the web directory or `landing/.next` is owned by `root` (from a prior `sudo` build), the update can't write. Fix ownership: `sudo chown -R $(whoami) ~/.lmwebui` (or `landing/.next`).
-- **`npm` not on PATH.** The frontend must be rebuilt during update (the server serves `web/dist`, which isn't committed). Ensure `npm`/`node` are on your PATH; the hardened update now fails loudly instead of silently skipping the rebuild.
-- **Service files locked.** Stop the service before updating if files are in use. The current update stops the app first.
+- **The download failed.** `update` fetches from
+  `https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz`. A proxy, VPN or
+  offline machine fails here; the message names the URL so you can fetch it by hand.
+- **Root-owned files block the replace.** If part of `~/.lmwebui` is owned by `root` (from a prior
+  `sudo` run), the copy can't write. `update` repairs ownership first; if it can't, run
+  `sudo chown -R $(whoami) ~/.lmwebui` and retry.
+- **Service files locked.** `update` stops the service first. If something else holds the files,
+  stop it and retry.
 
 ## Frontend is stale after an update
 
-The web UI is served from `web/dist`, which is generated during the build and not committed. If the UI looks old after an update, the frontend rebuild was skipped or failed — re-run `lm-webui update` and confirm it reports `Frontend rebuilt.` If the build errors on a root-owned `landing/.next`, clear it with `sudo rm -rf <landing>/.next` and rebuild.
+The web UI is served from `web/dist`, which is replaced wholesale from the release tarball on every
+update. So a stale UI is no longer a build problem — check, in order:
+
+- **The service didn't restart.** `lm-webui version` reports the running version; if it is unchanged,
+  the update failed before its final restart.
+- **Browser cache.** `index.html` is served fresh, but a cached copy can linger — hard-reload the page.
+- **You are running from a source checkout.** A checkout is not an install: the installed tree lives
+  at `~/.lmwebui`, and editing files in a clone has no effect on it. Use `npm run dev` in the clone
+  for development, or `lm-webui update` to move the install forward.
 
 ## Local provider (Ollama / LM Studio / vLLM) won't connect
 

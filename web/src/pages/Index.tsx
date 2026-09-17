@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import ChatArea from "@/pages/ChatArea";
 import { fetchSettings } from "@/utils/api";
-import { useChatCreation } from "@/features/chat/useChatCreation";
 import { useSessionManagement } from "@/features/sessions/useSessionManagement";
 import { useModelManagement } from "@/features/models/useModelManagement";
 import { useAllModels } from "@/features/models/useAllModels";
@@ -34,7 +33,7 @@ export default function IndexEnhanced() {
   // Enhanced features state
   const [selectedSearchEngine, setSelectedSearchEngine] = useState("duckduckgo");
   const [, setAvailableModels] = useState<string[]>([]);
-  const [modelMapping, setModelMapping] = useState<Record<string, string>>({});
+  const [, setModelMapping] = useState<Record<string, string>>({});
   const [selectedModel, setSelectedModel] = useState("");
   const [, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
   const [, setSupportedImageModels] = useState<string[]>([]);
@@ -59,7 +58,6 @@ export default function IndexEnhanced() {
     setIsCodingMode,
     showRawResponse,
     setShowRawResponse,
-    autoTitleGeneration,
 
     // UI state
     setIsFileProcessingOpen,
@@ -71,23 +69,9 @@ export default function IndexEnhanced() {
     onSidebarStateUpdate: setIsSidebarOpen,
   });
 
-  // Domain hooks
-  useChatCreation({
-    isAuthenticated,
-    currentSessionId: activeChatId || "",
-    currentConversationId: activeChatId || "",
-    selectedLLM,
-    selectedModel,
-    modelMapping,
-    showRawResponse,
-    isImageMode,
-    isCodingMode,
-    isSearchEnabled,
-    selectedSearchEngine,
-    autoTitleGeneration,
-    onLoadingUpdate: () => {}, // Zustand handles loading state
-    setIsImageMode
-  });
+  // The send path lives in ChatArea, which owns its own useChatCreation and is the instance wired
+  // to the Composer. A second instance here allocated its own state and AbortController while its
+  // handleSendMessage was unreachable.
 
 
   // Session management domain hook

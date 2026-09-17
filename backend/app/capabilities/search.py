@@ -2,23 +2,56 @@
 from __future__ import annotations
 
 import logging
+import re
 
 from .base import CapabilityContext, get_user_api_key
 from .results import SearchResult
 
 logger = logging.getLogger(__name__)
 
-_SEARCH_PREFIXES = ("search for", "look up", "search the web for", "find", "google")
+# Longest first: "search the web for" must win over "search for".
+_SEARCH_PREFIXES = ("search the web for", "search the web", "search for", "look up", "google")
+
+# Conversational filler that hurts recall — meaningful to a human, noise to an index. Deliberately
+# small: over-stripping is worse than under-stripping, so only words that are never the subject of
+# a query are listed. ("web" is not here — "web development" is a legitimate query.)
+_STOPWORDS = frozenset((
+    "a", "an", "about", "again", "and", "are", "can", "could", "do", "for", "give", "i", "is",
+    "me", "now", "of", "on", "please", "tell", "the", "this", "to", "try", "up", "was", "what",
+    "would", "you", "your",
+))
+_URL_RE = re.compile(r"https?://\S+")
+# Tokens keep internal punctuation — "python 3.13", "C++", "gpt-4" are single units, and splitting
+# on "." turns a version number into two useless tokens.
+_TOKEN_RE = re.compile(r"[A-Za-z0-9][\w.+#-]*")
 
 
 def _clean_query(message: str) -> str:
-    """Strip leading web-search noise prefixes (e.g. 'search for X' → 'X')."""
+    """Reduce a chat sentence to something worth sending a search engine.
+
+    'can you search the web for the latest news about python 3.13?' → 'latest news python 3.13'.
+
+    URLs are pulled out first and re-appended, because they are usually the subject of the query
+    and the tokenizer would otherwise chew through their punctuation.
+    """
     q = (message or "").strip()
-    low = q.lower()
+    urls = _URL_RE.findall(q)
+    prose = _URL_RE.sub(" ", q)
+
+    # Anywhere, not just at the start: "can you search the web for X" is the common phrasing.
+    low = prose.lower()
     for p in _SEARCH_PREFIXES:
-        if low.startswith(p):
-            return q[len(p):].strip()
-    return q
+        i = low.find(p)
+        if i != -1:
+            prose = prose[:i] + " " + prose[i + len(p):]
+            break
+
+    kept = [t for t in (w.rstrip(".") for w in _TOKEN_RE.findall(prose))
+            if t and t.lower() not in _STOPWORDS]
+    # All filler: search the original rather than nothing — an empty query is always wrong.
+    if not kept and not urls:
+        return q
+    return " ".join(kept + urls)[:200]
 
 
 def _get_search_cx(user_id: int) -> str | None:
@@ -72,6 +105,7 @@ async def execute(ctx: CapabilityContext) -> None:
         query = _clean_query(message)[:200]
         engine, searxng_url = _get_search_config(ctx.user_id)
         from app.search import get_search_provider
+        from app.search.fetch import enrich
         search_provider = get_search_provider(engine)  # distinct from the LLM provider
 
         if engine == "searxng":
@@ -91,8 +125,17 @@ async def execute(ctx: CapabilityContext) -> None:
             results = await search_provider.search(query)
 
         if results:
-            logger.info("Web search (%s) returned %d results for: %s...", search_provider.name, len(results), query[:60])
-            return SearchResult(items=[{"title": r.title, "url": r.url, "snippet": r.snippet} for r in results], query=query)
+            # Read the pages, not just the snippets — providers return ~150 chars of teaser, which
+            # is not enough for the model to answer from. Failures leave `.content` empty.
+            # Capped at 3 of the 5: `web_search` defaults ON in the UI, so this runs on every turn,
+            # and the tail results cost latency far more often than they contribute an answer.
+            results = await enrich(results, limit=3)
+            logger.info("Web search (%s) returned %d results (%d with page text) for: %s...",
+                        search_provider.name, len(results),
+                        sum(1 for r in results if r.content), query[:60])
+            return SearchResult(items=[{"title": r.title, "url": r.url,
+                                        "snippet": r.snippet, "content": r.content}
+                                       for r in results], query=query)
         logger.warning("Web search (%s) returned 0 results for: %s...", search_provider.name, query[:60])
     except Exception as exc:
         logger.warning("Web search failed: %s", exc)

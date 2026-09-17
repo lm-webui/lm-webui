@@ -189,8 +189,13 @@ class SearxngProbeRequest(BaseModel):
 
 
 @router.post("/search/connectivity")
-async def test_searxng_connectivity(req: SearxngProbeRequest):
-    """Probe a SearXNG instance URL for reachability + JSON API."""
+async def test_searxng_connectivity(req: SearxngProbeRequest,
+                                    user_id: dict = Depends(get_current_user)):
+    """Probe a SearXNG instance URL for reachability + JSON API.
+
+    Authenticated like every sibling: `base_url` makes the server issue a request to an arbitrary
+    address, so an anonymous caller would get a blind-SSRF oracle out of the status message.
+    """
     from app.search import get_search_provider
     provider = get_search_provider("searxng")
     ok, msg = await provider.test(base_url=req.base_url.strip() or None)

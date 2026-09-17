@@ -240,8 +240,7 @@ export function Settings({
 
               <TabsContent value="provider" className="space-y-4 m-0">
                 <ApiKeysTab />
-                <SettingsSearch
-                />
+                <SettingsSearch engine={localSearchEngine} setEngine={setLocalSearchEngine} />
               </TabsContent>
 
               <TabsContent value="models" className="space-y-4 h-full">

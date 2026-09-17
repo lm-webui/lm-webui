@@ -6,6 +6,7 @@ Both may come per-user (paired via the UI) or fall back to env:
   GOOGLE_SEARCH_CX        (Programmable Search Engine / "cx" ID)
 Returns no results when the keys are unset or the call fails.
 """
+import asyncio
 import os
 
 import requests
@@ -14,8 +15,18 @@ from .base import SearchProvider, SearchResult
 
 GOOGLE_API_KEY = os.getenv("GOOGLE_SEARCH_API_KEY", "")
 GOOGLE_CX = os.getenv("GOOGLE_SEARCH_CX", "")
+TIMEOUT = 10
 
 _SEARCH_URL = "https://www.googleapis.com/customsearch/v1"
+
+
+def _get(api_key: str, cx: str, query: str, num: int) -> requests.Response:
+    """Blocking GET of the Custom Search API — callers wrap this in `asyncio.to_thread`."""
+    return requests.get(
+        _SEARCH_URL,
+        params={"key": api_key, "cx": cx, "q": query.strip()[:200], "num": num},
+        timeout=TIMEOUT,
+    )
 
 
 class GoogleSearchProvider(SearchProvider):
@@ -28,18 +39,20 @@ class GoogleSearchProvider(SearchProvider):
             return []
 
         try:
-            resp = requests.get(
-                _SEARCH_URL,
-                params={"key": api_key, "cx": cx, "q": query.strip()[:200], "num": limit},
-                timeout=10,
-            )
+            resp = await asyncio.to_thread(_get, api_key, cx, query, limit)
         except Exception:
             return []
         if resp.status_code != 200:
             return []
+        try:
+            data = resp.json() or {}
+        except ValueError:
+            return []
+        if not isinstance(data, dict):
+            return []
 
         results: list[SearchResult] = []
-        for item in (resp.json() or {}).get("items", []):
+        for item in data.get("items") or []:
             url = item.get("link", "")
             title = (item.get("title") or "").strip()
             if not url or not title:
@@ -56,11 +69,7 @@ class GoogleSearchProvider(SearchProvider):
         if not api_key or not cx:
             return False, "No Google API key / CX configured"
         try:
-            resp = requests.get(
-                _SEARCH_URL,
-                params={"key": api_key, "cx": cx, "q": "test", "num": 1},
-                timeout=10,
-            )
+            resp = await asyncio.to_thread(_get, api_key, cx, "test", 1)
         except Exception as exc:
             return False, f"Connection error: {exc}"
         if resp.status_code == 200:
