@@ -14,11 +14,16 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
   // without a scroll container here a viewport too short for the stack — a small window, or the
   // mobile keyboard shrinking the dynamic viewport — clips the composer with no way to reach it.
   // overflow-x-hidden is not decoration: a bare overflow-y-auto computes overflow-x to auto, which
-  // would make this screen draggable sideways. On mobile, justify-start matters as much as the
-  // scroll: centred content that overflows above the scroll origin stays unreachable.
+  // would make this screen draggable sideways.
+  //
+  // `my-auto` (not `flex-1`, and not justify-start) is what keeps the stack centred at EVERY width:
+  // auto margins absorb the free space when the content fits, and collapse to zero when it doesn't,
+  // so an overflowing stack starts at the top and stays scrollable instead of being pinned off the
+  // top edge. `justify-center` alone could not do that — centred overflow is unreachable, which is
+  // why the mobile view used to sit hard against the top.
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent overflow-y-auto overflow-x-hidden max-md:justify-start">
-      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-8 min-h-0 max-md:justify-start">
+    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent overflow-y-auto overflow-x-hidden">
+      <div className="flex flex-col items-center justify-center w-full space-y-8 my-auto max-md:py-6">
         <div className="w-full max-w-2xl flex flex-col items-start space-y-2 animate-in fade-in zoom-in duration-500 px-2">
            <div className="flex items-center gap-3">
               <img src="/logo1.png" alt="Logo" className="h-9 w-9 object-contain" />

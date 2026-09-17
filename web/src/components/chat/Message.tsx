@@ -253,7 +253,10 @@ export function Message({
         "group animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
         message.role === "user"
           ? "ml-auto md:-mr-2"
-          : "-ml-2 -mr-2 md:-ml-2 md:mr-20",
+          // No desktop right margin: the old `md:mr-20` inset the assistant row 80px from the
+          // right edge, so assistant replies were visibly narrower than the column. The bleed
+          // (-ml-2 -mr-2) applies at every width, so mobile is untouched.
+          : "-ml-2 -mr-2",
         isMobile ? "max-w-full" : "max-w-4xl",
       )}
     >

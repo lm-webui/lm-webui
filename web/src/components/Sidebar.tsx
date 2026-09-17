@@ -87,6 +87,35 @@ function ConversationItem({
   const [editTitle, setEditTitle] = useState(conversation.title);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Touch has no hover, so the [...] trigger — hidden until `group-hover` — was unreachable on a
+  // phone, and revealing it permanently put a menu button on every row. A long-press opens the
+  // menu directly instead, and the trigger stays hover-only at every width.
+  //
+  // That means the menu must be controlled here: Radix can otherwise only be opened by its trigger.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Set when a press became a long-press, so the click that still follows touchend doesn't ALSO
+  // select the conversation.
+  const didLongPress = useRef(false);
+
+  const cancelLongPress = () => {
+    if (pressTimer.current) {
+      clearTimeout(pressTimer.current);
+      pressTimer.current = null;
+    }
+  };
+
+  const startLongPress = () => {
+    didLongPress.current = false;
+    cancelLongPress();
+    pressTimer.current = setTimeout(() => {
+      didLongPress.current = true;
+      setMenuOpen(true);
+    }, 500);
+  };
+
+  useEffect(() => cancelLongPress, []);   // a row unmounted mid-press must not fire later
+
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
@@ -120,12 +149,29 @@ function ConversationItem({
       <div
         role="button"
         tabIndex={0}
-        onClick={() => { if (window.innerWidth < 768) onClose?.(); onSelect(conversation.id); }}
+        onClick={() => {
+          if (didLongPress.current) { didLongPress.current = false; return; }
+          if (window.innerWidth < 768) onClose?.();
+          onSelect(conversation.id);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter") onSelect(conversation.id);
         }}
+        // Long-press only: these are touch events, so a mouse on desktop never reaches them.
+        onTouchStart={startLongPress}
+        onTouchEnd={cancelLongPress}
+        onTouchMove={cancelLongPress}      // a scroll is not a press
+        onTouchCancel={cancelLongPress}
+        onContextMenu={(e) => {
+          // Suppress the iOS/Android callout so a long-press opens our menu instead of the
+          // browser's. Desktop keeps its own context menu.
+          if (window.innerWidth < 768) e.preventDefault();
+        }}
         className={cn(
           "w-full text-left px-3 py-2 rounded-lg text-sm truncate transition-colors flex items-center justify-between cursor-pointer",
+          // No text selection / callout while long-pressing — mobile only, so desktop keeps
+          // selecting normally.
+          "max-md:select-none max-md:[-webkit-touch-callout:none]",
           isSelected
             ? "bg-zinc-100 dark:bg-zinc-800 font-medium"
             : "hover:bg-zinc-50 dark:hover:bg-zinc-800/50",
@@ -159,9 +205,11 @@ function ConversationItem({
         )}
 
         {!isEditing && !conversation.isTitleGenerating && (
-          <DropdownMenu>
+          <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+            {/* Controlled: a long-press opens it (see startLongPress). The trigger stays in the
+                layout at opacity-0, so the menu still anchors to it correctly while hidden. */}
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 max-md:opacity-100"
+              <Button variant="ghost" size="icon" className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
                 onClick={(e) => e.stopPropagation()}>
                 {isLoadingMessages?.[conversation.id] ? (
                   <Loader2 className="h-3 w-3 animate-spin text-zinc-400" />
