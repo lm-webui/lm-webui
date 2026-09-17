@@ -6,7 +6,7 @@ import Composer from "../Composer";
 import { useAuth } from "@/contexts/AuthContext";
 import { Welcome } from "../Welcome";
 import { useChatStore } from "@/store/chatStore";
-import { FolderKanban } from "lucide-react";
+import { ArrowDown, FolderKanban } from "lucide-react";
 import { authFetch } from "@/utils/api";
 import { toast } from "sonner";
 
@@ -60,6 +60,9 @@ export default function ChatPane({
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const stickToBottomRef = React.useRef(true); // follow streaming unless the user scrolls up
+  // Render-state twin of stickToBottomRef: the ref guards the auto-scroll, this drives the
+  // jump-to-bottom button's visibility (a ref change cannot re-render).
+  const [atBottom, setAtBottom] = useState(true);
   const { user } = useAuth();
 
   // Look up project name when conversation has a project_id
@@ -138,19 +141,43 @@ export default function ChatPane({
     const el = scrollRef.current;
     if (!el) return;
     const threshold = 80;
-    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    const stuck = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+    stickToBottomRef.current = stuck;
+    setAtBottom(stuck);   // same value = React bails out, so this is free on every scroll tick
   };
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
     if (el && stickToBottomRef.current) {
-      el.scrollTop = el.scrollHeight;
+      el.scrollTop = el.scrollHeight;   // instant: a smooth scroll per token fights itself
     }
   };
 
+  // Clicking the button is an explicit "take me back", so it re-arms the follow even though the
+  // user is currently scrolled up.
+  const jumpToBottom = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    setAtBottom(true);
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  };
+
+  // While tokens stream, the tail message GROWS but messages.length does not change — so keying
+  // the scroll on the length alone followed a completed message and never the stream itself.
+  // tailLength is what actually changes on every chunk.
+  const tailLength = conversation?.messages.at(-1)?.content?.length ?? 0;
+
   React.useEffect(() => {
     scrollToBottom();
-  }, [conversation?.messages.length, isThinking]);
+  }, [conversation?.messages.length, tailLength, isThinking]);
+
+  // Switching conversations must not inherit the previous one's "user scrolled up" state, or the
+  // new chat would open wherever the old scroll position left off.
+  React.useEffect(() => {
+    stickToBottomRef.current = true;
+    setAtBottom(true);
+  }, [conversation?.id]);
 
   const composer = (
     <Composer
@@ -208,6 +235,11 @@ export default function ChatPane({
           overflow-x compute to `auto` too, so one over-wide child — a long unbroken URL in a
           message — let the whole chat area be dragged left and right. Wide content that genuinely
           needs it (tables, code blocks) scrolls inside its own wrapper. */}
+      {/* The wrapper exists so the button can sit against the SCROLLER's bottom edge — floating
+          over the last message and just clear of the composer, whatever height the composer grows
+          to (attachments, multi-line input). Anchoring to the pane instead would need a hardcoded
+          offset that the composer's height invalidates. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="mb-8 hidden md:block">
@@ -262,6 +294,22 @@ export default function ChatPane({
 
           <div className="h-4" />
         </div>
+      </div>
+
+        {/* Jump to latest. Always mounted and faded by opacity rather than unmounted, so both
+            directions animate — conditional rendering would pop in and vanish with no transition.
+            It stays translucent so it never competes with the message you're reading behind it,
+            and `pointer-events-none` while hidden keeps it from eating taps on the message. */}
+        <button
+          type="button"
+          aria-label="Scroll to latest message"
+          onClick={jumpToBottom}
+          className={`absolute bottom-5 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300/70 bg-white/70 text-zinc-600 shadow-md backdrop-blur-sm transition-opacity duration-300 ease-out hover:opacity-100 dark:border-zinc-700/70 dark:bg-zinc-800/70 dark:text-zinc-300 ${
+            atBottom ? "pointer-events-none opacity-0" : "opacity-50"
+          }`}
+        >
+          <ArrowDown className="h-4 w-4" />
+        </button>
       </div>
 
       {projectName && (
