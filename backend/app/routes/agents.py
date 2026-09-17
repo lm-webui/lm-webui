@@ -11,12 +11,12 @@ from pydantic import BaseModel
 from app.security.auth.dependencies import require_permission
 from app.security.auth.core import verify_token
 from app.agents.registry import (
-    AGENTS, detect, detect_all, forget, profile, launch_install_terminal,
+    AGENTS, detect, detect_all, forget, install_cmd, profile, launch_install_terminal,
 )
 from app.agents.runner import run, InteractiveSession
 from app.agents.terminal import TerminalRegistry
 from app.agents import agent_files as af
-from app.agents.providers import is_interactive, context_file
+from app.agents.registry import is_interactive, context_file
 from app.agents.parser import parse
 from app.agents.sessions import sessions
 
@@ -32,7 +32,7 @@ _live_sessions: dict[str, InteractiveSession] = {}
 terminals = TerminalRegistry()
 
 # Native interactive command per agent (bare `cmd` drops into the CLI's TUI).
-TERMINAL_CMD = {name: [cfg["cmd"]] for name, cfg in AGENTS.items()}
+TERMINAL_CMD = {name: [cfg.cmd] for name, cfg in AGENTS.items()}
 
 
 class ChatRequest(BaseModel):
@@ -201,9 +201,9 @@ def _reject_unsupported(agent: str, req: ChatRequest) -> None:
     used to accept `model` and `skill` and drop them on the floor.
     """
     cfg = AGENTS[agent]
-    if req.model and not cfg.get("model_flag"):
+    if req.model and not cfg.model_flag:
         raise HTTPException(400, f"{agent} does not accept a model")
-    if req.skill and not cfg.get("skill_flag"):
+    if req.skill and not cfg.skill_flag:
         raise HTTPException(400, f"{agent} does not accept a skill")
 
 
@@ -231,7 +231,7 @@ async def chat_stream(agent: str, req: ChatRequest):
 
     async def event_stream():
         if not detect(agent)["installed"]:
-            command = AGENTS[agent]["install"]
+            command = install_cmd(agent)
             yield await _sse({"type": "status", "data": {"status": "not_installed"}})
             yield await _sse({
                 "type": "error",

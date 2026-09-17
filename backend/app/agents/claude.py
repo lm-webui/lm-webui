@@ -1,7 +1,14 @@
-"""Claude Code adapter for Agent Hub's bidirectional stream."""
+"""Claude Code — the one interactive agent (bidirectional stream-json session).
+
+`model_flag`/`skill_flag` below declare which request fields the route will accept; `spawn()` is
+where those flags are actually applied. Keep the two in step — nothing checks them against each
+other.
+"""
 import json
 from pathlib import Path
 from typing import Optional
+
+from .base import AgentDef
 
 CLAUDE_BASE = ["claude", "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--permission-mode", "manual", "--permission-prompt-tool", "stdio", "--verbose"]
 
@@ -45,3 +52,21 @@ def normalize(ev: dict) -> Optional[list[dict]]:
         cw = usage.get("contextWindow") or next((m.get("contextWindow") for m in (usage.get("modelUsage") or {}).values() if m.get("contextWindow")), None)
         return [{"type": "complete", "result": ev.get("result") or "", "subtype": ev.get("subtype"), "usage": usage, "cost_usd": ev.get("total_cost_usd"), "context_window": cw}]
     return None
+
+
+# Must come after the adapter defs above — it references them.
+AGENT = AgentDef(
+    name="claude",
+    cmd="claude",
+    run=("claude", "-p"),
+    install='npm install -g --prefix "{prefix}" @anthropic-ai/claude-code',
+    context_file="CLAUDE.md",
+    config_dir="~/.claude",
+    config_name="settings.json",
+    interactive=True,
+    model_flag="--model",
+    skill_flag="--append-system-prompt",
+    spawn=spawn,
+    normalize=normalize,
+    prepare_workspace=prepare_workspace,
+)

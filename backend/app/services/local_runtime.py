@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess
 import shutil
+import sys
 import asyncio
 from typing import Optional
 from app.runtime.detector import RuntimeDetector, RuntimeType
@@ -89,8 +90,12 @@ class ComfyUIRuntime:
             gpu_flags = ["--force-fp16"]
 
         try:
+            # sys.executable, not a bare "python": the installer put ComfyUI's requirements into
+            # THIS interpreter (installer.py runs `{sys.executable} -m pip install -r ...`), so a
+            # bare name would pick up whatever `python` the PATH happens to offer — which for a
+            # service is nothing at all, or an unrelated virtualenv.
             self._process = subprocess.Popen(
-                ["python", "main.py", f"--port={COMFYUI_PORT}", *gpu_flags],
+                [sys.executable, "main.py", f"--port={COMFYUI_PORT}", *gpu_flags],
                 cwd=COMFYUI_DIR,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,

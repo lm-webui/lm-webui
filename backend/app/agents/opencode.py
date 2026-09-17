@@ -1,4 +1,13 @@
-"""OpenCode CLI adapter."""
-def normalize(ev: dict) -> list[dict] | None:
-    text = ev.get("text") or ev.get("content")
-    return [{"type": "output", "content": text}] if isinstance(text, str) and text else None
+"""OpenCode CLI — non-interactive one-shot (`opencode run`)."""
+from .base import AgentDef
+
+
+
+AGENT = AgentDef(
+    name="opencode",
+    cmd="opencode",
+    run=("opencode", "run"),
+    install='npm install -g --prefix "{prefix}" opencode-ai',
+    config_dir="~/.config/opencode",
+    config_name="opencode.jsonc",
+)

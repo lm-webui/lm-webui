@@ -79,8 +79,24 @@ setup_environment() {
     sudo mkdir -p "$LMWEBUI_HOME" && sudo chown -R "$(whoami)" "$LMWEBUI_HOME" || {
       log_error "Cannot write to $LMWEBUI_HOME. Run: sudo chown -R $(whoami) $LMWEBUI_HOME"; exit 1; }
   fi
-  mkdir -p "$LMWEBUI_HOME"/{data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,models/vision,cache/fastembed,cache/flashrank,secrets,logs}
+  # bin/ is where agent CLIs install (npm --prefix) and where llama-server goes; both service
+  # units already put it FIRST on PATH, so create it up front rather than lazily.
+  mkdir -p "$LMWEBUI_HOME"/{bin,data/sql_db,data/vectors,media/uploads,media/generated/images,models/gguf,models/mlx,models/vision,cache/fastembed,cache/flashrank,secrets,logs}
   log_success "Directory structure created"
+}
+
+export_bin_path() {
+  # Put $LMWEBUI_HOME/bin on the user's interactive PATH, once. Agent CLIs install there
+  # (npm --prefix), so without this the user's OWN shell cannot see an agent the app installed.
+  # Idempotent: re-running the installer must not append the line again.
+  # .zshrc is what `zsh -lic` sources, which is the probe the backend uses to widen its own PATH.
+  local marker="$LMWEBUI_HOME/bin"
+  local line="export PATH=\"$marker:\$PATH\""
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    [ -f "$rc" ] || continue
+    grep -qF "$marker" "$rc" && continue
+    printf '\n# LM-WebUI agent CLIs\n%s\n' "$line" >> "$rc"
+  done
 }
 
 setup_repository() {
@@ -202,9 +218,7 @@ ensure_llama_server() {
       rm -rf "$src_dir"
       chmod +x "$bin_dir/llama-server"
       export PATH="$bin_dir:$PATH"
-      # Persist for future shells/services.
-      { echo ""; echo '# llama.cpp (LM-WebUI)'; echo "export PATH=\"$bin_dir:\$PATH\""; } >> "$HOME/.bashrc" 2>/dev/null
-      [ -f "$HOME/.zshrc" ] && echo "export PATH=\"$bin_dir:\$PATH\"" >> "$HOME/.zshrc"
+      export_bin_path   # persist for future shells (idempotent)
       command -v llama-server &>/dev/null && log_success "  llama-server installed to $bin_dir" && return
     fi
   fi
@@ -247,6 +261,9 @@ Type=simple
 User=$USER
 WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
+# config.yaml hardcodes base_dir: ~/.lmwebui; pin it to the real home so an overridden
+# LMWEBUI_HOME can't leave the agent bin dir and the installer pointing at different places.
+Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7070
 Restart=on-failure
@@ -276,7 +293,7 @@ SERVICEEOF
 <key>Label</key><string>com.lmwebui.server</string>
 <key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
-<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>LMWEBUI_BASE_DIR</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LMWEBUI_HOME/logs/stdout.log</string>
 <key>StandardErrorPath</key><string>$LMWEBUI_HOME/logs/stderr.log</string>
@@ -349,6 +366,7 @@ main() {
   check_prerequisites
   check_sudo
   setup_environment
+  export_bin_path
   # setup_repository lays the tree down and consumes the config template, so it owns config
   # creation too — there is no separate ensure_config step any more.
   setup_repository

@@ -14,15 +14,7 @@ import shutil
 from pathlib import Path
 
 from app.core.config_manager import get_data_dir
-
-# Real config file per agent, under the user's home. Hermes' config is YAML; it is editable and
-# backed up here, but not validated — there is no YAML parser on this path (see `validate`).
-_CONFIG_FILES = {
-    "claude": ("~/.claude", "settings.json"),
-    "codex": ("~/.codex", "config.toml"),
-    "opencode": ("~/.config/opencode", "opencode.jsonc"),
-    "hermes": ("~/.hermes", "config.yaml"),
-}
+from app.agents import registry
 
 # Mirrors MAX_FILE_BYTES in web/src/features/agents/agentFileKinds.ts, which warns the user
 # before they get here. This copy is the one that is enforced.
@@ -30,14 +22,26 @@ MAX_FILE_BYTES = 256_000
 
 
 def config_dir(agent: str) -> Path:
-    rel, _ = _CONFIG_FILES.get(agent, ("~/.config", "config.json"))
-    return Path(rel).expanduser()
+    """The agent's real config directory, from its own module's definition."""
+    a = registry.AGENTS.get(agent)
+    return Path(a.config_dir if a else "~/.config").expanduser()
 
 
 def config_path(agent: str) -> Path:
-    """Absolute path of the agent's real config file."""
-    rel, name = _CONFIG_FILES.get(agent, ("~/.config", "config.json"))
-    return Path(rel).expanduser() / name
+    """Absolute path of the agent's real config file.
+
+    The config lives in the per-agent definition (claude.py, codex.py, …) rather than a table here,
+    so adding an agent no longer means editing this module. Hermes' config is YAML: editable and
+    backed up, but not validated — there is no YAML parser on this path (see `validate`).
+
+    Deliberately a module-level function called through the module global by agent_files()/save(),
+    not an inlined lookup — the tests monkeypatch it, and an inlined version would write into the
+    real ~/.claude during a test run.
+    """
+    a = registry.AGENTS.get(agent)
+    if not a:
+        return Path("~/.config/config.json").expanduser()
+    return Path(a.config_dir).expanduser() / a.config_name
 
 
 def app_dir(agent: str) -> Path:
@@ -117,7 +121,9 @@ def connected_manifest(agent: str) -> str:
     """
     lines = ["## Connected agents", "You can coordinate with these host agents. Read their "
              "config/skill/memory when relevant:"]
-    for other in ("claude", "codex", "opencode", "hermes"):
+    # Iterate the registry rather than a copy of its keys — a second list here silently went stale
+    # whenever an agent was added or removed.
+    for other in registry.AGENTS:
         if other == agent:
             continue
         lines.append(

@@ -185,6 +185,13 @@ async def lifespan(app: FastAPI):
     from app.database import init_db
     init_db()
 
+    # Widen PATH before anything resolves an agent binary: services run with a pinned PATH that
+    # omits ~/.local/bin, npm's global prefix and Homebrew, so a CLI installed by the user (or by
+    # the Agent Hub itself) reads as "not installed" to the backend. In a thread because it may
+    # spawn the user's login shell with a bounded timeout.
+    from app.agents.registry import ensure_agent_path
+    await asyncio.to_thread(ensure_agent_path)
+
     # Startup: Run remaining initialization in background
     task = asyncio.create_task(initialize_app())
 

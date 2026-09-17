@@ -17,6 +17,12 @@ import TerminalPane from "./TerminalPane";
 import { cn } from "@/lib/utils";
 import { copyText } from "@/lib/clipboard";
 import { toast } from "sonner";
+// An agent install runs in an external terminal, so the result has to be waited for. `npm install
+// -g` typically takes 30–90 s; ~2 minutes of polling covers it, and the Manage tab's Re-check
+// button is the escape hatch when it doesn't.
+const INSTALL_POLL_TRIES = 24;
+const INSTALL_POLL_MS = 5000;
+
 export default function AgentWorkspace() {
   const isMobile = useIsMobile();
   const [agents, setAgents] = useState<AgentInfo[]>([]);
@@ -32,15 +38,19 @@ export default function AgentWorkspace() {
   const [sessionId, setSessionId] = useState("");
   const [sessions, setSessions] = useState<any[]>([]);
 
-  // `bust` re-probes install state server-side, bypassing the backend's 24h detect cache.
-  const refresh = async (bust = false) => {
+  // `bust` re-probes install state server-side, bypassing the backend's detect cache.
+  // Returns the list so the post-install poll can inspect it.
+  const refresh = async (bust = false): Promise<any[]> => {
     try {
       const d: any = await getAgents(bust);
-      setAgents(d.agents || []);
+      const list = d.agents || [];
+      setAgents(list);
+      return list;
     } catch (err) {
       // Not silent: an empty list renders every agent as "not installed", which is a
       // very different story from "the request failed".
       toast.error(`Could not list agents: ${(err as Error).message}`);
+      return [];
     }
   };
   useEffect(() => { void refresh(); }, []);
@@ -315,7 +325,7 @@ function ActivityTab({ agent, sessionId }: { agent: string; sessionId: string })
 /* The selected agent's detail: install state on top, its config/skill/memory files below.
  * Selection lives in the rail, so there is no card grid or drill-down here. */
 function ManageTab({ agent, active, onRefresh }: {
-  agent: string; active: AgentInfo | undefined; onRefresh: (bust?: boolean) => void;
+  agent: string; active: AgentInfo | undefined; onRefresh: (bust?: boolean) => Promise<any[]>;
 }) {
   const [copied, setCopied] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -349,9 +359,21 @@ function ManageTab({ agent, active, onRefresh }: {
         toast.success(`${update ? "Update" : "Install"} launched in a terminal.`);
       } else {
         toast.info(`${agent} is already installed.`);
+        setInstalling(false);
+        return;
       }
-      // The backend drops its detect cache on the way out, so this re-probe sees the new state.
-      setTimeout(() => onRefresh(true), 2500);
+      // The install runs in an external terminal (`npm install -g` takes 30–90 s), so a single
+      // re-probe can never see the result — the old 2.5 s timer reliably cached "missing" for the
+      // rest of the day. Poll until it appears, then stop. The Manage tab's re-check button is the
+      // escape hatch if this gives up first.
+      for (let i = 0; i < INSTALL_POLL_TRIES; i++) {
+        await new Promise((res) => setTimeout(res, INSTALL_POLL_MS));
+        const list = await onRefresh(true);
+        if (list?.find((a: any) => a.id === agent)?.installed) {
+          toast.success(`${agent} installed.`);
+          break;
+        }
+      }
     } catch (err) {
       // 409 = no terminal to open (headless / Docker). The command is right here to copy.
       toast.error((err as Error).message || `Could not install ${agent}`);
@@ -375,8 +397,16 @@ function ManageTab({ agent, active, onRefresh }: {
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{meta?.label ?? agent}</span>
           <HealthBadge status={active?.status} installed={installed} />
+          {/* Re-check install state. The "Update" button used to be the only way to refresh, and it
+              re-runs the installer — a plain re-probe is what you want after installing by hand. */}
+          <Button variant="ghost" size="sm" className="ml-auto gap-1.5" disabled={installing}
+            title="Re-check whether this agent is installed"
+            onClick={() => onRefresh(true)}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Re-check
+          </Button>
           {installed && meta ? (
-            <Button variant="outline" size="sm" className="ml-auto gap-1.5" disabled={installing}
+            <Button variant="outline" size="sm" className="gap-1.5" disabled={installing}
               onClick={() => install(true)}>
               {installing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               {installing ? "Updating…" : "Update"}
