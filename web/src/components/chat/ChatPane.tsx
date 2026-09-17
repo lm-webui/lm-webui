@@ -176,7 +176,7 @@ export default function ChatPane({
   if (isLoadingMessages) {
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col bg-neutral-200/70 dark:bg-neutral-900/50">
-        <div className="flex-1 space-y-8 overflow-y-auto px-4 py-6 sm:px-8">
+        <div className="flex-1 space-y-8 overflow-y-auto overflow-x-hidden px-4 py-6 sm:px-8">
           <div className="max-w-3xl mx-auto space-y-6 mt-8">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
@@ -204,7 +204,11 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col relative bg-neutral-200/70 dark:bg-neutral-900/50">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-6 overflow-y-auto px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
+      {/* overflow-x-hidden is load-bearing, not decoration: a bare `overflow-y-auto` makes
+          overflow-x compute to `auto` too, so one over-wide child — a long unbroken URL in a
+          message — let the whole chat area be dragged left and right. Wide content that genuinely
+          needs it (tables, code blocks) scrolls inside its own wrapper. */}
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
           <div className="mb-8 hidden md:block">
             <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-dark">
@@ -264,7 +268,9 @@ export default function ChatPane({
         <div className="px-4 pb-2">
           <div className="max-w-3xl mx-auto flex items-center gap-2 text-xs text-muted-foreground bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2">
             <FolderKanban className="h-3 w-3 shrink-0" />
-            <span>Project: <span className="font-medium">{projectName}</span></span>
+            {/* A long project name has nothing to truncate it and pushes this non-wrapping row —
+                which also holds the Remove button — past its container at any width. */}
+            <span className="min-w-0 truncate">Project: <span className="font-medium">{projectName}</span></span>
             <span className="text-zinc-400 hidden sm:inline">· System prompt active</span>
             <button type="button" onClick={handleRemoveFromProject} className="ml-auto rounded px-2 py-1 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Remove</button>
           </div>

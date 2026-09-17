@@ -10,13 +10,22 @@ interface WelcomeProps {
 export function Welcome({ user, children, onAction }: WelcomeProps) {
   const userName = user?.email?.split("@")[0] || "User";
 
+  // The composer is one of the `children` below and the ancestor `main` is overflow-hidden, so
+  // without a scroll container here a viewport too short for the stack — a small window, or the
+  // mobile keyboard shrinking the dynamic viewport — clips the composer with no way to reach it.
+  // overflow-x-hidden is not decoration: a bare overflow-y-auto computes overflow-x to auto, which
+  // would make this screen draggable sideways. On mobile, justify-start matters as much as the
+  // scroll: centred content that overflows above the scroll origin stays unreachable.
   return (
-    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent">
-      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-8 min-h-0">
+    <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent overflow-y-auto overflow-x-hidden max-md:justify-start">
+      <div className="flex-1 flex flex-col items-center justify-center w-full space-y-8 min-h-0 max-md:justify-start">
         <div className="w-full max-w-2xl flex flex-col items-start space-y-2 animate-in fade-in zoom-in duration-500 px-2">
            <div className="flex items-center gap-3">
               <img src="/logo1.png" alt="Logo" className="h-9 w-9 object-contain" />
-              <h1 className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100">
+              {/* min-w-0 on the h1 itself — a flex item's default min-width:auto refuses to shrink
+                  below its content, and a long email local-part is one unbreakable token that
+                  pushed the row past its container at any width. break-words then lets it wrap. */}
+              <h1 className="text-4xl font-medium tracking-tight text-zinc-900 dark:text-zinc-100 break-words min-w-0">
                 <span className="bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent">
                   Hi, {userName}
                 </span>

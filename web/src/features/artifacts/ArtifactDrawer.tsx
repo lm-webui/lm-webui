@@ -13,8 +13,10 @@ export default function ArtifactDrawer({ artifact, onClose }: { artifact: any; o
     link.click();
     URL.revokeObjectURL(url);
   };
+  // mt aligns to the header's real height: h-12 + border-b = 49px. At 43px this drawer (z-50,
+  // over the header's z-30) painted on top of the header's bottom edge at every width.
   return (
-    <aside className="absolute inset-y-0 right-0 z-50 mt-[43px] flex w-full max-w-xl flex-col border-l bg-background shadow-xl">
+    <aside className="absolute inset-y-0 right-0 z-50 mt-[49px] flex w-full max-w-xl flex-col border-l bg-background shadow-xl">
       <div className="flex items-center justify-between border-b p-4">
         <div className="flex items-center gap-2"><FileText className="h-4 w-4" /><h2 className="font-semibold">{artifact.title}</h2></div>
         <div className="flex gap-1"><Button size="sm" variant="ghost" onClick={download} title="Download Markdown"><Download className="h-4 w-4" /></Button><Button size="sm" variant="ghost" onClick={onClose} title="Close"><X className="h-4 w-4" /></Button></div>

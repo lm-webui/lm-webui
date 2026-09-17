@@ -106,7 +106,9 @@ export const SearchTool = React.memo(function SearchTool({
                   <>
                     <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
                     <span className="text-sm truncate flex-1 min-w-0">{result.title}</span>
-                    <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
+                    {/* shrink-0 + nowrap let a long source URL win the layout fight and collapse
+                        the truncated title beside it to nothing, at any container width. */}
+                    <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap min-w-0 truncate">
                       {result.date || result.source}
                     </span>
                   </>

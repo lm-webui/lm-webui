@@ -226,7 +226,9 @@ export default function Composer({
           />
         </div>
 
-        <div className="flex items-center justify-between px-2 pb-2 pl-3 md:px-3 md:pb-3 md:pl-4">
+        {/* max-md:flex-wrap is the backstop — the model trigger and send button together can
+            exceed the row at 320px, and nothing in the row can shrink. */}
+        <div className="flex items-center justify-between px-2 pb-2 pl-3 md:px-3 md:pb-3 md:pl-4 max-md:flex-wrap">
           <div className="flex items-center gap-1">
             <input
               type="file"
@@ -242,7 +244,7 @@ export default function Composer({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-full text-zinc-500 mx-3 h-8 w-8"
+                  className="rounded-full text-zinc-500 mx-0 md:mx-3 h-8 w-8"
                 >
                   <Plus className="h-5 w-5" />
                 </Button>

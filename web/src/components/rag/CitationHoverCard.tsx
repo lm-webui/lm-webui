@@ -64,7 +64,9 @@ export function CitationHoverCard({
       </HoverCardTrigger>
       <HoverCardContent
         className={cn(
-          "w-80 p-4 border-2",
+          // max-md: not portaled, so a fixed w-80 (320px) is wider than the message column at a
+          // 320px viewport and gets clipped by the chat's overflow-x.
+          "w-80 p-4 border-2 max-md:w-[calc(100vw-2rem)]",
           getSourceColor()
         )}
         side="top"

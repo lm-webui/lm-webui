@@ -131,7 +131,9 @@ if (contextBadges.length === 0 && otherSources.length === 0 && webResults.length
                   {index + 1}
                 </button>
               </HoverCardTrigger>
-              <HoverCardContent className="w-80 p-3" side="top">
+              {/* max-md: this card is not portaled, so a fixed w-80 (320px) is wider than the
+                  message column at a 320px viewport and gets clipped by the chat's overflow-x. */}
+              <HoverCardContent className="w-80 p-3 max-md:w-[calc(100vw-2rem)]" side="top">
                 <div className="space-y-2">
                   <div className="text-sm font-medium">Source {index + 1}</div>
                   <div className="text-xs text-muted-foreground">

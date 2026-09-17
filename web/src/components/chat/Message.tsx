@@ -280,6 +280,12 @@ export function Message({
             <div
               className={cn(
                 "prose max-w-none dark:prose-invert",
+                // overflow-wrap is inherited, so this one class wraps long unbroken tokens (URLs,
+                // hashes, long identifiers) across every markdown descendant — p, li, td, inline
+                // code. Without it a single such token pushes the message list wider than the
+                // viewport. Code blocks are unaffected: their <pre> keeps `white-space: pre`, and
+                // wrapping is disabled wherever white-space forbids it.
+                "break-words",
                 isMobile ? "prose-sm text-sm" : "prose-base text-base",
                 "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
                 "[&>h1]:text-xl [&>h1]:font-semibold [&>h1]:tracking-tight [&>h1]:mb-4",
@@ -420,7 +426,7 @@ export function Message({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity h-8 w-8 p-0"
+                          className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity h-8 w-8 p-0 max-md:opacity-100"
                           onClick={async (e) => {
                             e.stopPropagation(); // Prevent image click
 
@@ -679,7 +685,9 @@ export function Message({
               <div
                 className={cn("overflow-hidden", !expanded && "max-h-[25vh]")}
               >
-                <p className="whitespace-pre-wrap leading-relaxed">
+                {/* break-words: whitespace-pre-wrap wraps at spaces but not inside one long
+                    token, so a pasted URL would widen the row past the viewport. */}
+                <p className="whitespace-pre-wrap break-words leading-relaxed">
                   {message.content}
                 </p>
               </div>
@@ -712,12 +720,15 @@ export function Message({
                         return (
                           <div
                             key={file.media_id ?? idx}
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30 max-w-full"
+                            // max-md:flex-wrap + a full-width audio element: the row's min-content
+                            // (icon + filename + a fixed w-40 player + Transcribe) is wider than a
+                            // 320px viewport allows, so the button used to be clipped away.
+                            className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 rounded-lg border border-blue-500/30 max-w-full max-md:flex-wrap"
                           >
                             <AudioLines className="h-4 w-4 text-blue-400 shrink-0" />
                             <span className="text-xs text-blue-300 truncate max-w-32">{file.filename}</span>
                             {mediaUrl && (
-                              <audio controls preload="metadata" className="h-8 w-40">
+                              <audio controls preload="metadata" className="h-8 w-40 max-md:w-full">
                                 <source src={mediaUrl} />
                               </audio>
                             )}
@@ -778,8 +789,13 @@ export function Message({
                 </Button>
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2">
-                <div className="bg-muted/50 p-3 rounded-lg text-xs font-mono max-h-40 overflow-y-auto border">
-                  <pre className="whitespace-pre-wrap">
+                {/* A bare overflow-y-auto computes overflow-x to auto, so one long token made
+                    this box scroll sideways at every width. break-words on the <pre> is what
+                    actually stops it overflowing — overflow-x-hidden is the guard behind it, and
+                    clipping is safe here because the text has already been given a way to wrap.
+                    (whitespace-pre-wrap alone wraps at spaces, not inside a token.) */}
+                <div className="bg-muted/50 p-3 rounded-lg text-xs font-mono max-h-40 overflow-y-auto overflow-x-hidden border">
+                  <pre className="whitespace-pre-wrap break-words">
                     {message.rawResponse}
                   </pre>
                 </div>
