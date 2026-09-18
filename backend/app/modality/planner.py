@@ -101,7 +101,10 @@ def plan(
         return p  # image generation takes over
 
     if intent.processing_class == ProcessingClass.LIVE:
-        p.search = True
+        # The toggle is authoritative in BOTH directions. This set p.search unconditionally, so a
+        # message carrying a recency cue ("latest news") searched even with web search switched
+        # OFF — the toggle could force a search on but never off.
+        p.search = bool(web_search)
         return p
 
     # Mixed image + doc: run ONLY the pipeline the question targets (rec 2), to
@@ -148,17 +151,16 @@ def plan(
             else:
                 p.retrieve = True
 
-    # Honor an explicit web-search toggle alongside RAG/vision (the user asked for
-    # "vision/RAG → websearch → LLM compose"). Vision must be in describe mode so the
-    # VL produces a description the text LLM composes with — direct mode would answer
-    # alone and drop the web context.
-    if web_search and not (p.vision and p.vision_mode == "direct"):
-        # Option C (intent-aware): a direct/simple image question is answered by the VL with
-        # the image directly — web search is pointless there and would force the heavy describe
-        # path. Drop it. Web search combines with RAG/file-context/text everywhere else.
-        p.search = True
-        if p.vision:
-            p.vision_mode = "describe"
+    # Web search is for plain text chat only. It deliberately does NOT compose with the other
+    # modalities: a message already carrying retrieved documents, an image (vision/OCR) or a file
+    # is answered from that material, and bolting a web search onto it costs a search plus up to
+    # three page fetches while diluting the context it was actually asked about.
+    #
+    # This block used to do exactly that composition ("vision/RAG → websearch → LLM compose"), which
+    # meant "summarize the attached PDF" also searched the web. The only path that sets `search` now
+    # is the LIVE branch above — a text message that asked for something current, with the toggle on.
+    #
+    # Image generation never reached here: `image_mode` and the GENERATE intent both return earlier.
 
     # A linked YouTube video → transcribe and summarize (independent of other modalities).
     if YOUTUBE_RE.search(message or ""):

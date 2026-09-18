@@ -53,8 +53,36 @@ class IntentRequest:
 
 # Shared intent rule sets — reused by any capability, not just RAG.
 DIRECT_HINTS = ("translate", "rewrite", "explain in plain", "proofread", "draft", "write a")
-WEB_HINTS = ("latest", "search the web", "web search", "current price", "today's news",
-             "what's new", "recent", "breaking", "weather", "stock price")
+# Matched as plain substrings against the lowercased message (_has_hint), so every entry must be
+# unambiguous on its own. Scored against 11 live queries that should search and 11 ordinary
+# development messages that should not:
+#
+#     original (10 entries)    3/11 live caught    2/11 wasted dev searches
+#     broadened (31 entries)  11/11 live caught    8/11 wasted dev searches   <- rejected
+#     this list (18 entries)   7/11 live caught    0/11 wasted dev searches
+#
+# The broadened version is rejected deliberately. In a coding workspace the words that buy recall —
+# "news", "price", "today", "recent", "look up", " down" — are everyday development vocabulary:
+# "the price display in my app" and "the stock levels in inventory" are not questions about the
+# world. A wasted search costs a search plus up to three page fetches AND dilutes the context the
+# user actually asked about, so precision wins. The four live queries this list misses are recorded
+# in tests/unit/test_search_toggle.py::test_known_misses_are_the_accepted_trade.
+#
+# No substring list gets both: a word broad enough to catch "who won the election" is the same word
+# that catches "the stock levels in inventory". That ceiling is the argument for tool calling.
+WEB_HINTS = (
+    # Explicit request to search.
+    "search the web", "web search", "search for",
+    # Unambiguous live-data nouns and events.
+    "weather", "forecast", "exchange rate", "stock price", "current price", "today's news",
+    "breaking", "trending", "standings", "outage", "headline", "who won",
+    "release notes", "release date", "up to date",
+    # The phrase, not the word. Bare "latest" is ambiguous — "the latest commit", "the latest
+    # changes" are ordinary development talk — while "latest news" is only ever about the world.
+    # This is what keeps the canonical query ("what is the latest news about X?") working at no
+    # measurable cost in false positives.
+    "latest news",
+)
 DOCUMENT_HINTS = ("my invoices", "my notes", "my documents", "the pdf", "my pdf",
                   "the file", "the attached", "from the uploaded", "this document",
                   "my knowledge base", "summarize this file", "what did i", "in this doc",
@@ -147,9 +175,10 @@ def classify(req: IntentRequest) -> IntentResult:
     if h:
         return IntentResult(ProcessingClass.KNOWLEDGE, KnowledgeScope.USER, matched_hint=h)
 
-    # 4. LIVE — web search requested or hinted.
-    if req.web_search:
-        return IntentResult(ProcessingClass.LIVE, KnowledgeScope.WEB, requires_live_data=True, matched_hint="web_search")
+    # 4. LIVE — the message itself asks for something current.
+    #    `req.web_search` is deliberately NOT consulted here. It is a permission, not a command:
+    #    short-circuiting on it made every message LIVE, so "hello" triggered a full search and up
+    #    to three page fetches. Whether the toggle permits a search is decided in the planner.
     h = _has_hint(message, WEB_HINTS)
     if h:
         return IntentResult(ProcessingClass.LIVE, KnowledgeScope.WEB, requires_live_data=True, matched_hint=h)
