@@ -304,7 +304,7 @@ export default function ChatPane({
           type="button"
           aria-label="Scroll to latest message"
           onClick={jumpToBottom}
-          className={`absolute bottom-5 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-zinc-300/70 bg-white/70 text-zinc-600 shadow-md backdrop-blur-sm transition-opacity duration-300 ease-out hover:opacity-100 dark:border-zinc-700/70 dark:bg-zinc-800/70 dark:text-zinc-300 ${
+          className={`absolute bottom-5 right-4 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white/70 text-zinc-600 shadow-md backdrop-blur-sm transition-opacity duration-300 ease-out hover:opacity-100 dark:bg-zinc-800/70 dark:text-zinc-300 ${
             atBottom ? "pointer-events-none opacity-0" : "opacity-50"
           }`}
         >

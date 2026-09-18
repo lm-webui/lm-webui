@@ -806,10 +806,16 @@ export function Message({
             </Collapsible>
           )}
 
-        {/* Timestamp and model info with inline actions */}
+        {/* Timestamp, model (assistant only) and inline actions.
+            One opacity for the whole row so the metadata reads as a single quiet line rather than
+            a mix — the action buttons already carried their own opacity, which left the timestamp
+            and model full-strength beside them. The row also lifts together on hover: a child's
+            `hover:opacity-100` cannot exceed the parent (opacity multiplies), so the hover has to
+            live here to keep working. */}
         <div
           className={cn(
             "text-[10px] text-note-foreground mt-1 mb-4 ml-4 mr-8 flex items-center gap-2",
+            "opacity-35 hover:opacity-55 transition-opacity",
             message.role === "user" ? "justify-end" : "",
             isMobile && "text-[11px]",
           )}
@@ -828,6 +834,9 @@ export function Message({
               showShare={false}
               showLike={false}
               showDislike={false}
+              // showEdit defaults to true, which is why a user bubble was also rendering an Edit
+              // button — for an action that is still a TODO. The row is copy + timestamp.
+              showEdit={false}
             />
           )}
 
@@ -842,8 +851,9 @@ export function Message({
             </div>
           )}
 
-          {/* Model info */}
-          {message.model && (
+          {/* Model info — assistant only. On a user message it names the model that will answer,
+              not one that produced anything, which reads as noise next to their own text. */}
+          {message.model && message.role === "assistant" && (
             <>
               <span>•</span>
               <span className="truncate max-w-[140px]">{message.model}</span>

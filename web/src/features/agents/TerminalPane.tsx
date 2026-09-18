@@ -67,6 +67,57 @@ const DARK_THEME = {
   brightBlue: "#3b8eea", brightMagenta: "#d670d6", brightCyan: "#29b8db", brightWhite: "#ffffff",
 };
 
+// The soft keyboard has no Esc, Tab or arrow keys — the keys every agent TUI needs (claude's
+// permission prompt is an arrow-select menu). This bar is that missing row of keys.
+//
+// `seq` is a thunk, not a string: arrows differ between normal and *application* cursor keys mode
+// (DECCKM, `\x1b[?1h`), which TUIs enable, and the mode can change mid-session — so the variant
+// has to be resolved when the key is pressed, against the live terminal.
+//
+// `getTerm` is a GETTER, not the terminal itself. Passing termRef.current would capture its value
+// at render time, and on the render where the engine becomes ready the ref is still null — the
+// effect that assigns it runs afterwards and does not re-render. Arrows would then stay in the
+// wrong mode until some unrelated state change happened to re-render the pane.
+function keyTable(getTerm: () => any) {
+  const arrow = (final: string) => `\x1b${getTerm()?.modes?.applicationCursorKeysMode ? "O" : "["}${final}`;
+  return [
+    { label: "Esc",  aria: "Escape",                  seq: () => "\x1b" },
+    { label: "⇧Tab", aria: "Shift Tab",               seq: () => "\x1b[Z" },
+    { label: "←",    aria: "Arrow left",              seq: () => arrow("D") },
+    { label: "↓",    aria: "Arrow down",              seq: () => arrow("B") },
+    { label: "↑",    aria: "Arrow up",                seq: () => arrow("A") },
+    { label: "→",    aria: "Arrow right",             seq: () => arrow("C") },
+    { label: "⏎",    aria: "Enter",                   seq: () => "\r" },
+    // The one key you cannot do without on a phone: nothing else interrupts a running command.
+    { label: "^C",   aria: "Interrupt (Control C)",   seq: () => "\x03" },
+  ];
+}
+
+const KEYBOARD_MIN = 120;   // px; below this the URL bar collapsing would read as a keyboard
+
+/** How much of the viewport the on-screen keyboard is covering. */
+function useKeyboardInset(): number {
+  const [inset, setInset] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;                       // desktop browsers without it never open a keyboard
+    const update = () => {
+      const hidden = window.innerHeight - vv.height - vv.offsetTop;
+      // vv.height also shrinks ~50–60px when the mobile URL bar hides on scroll. Only a keyboard
+      // is big enough to matter; without the threshold the bar jumps every time the chrome moves.
+      setInset(hidden > KEYBOARD_MIN ? hidden : 0);
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);  // offsetTop changes as iOS scrolls the visual viewport
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+    };
+  }, []);
+  return inset;
+}
+
 export default function TerminalPane({ agent, sessionId }: { agent: string; sessionId: string }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<any>(null);
@@ -83,6 +134,25 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     const s = sockRef.current;
     if (s?.readyState === WebSocket.OPEN) s.send(data as any);
   };
+
+  // Touch devices only. `pointer: coarse` rather than a width breakpoint: a phone in landscape is
+  // wider than 768px and would lose the bar, and useIsMobile flashes false on first paint.
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(pointer: coarse)");
+    const sync = () => setIsTouch(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const keyboardInset = useKeyboardInset();
+
+  // term.input(..., false): it fires onData, so this is the same path as real typing, and `false`
+  // is what its own docs ask for when forwarding an escape sequence (true would also trigger
+  // focus/selection side effects on every tap). Never term.paste() — with bracketed paste active
+  // it wraps input in \x1b[200~…\x1b[201~ and the app gets literal text.
+  const press = (seq: string) => termRef.current?.input(seq, false);
 
   // 1. Load the terminal engine.
   useEffect(() => {
@@ -175,7 +245,10 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    // paddingBottom, not a margin on the bar: the inset has to shrink the WHOLE pane so the
+    // terminal's last rows clear the keyboard too — otherwise the bar floats above it while the
+    // prompt you are answering stays hidden behind. The resize re-fits xterm via the ResizeObserver.
+    <div className="flex flex-col h-full min-h-0" style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}>
       <div className="flex items-center justify-between border-b border-border/40 px-3 h-9 shrink-0">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
           <TerminalIcon className="h-3.5 w-3.5" /> {agent} · interactive
@@ -196,12 +269,35 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
 
       <div ref={hostRef} className="flex-1 min-h-0 min-w-0 overflow-hidden bg-black/80 p-2" />
 
-      {/* Hint only — no fake buttons. Native input handles every prompt type (y/n, arrow-select, number). */}
-      <div className="shrink-0 border-t border-border/40 bg-background px-3 py-2">
-        <span className="text-[.65rem] text-muted-foreground">
-          Click the terminal · use <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> or type the number to answer agent prompts
-        </span>
-      </div>
+      {isTouch ? (
+        /* 44x36 targets in one scrollable row: eight keys across a 320px screen would be ~39px
+           each, under the touch guideline. shrink-0 + overflow-x-auto keeps them full size and
+           lets the row scroll on the narrowest phones. */
+        <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-t border-border/40 bg-background px-1 py-1 scrollbar-hide">
+          {keyTable(() => termRef.current).map((k) => (
+            <button
+              key={k.aria}
+              type="button"
+              aria-label={k.aria}
+              // preventDefault on pointerdown keeps focus in xterm's hidden textarea, so the soft
+              // keyboard stays open between taps. Without it every key needs the terminal
+              // re-tapped first, which makes the bar useless. The click still fires afterwards.
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => press(k.seq())}
+              className="h-9 min-w-11 shrink-0 rounded-md border border-border/50 bg-muted/40 px-2 font-mono text-xs text-foreground transition-colors active:bg-muted"
+            >
+              {k.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        /* Desktop keeps the hint — there the keys exist, and it explains the prompt model. */
+        <div className="shrink-0 border-t border-border/40 bg-background px-3 py-2">
+          <span className="text-[.65rem] text-muted-foreground">
+            Click the terminal · use <kbd>↑</kbd>/<kbd>↓</kbd> + <kbd>Enter</kbd> or type the number to answer agent prompts
+          </span>
+        </div>
+      )}
     </div>
   );
 }
