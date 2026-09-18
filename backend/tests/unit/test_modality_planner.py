@@ -63,12 +63,23 @@ class TestVision:
 
 
 class TestWebSearch:
-    def test_web_search_flag(self):
-        p = plan(message="anything", web_search=True)
-        assert p.search is True
+    """The toggle is a permission, not a command — so neither half decides alone.
 
-    def test_web_hint_triggers_search(self):
+    Both tests here used to assert the opposite and had been failing since the toggle was made
+    authoritative in both directions (see tests/unit/test_search_toggle.py). The toggle alone must
+    not search, and a live cue alone must not either: it takes both.
+    """
+
+    def test_toggle_alone_does_not_search(self):
+        p = plan(message="anything", web_search=True)
+        assert p.search is False
+
+    def test_hint_alone_does_not_search_with_the_toggle_off(self):
         p = plan(message="what is the latest news?")
+        assert p.search is False
+
+    def test_hint_with_the_toggle_on_searches(self):
+        p = plan(message="what is the latest news?", web_search=True)
         assert p.search is True
 
 

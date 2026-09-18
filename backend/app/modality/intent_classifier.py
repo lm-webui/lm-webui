@@ -54,21 +54,26 @@ class IntentRequest:
 # Shared intent rule sets — reused by any capability, not just RAG.
 DIRECT_HINTS = ("translate", "rewrite", "explain in plain", "proofread", "draft", "write a")
 # Matched as plain substrings against the lowercased message (_has_hint), so every entry must be
-# unambiguous on its own. Scored against 11 live queries that should search and 11 ordinary
-# development messages that should not:
+# unambiguous on its own. This list decides LIVE vs DIRECT — and ONLY the toggle-on case is ever
+# affected by that decision, because the planner refuses to search with the toggle off.
 #
-#     original (10 entries)    3/11 live caught    2/11 wasted dev searches
-#     broadened (31 entries)  11/11 live caught    8/11 wasted dev searches   <- rejected
-#     this list (18 entries)   7/11 live caught    0/11 wasted dev searches
+# That asymmetry is what sets the tuning. The toggle is authoritative, so this list is consulted
+# only when the user has explicitly switched web search ON. Someone who turns search on is asking
+# for web context; a search they did not want is a surprise, but a search they did ask for and did
+# not get is a broken feature. Recall therefore wins over precision here.
 #
-# The broadened version is rejected deliberately. In a coding workspace the words that buy recall —
-# "news", "price", "today", "recent", "look up", " down" — are everyday development vocabulary:
-# "the price display in my app" and "the stock levels in inventory" are not questions about the
-# world. A wasted search costs a search plus up to three page fetches AND dilutes the context the
-# user actually asked about, so precision wins. The four live queries this list misses are recorded
-# in tests/unit/test_search_toggle.py::test_known_misses_are_the_accepted_trade.
+# Measured against the corpora in tests/unit/test_search_toggle.py:
 #
-# No substring list gets both: a word broad enough to catch "who won the election" is the same word
+#     precision-tuned (18 entries)   7/12 live caught    0/17 dev searched
+#     this list (24 entries)        12/12 live caught    6/17 dev searched
+#
+# The 6 dev false positives are pinned by name in
+# test_search_toggle.py::test_authorized_false_positives. They are the price of the recall: each of
+# these words is also ordinary development vocabulary ("update the price display", "add a news
+# section", "today we'll refactor"). A wasted search costs a search plus up to three page fetches
+# and dilutes the context the user actually asked about — accepted because the user asked.
+#
+# No substring list gets both. A word broad enough to catch "who won the election" is the same word
 # that catches "the stock levels in inventory". That ceiling is the argument for tool calling.
 WEB_HINTS = (
     # Explicit request to search.
@@ -77,12 +82,14 @@ WEB_HINTS = (
     "weather", "forecast", "exchange rate", "stock price", "current price", "today's news",
     "breaking", "trending", "standings", "outage", "headline", "who won",
     "release notes", "release date", "up to date",
-    # The phrase, not the word. Bare "latest" is ambiguous — "the latest commit", "the latest
-    # changes" are ordinary development talk — while "latest news" is only ever about the world.
-    # This is what keeps the canonical query ("what is the latest news about X?") working at no
-    # measurable cost in false positives.
-    "latest news",
+    # Broadened recall words. "latest news" is deliberately absent — "latest" below subsumes it,
+    # and it now also catches "the latest commit", which is the accepted trade.
+    "news", "price", "today", "recent", "latest", "look up", "right now",
 )
+# "down" needs whole-word matching, so it is not in the substring list above. A bare "down" entry
+# matches "download the file"; a space-padded " down " misses "is github down?" at end of message.
+# \bdown\b catches the live phrasing and neither of the traps.
+_WEB_HINTS_RE = re.compile(r"\bdown\b", re.IGNORECASE)
 DOCUMENT_HINTS = ("my invoices", "my notes", "my documents", "the pdf", "my pdf",
                   "the file", "the attached", "from the uploaded", "this document",
                   "my knowledge base", "summarize this file", "what did i", "in this doc",
@@ -180,8 +187,9 @@ def classify(req: IntentRequest) -> IntentResult:
     #    short-circuiting on it made every message LIVE, so "hello" triggered a full search and up
     #    to three page fetches. Whether the toggle permits a search is decided in the planner.
     h = _has_hint(message, WEB_HINTS)
-    if h:
-        return IntentResult(ProcessingClass.LIVE, KnowledgeScope.WEB, requires_live_data=True, matched_hint=h)
+    if h or _WEB_HINTS_RE.search(message):
+        return IntentResult(ProcessingClass.LIVE, KnowledgeScope.WEB, requires_live_data=True,
+                            matched_hint=h or "down")
 
     # 5. DIRECT — general knowledge (model answers).
     return IntentResult(ProcessingClass.DIRECT, KnowledgeScope.MODEL, matched_hint=None)

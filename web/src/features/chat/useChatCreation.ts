@@ -46,7 +46,6 @@ interface UseChatCreationOptions {
   isImageMode: boolean;
   isCodingMode: boolean;
   isSearchEnabled?: boolean;
-  selectedSearchEngine?: string;
   autoTitleGeneration: boolean;
   onLoadingUpdate: (loading: boolean) => void;
   setIsImageMode?: (value: boolean) => void;
@@ -97,7 +96,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       isImageMode: false,
       isCodingMode: false,
       isSearchEnabled: false,
-      selectedSearchEngine: "duckduckgo",
       autoTitleGeneration: true,
     };
 
@@ -172,8 +170,10 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           signal: abortControllerRef.current.signal,
           show_raw_response: hookOptions.showRawResponse,
           file_references: fileReferences,
-          web_search: hookOptions.isSearchEnabled ?? false,
-          search_provider: hookOptions.selectedSearchEngine ?? "duckduckgo",
+          // Image mode suppresses search here, at the point of use, rather than by mutating the
+          // user's toggle — see the note in Composer. The backend also returns before its LIVE
+          // branch when image_mode is set, so this is defence in depth, not the mechanism.
+          web_search: (hookOptions.isSearchEnabled ?? false) && !(hookOptions.isImageMode || imageMode),
           is_image_mode: hookOptions.isImageMode || imageMode,
         };
 
@@ -188,8 +188,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
         selectedModel: hookOptions.selectedModel,
         modelMapping: hookOptions.modelMapping,
         showRawResponse: hookOptions.showRawResponse,
-        isSearchEnabled: hookOptions.isSearchEnabled ?? false,
-        selectedSearchEngine: hookOptions.selectedSearchEngine ?? "duckduckgo",
         autoTitleGeneration: hookOptions.autoTitleGeneration,
         setCurrentSessionId: () => {},
         setCurrentConversationId: () => {},

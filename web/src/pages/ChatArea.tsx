@@ -37,7 +37,6 @@ export default function ChatArea({
   setIsImageMode,
   isCodingMode,
   setIsCodingMode,
-  selectedSearchEngine,
 }: any) {
   const isMobile = useIsMobile();
 
@@ -89,7 +88,6 @@ export default function ChatArea({
     isImageMode,
     isCodingMode,
     isSearchEnabled,
-    selectedSearchEngine,
     autoTitleGeneration: true,
     onLoadingUpdate: setIsLoading,
     setIsImageMode

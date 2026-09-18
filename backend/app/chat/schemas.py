@@ -20,10 +20,12 @@ class ChatRequest:
     # Reasoning-specific fields
     conversationId: Optional[str] = None
     webSearch: Optional[bool] = False
-    searchProvider: Optional[str] = "duckduckgo"
     projectId: Optional[str] = None
     isImageMode: Optional[bool] = False
-    
+    # NOTE: there is no per-request search engine. The engine is a persisted user setting
+    # (user_settings.selectedSearchEngine, read at capabilities/search.py:_get_search_config);
+    # a request-level copy was sent by the client and ignored by everything.
+
     def __post_init__(self):
         """Generate job_id for tracking"""
         self.job_id = f"job_{uuid.uuid4()}"
@@ -34,17 +36,18 @@ class ChatRequest:
             self.metadata["conversationId"] = self.conversationId
         if "webSearch" not in self.metadata:
             self.metadata["webSearch"] = self.webSearch
-        if "searchProvider" not in self.metadata:
-            self.metadata["searchProvider"] = self.searchProvider
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ChatRequest':
         """Create ChatRequest from dictionary (WebSocket message)"""
         # Extract reasoning-specific fields
         conversationId = data.get("conversationId")
         webSearch = data.get("webSearch", False)
-        searchProvider = data.get("searchProvider", "duckduckgo")
-        
+        # isImageMode lives on the request so Smart-Modality can honour the image-gen bypass on this
+        # transport too. The REST routes read `is_image_mode` (routes/chat.py); both spellings are
+        # accepted here so the same client payload works over either transport.
+        isImageMode = data.get("isImageMode", data.get("is_image_mode", False))
+
         # Get metadata if provided
         metadata = data.get("metadata", {})
         # Merge reasoning fields into metadata for backward compatibility
@@ -52,9 +55,7 @@ class ChatRequest:
             metadata["conversationId"] = conversationId
         if "webSearch" not in metadata:
             metadata["webSearch"] = webSearch
-        if "searchProvider" not in metadata:
-            metadata["searchProvider"] = searchProvider
-        
+
         return cls(
             sessionId=data["sessionId"],
             message=data["message"],
@@ -64,7 +65,7 @@ class ChatRequest:
             metadata=metadata,
             conversationId=conversationId,
             webSearch=webSearch,
-            searchProvider=searchProvider,
+            isImageMode=isImageMode,
         )
 
 

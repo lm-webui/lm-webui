@@ -100,6 +100,14 @@ def plan(
         p.diffusion = True
         return p  # image generation takes over
 
+    # A linked YouTube video → transcribe and summarize (independent of other modalities).
+    # Checked here, above the LIVE branch, because that branch returns early — a recency-cued
+    # message that also linked a video ("what's new with <link>?") used to lose transcription.
+    # Deliberately below the image_mode / GENERATE returns: those own the request outright, and an
+    # image-mode request with a pasted link must not also pay for a video transcription.
+    if YOUTUBE_RE.search(message or ""):
+        p.transcribe = True
+
     if intent.processing_class == ProcessingClass.LIVE:
         # The toggle is authoritative in BOTH directions. This set p.search unconditionally, so a
         # message carrying a recency cue ("latest news") searched even with web search switched
@@ -161,9 +169,6 @@ def plan(
     # is the LIVE branch above — a text message that asked for something current, with the toggle on.
     #
     # Image generation never reached here: `image_mode` and the GENERATE intent both return earlier.
-
-    # A linked YouTube video → transcribe and summarize (independent of other modalities).
-    if YOUTUBE_RE.search(message or ""):
-        p.transcribe = True
+    # (The YouTube transcribe check also lives above now — see the LIVE branch.)
 
     return p

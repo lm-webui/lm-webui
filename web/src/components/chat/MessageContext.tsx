@@ -46,13 +46,17 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
 
   const contextBadges = [];
 
+  // Each badge carries a light and a dark pair — the `-300` on `-800` values these
+  // started with are invisible on the light theme, which is reachable (theme is a
+  // user setting, `system` included), not just a theoretical mode.
+
   // Memory indicator
   if (message.memoryUsed) {
     contextBadges.push({
       icon: Brain,
       label: "Using memory",
       variant: "outline" as const,
-      className: "border-purple-800 text-purple-300",
+      className: "border-purple-300 text-purple-700 dark:border-purple-800 dark:text-purple-300",
     });
   }
 
@@ -62,7 +66,7 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
       icon: FileText,
       label: `${message.documentsReferenced} document${message.documentsReferenced > 1 ? 's' : ''}`,
       variant: "outline" as const,
-      className: "border-blue-800 text-blue-300",
+      className: "border-blue-300 text-blue-700 dark:border-blue-800 dark:text-blue-300",
     });
   }
 
@@ -72,7 +76,7 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
       icon: Search,
       label: "Web search",
       variant: "outline" as const,
-      className: "border-green-800 text-green-300",
+      className: "border-green-300 text-green-700 dark:border-green-800 dark:text-green-300",
     });
   }
 
@@ -82,7 +86,7 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
       icon: AudioLines,
       label: "Transcribed audio",
       variant: "outline" as const,
-      className: "border-cyan-800 text-cyan-300",
+      className: "border-cyan-300 text-cyan-700 dark:border-cyan-800 dark:text-cyan-300",
     });
   }
 

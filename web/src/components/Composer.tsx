@@ -65,19 +65,19 @@ export default function Composer({
   const urlsRef = useRef<string[]>([]); // object URLs to revoke on unmount
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const prevSearchRef = useRef(false);
   const [modelOpen, setModelOpen] = useState(false);
   const isMobile = useIsMobile();
 
-  // Image mode disables web search — save/restore state
-  useEffect(() => {
-    if (isImageMode) {
-      prevSearchRef.current = isSearchEnabled;
-      if (isSearchEnabled) setIsSearchEnabled(false);
-    } else if (prevSearchRef.current) {
-      setIsSearchEnabled(true);
-    }
-  }, [isImageMode]);
+  // Image mode disables web search, but the user's *preference* is left alone — the suppression is
+  // derived here rather than written back to the state.
+  //
+  // This used to save/restore `isSearchEnabled` through a Composer-local ref, which broke in the
+  // case it had to survive: `isImageMode` is also reset by useChatCreation's send `finally`, which
+  // runs outside this component. Switch views mid-generation and the ref died with the unmounted
+  // Composer, so the restore never ran and `isSearchEnabled` — owned by useUIStateManagement, which
+  // stays mounted — stayed false for good. The toggle lives inside the "+" popover, so nothing
+  // showed it, and every later search silently did not happen.
+  const searchActive = isSearchEnabled && !isImageMode;
 
   useEffect(() => {
     if (inputRef.current) {
@@ -277,7 +277,7 @@ export default function Composer({
                       <Globe className="h-4 w-4" /> Search
                     </span>
                     <span
-                      className={`w-4 h-4 rounded-full border-2 transition-colors ${isSearchEnabled ? "bg-cyan-500 border-cyan-500" : "border-zinc-400 dark:border-zinc-600"}`}
+                      className={`w-4 h-4 rounded-full border-2 transition-colors ${searchActive ? "bg-cyan-500 border-cyan-500" : "border-zinc-400 dark:border-zinc-600"}`}
                     />
                   </button>
                   <button
@@ -307,13 +307,17 @@ export default function Composer({
             </Popover>
 
             {/* Active tool badges inline.
-                Shown at every width: `hidden sm:inline-flex` made this `display: none` below
-                640px, so on a phone the search toggle gave no confirmation at all — the only
-                other sign of the state is the dot inside the "+" popover, which closes. */}
-            {isSearchEnabled && (
+                Two things had to be right for this to be visible on a phone:
+                  • `hidden sm:inline-flex` made it `display: none` below 640px — fixed.
+                  • `text-neutral-600` with no dark variant is ~2.4:1 on the dark composer
+                    background, i.e. invisible. Phones default to dark mode, which is why it still
+                    "did not show" after the first fix.
+                Neutral pill in the composer's own zinc, with the surface drawn from the same
+                colour at low opacity — no accent tint, the glyph is the signal. */}
+            {searchActive && (
               <span
                 title="Web search is on"
-                className="inline-flex items-center gap-1 text-[10px] text-neutral-600 px-2 py-0.5 font-medium"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20"
               >
                 <Globe className="w-4 h-4" />
               </span>

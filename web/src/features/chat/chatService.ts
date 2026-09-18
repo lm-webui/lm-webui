@@ -61,8 +61,6 @@ export class ChatService {
       selectedModel: string;
       modelMapping: Record<string, string>;
       showRawResponse: boolean;
-          isSearchEnabled?: boolean;
-      selectedSearchEngine?: string;
       autoTitleGeneration: boolean;
       setCurrentSessionId: (id: string) => void;
       setCurrentConversationId: (id: string) => void;
@@ -87,8 +85,6 @@ export class ChatService {
       selectedModel,
       modelMapping,
       showRawResponse,
-      isSearchEnabled,
-      selectedSearchEngine,
       autoTitleGeneration,
       setCurrentSessionId,
       setCurrentConversationId,
@@ -212,8 +208,9 @@ export class ChatService {
         signal: signal,
         conversation_id: sessionId, // Pass conversation ID to backend
         file_references: request.file_references || [],
-        web_search: isSearchEnabled ?? false,
-        search_provider: selectedSearchEngine ?? "duckduckgo",
+        // Read from the request — it is the payload the caller built, and the options bag held a
+        // second copy of the same value that this line used to prefer.
+        web_search: request.web_search ?? false,
         is_image_mode: request.is_image_mode ?? false,
       }, {
         onToken: (token) => {
