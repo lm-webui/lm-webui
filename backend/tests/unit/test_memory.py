@@ -239,3 +239,109 @@ def test_unsummarized_messages_are_owner_scoped(db):
 def test_should_summarize_is_owner_scoped(db):
     """False for a conversation the caller does not own — it must not even count tokens for it."""
     assert summaries.should_summarize("theirs", USER, threshold=0) is False
+
+
+# ── the summary is injected only when it has something exclusive ──────────
+#
+# Frontier apps use a summary for turns that FELL OUT of the context window. Injecting it while
+# the window still holds the whole conversation is worse than redundant tokens: a summary is
+# lossy, so it can contradict the verbatim turns beside it.
+
+def _conv(db, cid, n, summary=None):
+    """A conversation of `n` turns owned by USER, optionally with a stored summary.
+
+    Timestamps are explicit and increasing: the table's CURRENT_TIMESTAMP default has one-second
+    resolution, so a tight insert loop gives every row the same value and the ordering becomes
+    genuinely ambiguous rather than wrong.
+    """
+    db.execute("INSERT INTO conversations VALUES (?, ?)", (cid, USER))
+    for i in range(n):
+        db.execute(
+            "INSERT INTO messages (id, conversation_id, user_id, role, content, created_at) "
+            "VALUES (?,?,?,'user',?,?)",
+            (f"{cid}-{i}", cid, USER, f"turn {i}", f"2026-01-01 00:00:{i:02d}"))
+    if summary:
+        db.execute("INSERT INTO conversation_summaries (conversation_id, summary) VALUES (?,?)",
+                   (cid, summary))
+    db.commit()
+
+
+def test_short_conversation_skips_the_summary(db):
+    """A stored summary is NOT injected while the window still covers every turn."""
+    _conv(db, "short", 3, summary="A SUMMARY OF THE SAME THREE TURNS")
+    mem = memory.assemble("short", USER, limit=20)
+    assert mem.summary is None, "summary duplicated turns already present verbatim"
+    assert mem.has_summary is False
+    assert len(mem.recent) == 3
+
+
+def test_truncated_conversation_injects_the_summary(db):
+    """Once turns fall out of the window, the summary is the only source for them."""
+    _conv(db, "long", 25, summary="WHAT FELL OUT")
+    mem = memory.assemble("long", USER, limit=20)
+    assert mem.summary == "WHAT FELL OUT"
+    assert mem.has_summary is True
+
+
+def test_window_boundary_is_exact(db):
+    """Exactly `limit` messages means nothing fell out; one more means something did."""
+    _conv(db, "exact", 20, summary="S")
+    assert memory.assemble("exact", USER, limit=20).summary is None
+
+    _conv(db, "over", 21, summary="S")
+    assert memory.assemble("over", USER, limit=20).summary == "S"
+
+
+def test_window_still_holds_the_newest_turns(db):
+    """The extra fetch used to detect truncation must not shift the window itself."""
+    _conv(db, "win", 25)
+    recent = memory.assemble("win", USER, limit=20).recent
+    assert len(recent) == 20
+    assert recent[-1]["content"] == "turn 24", "window must end at the newest turn"
+    assert recent[0]["content"] == "turn 5", "and start 20 turns back"
+
+
+def test_memory_flag_follows_injection_not_existence(db):
+    """A summary that was skipped is not used memory."""
+    _conv(db, "flagged", 3, summary="STORED BUT DUPLICATIVE")
+    info: dict = {}
+    pb.build_messages("hi", [], "flagged", USER, info=info)
+    assert info["memory"] is False, "reported memory used for a summary that was not injected"
+
+
+def _tight_budget(monkeypatch, history_budget):
+    import app.memory as m
+    from app.core import config_manager
+    monkeypatch.setattr(m, "assemble", lambda cid, uid, limit=20: MemoryContext(
+        summary="S" * 400,                                   # 100 tokens
+        recent=[{"role": "user", "content": "N" * 400},     # 100 each
+                {"role": "user", "content": "O" * 400}],
+    ))
+    monkeypatch.setattr(pb, "_approx_tokens", lambda t: len(t) // 4)
+    monkeypatch.setattr(config_manager, "get_config", lambda: type("C", (), {
+        "rag": type("R", (), {"context_token_budget": 100,
+                              "history_token_budget": history_budget})()})())
+
+
+def test_summary_is_charged_to_the_history_budget(monkeypatch):
+    """history_token_budget is documented as 'summary + recent messages' — so the summary spends
+    it, or the budget silently overruns by up to a whole summary."""
+    _tight_budget(monkeypatch, history_budget=250)     # summary 100, one turn 100, two = 300
+    msgs = pb.build_messages("q", [], "conv_bud", USER)
+    turns = [m for m in msgs if m["role"] != "system"]
+    # 1 history turn + the always-kept user anchor. Two would need 300 > 250.
+    assert len(turns) == 2, f"summary did not consume budget: {len(turns)} messages"
+
+
+def test_over_budget_summary_is_dropped(monkeypatch):
+    """A summary bigger than the whole budget must not starve every recent turn."""
+    _tight_budget(monkeypatch, history_budget=150)
+    monkeypatch.setattr(memory, "assemble", lambda cid, uid, limit=20: MemoryContext(
+        summary="S" * 4000,                              # 1000 tokens, budget is 150
+        recent=[{"role": "user", "content": "recent"}],
+    ))
+    info: dict = {}
+    msgs = pb.build_messages("q", [], "conv_big", USER, info=info)
+    assert "SSSS" not in msgs[0]["content"], "over-budget summary was injected anyway"
+    assert any(m["content"] == "recent" for m in msgs), "recent turns must win"
+    assert info["memory"] is False

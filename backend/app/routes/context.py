@@ -11,7 +11,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from app.memory import assemble
+from app.memory import get_recent_turns, get_summary
 from app.security.auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
@@ -21,16 +21,23 @@ router = APIRouter(prefix="/api/context")
 
 @router.get("/{conversation_id}")
 async def get_context(conversation_id: str, user_id: dict = Depends(get_current_user)):
-    """The caller's active memory for a conversation: summary + recent turns."""
+    """What memory is STORED for a conversation: the summary, and the recent window.
+
+    Deliberately not `memory.assemble()`, which applies the prompt rule of dropping a summary the
+    recent window already covers. That is right for a prompt and wrong for an inspector — someone
+    debugging "why is my summary not being used" needs to see it exists.
+    """
     try:
-        mem = assemble(conversation_id, user_id["id"], limit=10)
+        uid = user_id["id"]
         # A conversation the caller does not own yields empty context, indistinguishable from a
-        # conversation that does not exist — so this cannot be used to probe which ids are real.
+        # conversation that does not exist — so this cannot probe which ids are real.
+        summary = get_summary(conversation_id, uid)
+        recent = get_recent_turns(conversation_id, uid, limit=10)
         return {
             "conversation_id": conversation_id,
-            "summary": mem.summary,
-            "recent_messages": mem.recent,
-            "has_context": mem.has_summary or bool(mem.recent),
+            "summary": summary,
+            "recent_messages": recent,
+            "has_context": bool(summary) or bool(recent),
         }
     except Exception as e:
         raise HTTPException(500, f"Context retrieval error: {str(e)}")

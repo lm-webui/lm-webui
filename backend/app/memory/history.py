@@ -22,11 +22,14 @@ def get_recent_turns(conversation_id: str, user_id: int,
     """
     with db_ctx() as db:
         rows = db.execute(
+            # rowid breaks timestamp ties: created_at is written with microsecond precision, but a
+            # tie is still possible, and without a tiebreaker the window comes back in an arbitrary
+            # order — which would hand the model a scrambled conversation.
             """SELECT m.role, m.content, m.created_at
                  FROM messages m
                  JOIN conversations c ON c.id = m.conversation_id
                 WHERE m.conversation_id = ? AND c.user_id = ?
-                ORDER BY m.created_at DESC LIMIT ?""",
+                ORDER BY m.created_at DESC, m.rowid DESC LIMIT ?""",
             (conversation_id, user_id, limit),
         ).fetchall()
 
@@ -42,7 +45,7 @@ def get_conversation_messages(conversation_id: str, user_id: int,
               FROM messages m
               JOIN conversations c ON c.id = m.conversation_id
              WHERE m.conversation_id = ? AND c.user_id = ?
-             ORDER BY m.created_at ASC
+             ORDER BY m.created_at ASC, m.rowid ASC
         """
         params: tuple = (conversation_id, user_id)
         if limit:

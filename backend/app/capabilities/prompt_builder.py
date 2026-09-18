@@ -118,16 +118,28 @@ def build_messages(
     #    The summary goes into the system prompt (one system message); recent turns become messages.
     #    One call, so the owner is applied to both reads in the same place.
     mem = assemble(conversation_id, user_id, limit=HISTORY_FETCH)
+
+    # The summary is history too, so it spends the same budget the turns below draw on — and it
+    # goes in first, because it is the only source for turns the window already dropped. Counting
+    # it is what `history_token_budget` ("summary + recent messages") always claimed and never did.
+    used = 0
+    summary_in_prompt = False
     if mem.summary:
-        system_prompt += f"\n\nConversation Summary (prior turns): {mem.summary}"
+        cost = _approx_tokens(mem.summary)
+        # A summary longer than the entire budget would starve every recent turn and leave a
+        # prompt made only of a summary — the worst of both. Recency wins; skip it.
+        if cost <= hist_budget:
+            system_prompt += f"\n\nConversation Summary (prior turns): {mem.summary}"
+            used = cost
+            summary_in_prompt = True
     if info is not None:
-        # Lets the caller report `context_used.memory` without a second query.
-        info["memory"] = mem.has_summary
+        # What was INJECTED, not what merely exists — a skipped summary is not used memory.
+        info["memory"] = summary_in_prompt
 
     # Fetch generously and let the budget trim: a short conversation costs nothing extra, a long
-    # one gives the model far more to work with than the old fixed 5.
+    # one gives the model far more to work with than the old fixed 5. `used` carries the summary's
+    # share, so the two together stay inside hist_budget.
     kept: List[dict] = []
-    used = 0
     for m in reversed(mem.recent):      # walk newest → oldest, stop when the budget is spent
         cost = _approx_tokens(m["content"])
         if used + cost > hist_budget:

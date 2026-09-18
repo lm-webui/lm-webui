@@ -166,6 +166,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
+Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
 Restart=on-failure
@@ -189,7 +190,7 @@ SERVICEEOF
 <key>Label</key><string>com.lmwebui.server</string>
 <key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>$PORT</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
-<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
+<key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>LMWEBUI_BASE_DIR</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LMWEBUI_HOME/logs/stdout.log</string>
 <key>StandardErrorPath</key><string>$LMWEBUI_HOME/logs/stderr.log</string>
@@ -221,6 +222,19 @@ __install_tree() {
     rm -f "$src/config.yaml"
   fi
 
+  # 1b. Same trick for the CLI, for a sharper reason: this script IS the one running. `cp` truncates
+  #     its destination in place, so a bulk copy over $LMWEBUI_HOME/lmwebui would rewrite the very
+  #     file bash is reading commands from, mid-execution — at best it survives on read-ahead
+  #     buffering, at worst bash executes whatever the new bytes happen to line up with. Staging it
+  #     aside and installing it with `mv` afterwards renames it onto a NEW inode, so the running
+  #     shell keeps reading the old file while the path serves the new one.
+  local staged_cli=""
+  if [ -f "$src/lmwebui" ]; then
+    staged_cli="$LMWEBUI_HOME/.lmwebui.new.$$"
+    cp "$src/lmwebui" "$staged_cli"
+    rm -f "$src/lmwebui"
+  fi
+
   # 2. Ownership first, or cp/rm cannot write over root-owned leftovers from an old sudo run.
   if [ -n "$(find "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web" ! -user "$(whoami)" 2>/dev/null | head -1)" ]; then
     echo "   Fixing ownership (stale non-user files)..."
@@ -236,6 +250,14 @@ __install_tree() {
   for p in .git backend scripts; do rm -rf "$LMWEBUI_HOME/$p" 2>/dev/null || true; done
 
   cp -r "$src/." "$LMWEBUI_HOME/"
+
+  # Install the new CLI last, by rename (see 1b). Same directory, so this is an atomic mv and the
+  # destination gets a fresh inode rather than being truncated under the running shell.
+  if [ -n "$staged_cli" ]; then
+    mv -f "$staged_cli" "$LMWEBUI_HOME/lmwebui"
+    chmod +x "$LMWEBUI_HOME/lmwebui"
+  fi
+
   __apply_config_template
 }
 
@@ -276,10 +298,12 @@ __fetch_release() {
     || { echo "❌ Release download failed"; rm -f "$tgz"; exit 1; }
   tar -tzf "$tgz" >/dev/null 2>&1 || { echo "❌ Downloaded archive is corrupt"; rm -f "$tgz"; exit 1; }
   mkdir -p "$dest" && tar -xzf "$tgz" -C "$dest" --strip-components=1
-  # Fail before touching the install, not half-way through replacing it.
+  # Fail before touching the install, not half-way through replacing it. Clean up $dest too:
+  # `update` passes a mktemp -d, and this exit skips its `rm -rf "$TMP"`, so removing only the
+  # tarball would leave a whole extracted tree behind on a corrupt archive.
   if [ ! -f "$dest/app/main.py" ] || [ ! -f "$dest/web/dist/index.html" ]; then
     echo "❌ Release archive is missing app/main.py or web/dist/index.html"
-    rm -f "$tgz"; exit 1
+    rm -f "$tgz"; rm -rf "$dest"; exit 1
   fi
   rm -f "$tgz"
 }

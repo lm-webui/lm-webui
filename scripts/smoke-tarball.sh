@@ -45,6 +45,18 @@ pass "all install-time files present"
 [ -n "$(ls -A "$tree/web/dist/assets" 2>/dev/null)" ] || fail "web/dist/assets is empty"
 pass "frontend bundle has assets"
 
+# install.sh and lmwebui each carry their own copy of the service unit, and they have drifted:
+# LMWEBUI_BASE_DIR was added to one and not the other, so an `update` rewrote the unit WITHOUT it,
+# undoing what a fresh install had just written. Any divergence in the LMWEBUI_* variables means
+# the two disagree about the environment the service runs in.
+grep -oE 'LMWEBUI_[A-Z_]+' "$tree/install.sh" | sort -u > "$work/env.install"
+grep -oE 'LMWEBUI_[A-Z_]+' "$tree/lmwebui"   | sort -u > "$work/env.cli"
+if ! diff -q "$work/env.install" "$work/env.cli" >/dev/null; then
+  fail "install.sh and lmwebui disagree on LMWEBUI_* env vars:
+$(diff "$work/env.install" "$work/env.cli" | sed 's/^/       /')"
+fi
+pass "install.sh and lmwebui agree on the service environment"
+
 # Catches a truncated or half-copied script that would still extract fine.
 bash -n "$tree/install.sh" || fail "install.sh does not parse"
 bash -n "$tree/lmwebui"    || fail "lmwebui does not parse"
@@ -77,12 +89,14 @@ grep -qF '~/.lmwebui' "$home/config.yaml" && fail "config.yaml has an un-substit
 pass "config paths substituted"
 
 # A fresh home (no config at all) gets one created from the template. Needs its own extraction:
-# __install_tree consumes its source (it stages config.yaml, then deletes it from the tree), which
-# is fine in practice because every real caller passes a freshly extracted temp dir.
+# __install_tree consumes its source — it stages config.yaml AND lmwebui out of the tree, then
+# deletes both — which is fine in practice because every real caller passes a freshly extracted
+# temp dir and discards it. `$tree` no longer has an lmwebui in it by this point, so run the CLI
+# from the tree being installed from; it can unlink its own script safely (the shell holds an fd).
 fresh_tree="$work/tree2"; mkdir -p "$fresh_tree"
 tar -xzf "$tarball" -C "$fresh_tree" --strip-components=1
 fresh="$work/fresh"; mkdir -p "$fresh"
-LMWEBUI_HOME="$fresh" bash "$tree/lmwebui" __install-tree "$fresh_tree" >/dev/null
+LMWEBUI_HOME="$fresh" bash "$fresh_tree/lmwebui" __install-tree "$fresh_tree" >/dev/null
 [ -f "$fresh/config.yaml" ] || fail "no config.yaml created for a fresh install"
 grep -q "$fresh" "$fresh/config.yaml" || fail "created config does not point at LMWEBUI_HOME"
 pass "fresh install gets a config"

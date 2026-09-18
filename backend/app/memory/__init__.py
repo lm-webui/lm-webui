@@ -30,7 +30,12 @@ RECENT_TURNS_FETCH = 20
 
 @dataclass
 class MemoryContext:
-    """What a single turn should remember: the summary of older turns, and the recent ones."""
+    """What a single turn should remember: the summary of older turns, and the recent ones.
+
+    `summary` is the summary **to inject**, not the one that exists — it is None when the recent
+    window already covers the whole conversation. `has_summary` therefore means "a summary is
+    being injected", which is what `context_used.memory` should report.
+    """
 
     summary: Optional[str] = None
     recent: List[Dict[str, Any]] = field(default_factory=list)
@@ -42,10 +47,21 @@ class MemoryContext:
 
 def assemble(conversation_id: str, user_id: int,
              limit: int = RECENT_TURNS_FETCH) -> MemoryContext:
-    """Everything a turn needs from memory, scoped to `user_id` once and applied to both reads."""
+    """Everything a turn needs from memory, scoped to `user_id` once and applied to both reads.
+
+    The summary is included only when the window was truncated. Otherwise it describes turns the
+    prompt already carries verbatim, and since a summary is lossy it can contradict them — the
+    model then has two accounts of the same exchange and no way to prefer one.
+    """
+    # One extra row tells "exactly `limit` messages" apart from "more than `limit`", which is
+    # precisely the question of whether anything has fallen out of the window.
+    fetched = get_recent_turns(conversation_id, user_id, limit + 1)
+    truncated = len(fetched) > limit
+    recent = fetched[1:] if truncated else fetched
+
     return MemoryContext(
-        summary=get_summary(conversation_id, user_id),
-        recent=get_recent_turns(conversation_id, user_id, limit),
+        summary=get_summary(conversation_id, user_id) if truncated else None,
+        recent=recent,
     )
 
 
