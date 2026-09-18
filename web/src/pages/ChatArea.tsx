@@ -5,7 +5,6 @@ import { mapToConversation } from "@/utils/chatUtils";
 import { useChatCreation } from "@/features/chat/useChatCreation";
 import { toast } from "sonner";
 import { detectMessageIntent } from "@/utils/chatUtils";
-
 import Sidebar from "../components/Sidebar";
 import Header from "../components/Header";
 import ChatPane from "../components/chat/ChatPane";
@@ -43,15 +42,10 @@ export default function ChatArea({
   const activeConversation = activeChatId ? conversations[activeChatId] : null;
   const modernConversation = useMemo(() => activeConversation ? mapToConversation(activeConversation) : null, [activeConversation, messages]);
   const artifact = useChatStore((s) => s.artifact);
-
   const isLoadingMessages = useIsLoadingMessages();
-
-
-
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeView, setActiveView] = useState<"chat" | "agent" | "gallery" | "workspace" | "projects" | "settings" | "runtime">("chat");
-
   const openConversation = async (conversationId: string) => {
     setActiveChat(conversationId);
     setActiveView("chat");
@@ -60,14 +54,11 @@ export default function ChatArea({
       await store.loadMessagesForConversation(conversationId);
     }
   };
-
   const openProjectConversation = async (projectId: string) => {
     const id = useChatStore.getState().createNewChat();
     useChatStore.getState().updateConversation(id, { metadata: { project_id: projectId } });
     setActiveChat(id);
   };
-
-  // "Open in Image Studio" from a chat message -> switch to the Studio view.
   useEffect(() => {
     const go = () => setActiveView("workspace");
     window.addEventListener("navigate-studio", go);
@@ -102,7 +93,6 @@ export default function ChatArea({
       toast.info("Switching to coding mode", { duration: 1000 });
       setIsCodingMode(true);
     }
-
 
     const genFile = files.find((f: any) => f.type === "generating_image");
     if (genFile) {

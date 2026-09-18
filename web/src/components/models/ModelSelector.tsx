@@ -28,7 +28,6 @@ interface ModelSelectorProps {
     models: string[];
     modelMapping?: Record<string, string>;
   }>;
-  // External mode: an ancestor owns the <Popover> root (e.g. anchored to the composer).
   // Render only trigger + content; the root controls open state and position.
   external?: boolean;
   open?: boolean;
@@ -121,7 +120,7 @@ export function ModelSelector({
     <Button
       variant="outline"
       className="gap-1 md:gap-2 min-w-[70px] md:min-w-[140px] justify-between rounded-3xl
-     bg-neutral-100/90 dark:bg-neutral-900/10 border-neutral-300/50 dark:border-neutral-600/50 hover:bg-neutral-800/50 shadow-inner"
+     bg-neutral-100/90 dark:bg-neutral-900/10 border-neutral-300/50 dark:border-neutral-600/50 hover:bg-neutral-300/50 shadow-inner"
       size="sm"
     >
       <div className="flex items-center gap-1 md:gap-2">
@@ -213,7 +212,6 @@ export function ModelSelector({
     </div>
   );
 
-  // External mode: an ancestor owns the <Popover> root, so render only trigger + content.
   // Content spans the composer width (max-w-3xl = 48rem) and is a bottom sheet on mobile.
   if (external) {
     return (
@@ -223,7 +221,7 @@ export function ModelSelector({
           side={side}
           align="center"
           sideOffset={8}
-          className="z-50 w-[min(48rem,calc(100vw-1rem))] max-h-[70vh] overflow-hidden rounded-2xl border bg-popover p-0 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
+          className="z-50 w-[min(20rem,calc(100vw-1rem)] w-[max(46rem)] max-h-[70vh] overflow-hidden rounded-2xl border bg-popover p-0 text-popover-foreground shadow-xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2"
         >
           {panel}
         </PopoverContent>

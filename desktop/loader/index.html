@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>LM WebUI</title>
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        margin: 0;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #faf9f7;
+        color: #1c1c1e;
+      }
+      @media (prefers-color-scheme: dark) {
+        body { background: #1c1c1e; color: #f2f2f7; }
+        code { background: #2c2c2e; }
+      }
+      main { text-align: center; max-width: 30rem; padding: 2rem; }
+      .mark {
+        width: 72px; height: 72px; margin: 0 auto 1.5rem;
+        border-radius: 50%; background: #fe860a;
+        display: flex; align-items: center; justify-content: center;
+        color: #fff; font-size: 26px; font-weight: 600; letter-spacing: -1px;
+      }
+      .ring {
+        width: 14px; height: 14px; margin: 0 auto 1rem;
+        border: 2px solid currentColor; border-right-color: transparent;
+        border-radius: 50%; opacity: .45;
+        animation: spin .7s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      #hint { opacity: .6; }
+      #install { display: none; margin-top: 1.75rem; text-align: left; }
+      #install.visible { display: block; }
+      code {
+        display: block; margin: .5rem 0 1rem; padding: .6rem .75rem;
+        background: #ececec; border-radius: 6px;
+        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap; word-break: break-all;
+      }
+      a { color: #fe860a; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark">LM</div>
+      <div class="ring"></div>
+      <p id="hint">Starting the local server…</p>
+
+      <!-- Revealed by a local timer only. This page cannot reach the backend itself:
+           it is served from the webview's own origin, so a fetch to
+           http://localhost:7070 would be blocked by CORS. The Rust side does the polling
+           and replaces this page as soon as the server answers. -->
+      <section id="install">
+        <p>If this stays here, the LM-WebUI server is not installed or not running.</p>
+        <p>Install it, then reopen this app:</p>
+        <code>curl -fsSL https://lmwebui.com/install.sh | bash</code>
+        <p>Already installed? Start it with:</p>
+        <code>lm-web-ui start</code>
+        <p><a href="https://lmwebui.com">lmwebui.com</a></p>
+      </section>
+    </main>
+    <script>
+      setTimeout(function () {
+        document.getElementById("hint").textContent =
+          "Still waiting for the local server…";
+        document.getElementById("install").classList.add("visible");
+      }, 20000);
+    </script>
+  </body>
+</html>

@@ -65,9 +65,6 @@ export function LoadingMessage({
     );
   }
 
-  // Gemini-style: a single colorless row — animated three-dot loader, a stage
-  // favicon (Globe while web search is active), and one status text. No redundant
-  // duplication between a "chip" and a "bubble".
   return (
     <div
       className={cn(

@@ -1,6 +1,6 @@
 [package]
 name = "lm-webui-desktop"
-version = "0.8.3"
+version = "0.8.18"
 description = "LM-WebUI desktop application"
 authors = ["LM-WebUI"]
 edition = "2021"
@@ -14,9 +14,6 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = [] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-portpicker = "0.1"
 ureq = "3"
 
 [features]

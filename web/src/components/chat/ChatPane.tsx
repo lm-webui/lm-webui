@@ -60,8 +60,6 @@ export default function ChatPane({
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const stickToBottomRef = React.useRef(true); // follow streaming unless the user scrolls up
-  // Render-state twin of stickToBottomRef: the ref guards the auto-scroll, this drives the
-  // jump-to-bottom button's visibility (a ref change cannot re-render).
   const [atBottom, setAtBottom] = useState(true);
   const { user } = useAuth();
 
@@ -172,7 +170,6 @@ export default function ChatPane({
     scrollToBottom();
   }, [conversation?.messages.length, tailLength, isThinking]);
 
-  // Switching conversations must not inherit the previous one's "user scrolled up" state, or the
   // new chat would open wherever the old scroll position left off.
   React.useEffect(() => {
     stickToBottomRef.current = true;
@@ -231,14 +228,6 @@ export default function ChatPane({
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col relative bg-neutral-200/70 dark:bg-neutral-900/50">
-      {/* overflow-x-hidden is load-bearing, not decoration: a bare `overflow-y-auto` makes
-          overflow-x compute to `auto` too, so one over-wide child — a long unbroken URL in a
-          message — let the whole chat area be dragged left and right. Wide content that genuinely
-          needs it (tables, code blocks) scrolls inside its own wrapper. */}
-      {/* The wrapper exists so the button can sit against the SCROLLER's bottom edge — floating
-          over the last message and just clear of the composer, whatever height the composer grows
-          to (attachments, multi-line input). Anchoring to the pane instead would need a hardcoded
-          offset that the composer's height invalidates. */}
       <div className="relative flex min-h-0 flex-1 flex-col">
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 space-y-6 overflow-y-auto overflow-x-hidden px-3 py-3 sm:px-8 sm:py-6 scrollbar-hide">
         <div className="max-w-3xl mx-auto space-y-6">
@@ -278,9 +267,7 @@ export default function ChatPane({
             </div>
           ))}
 
-          {/* Loading indicator when LLM is generating response (standard mode).
-              Hidden once a message is streaming content — otherwise it duplicates
-              the streaming bubble's own shimmer. */}
+          {/* Loading indicator when LLM is generating response */}
           {isLoading && !conversation.messages.some((m) => m.isLoading) && (
             <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
               <LoadingMessage
@@ -296,10 +283,7 @@ export default function ChatPane({
         </div>
       </div>
 
-        {/* Jump to latest. Always mounted and faded by opacity rather than unmounted, so both
-            directions animate — conditional rendering would pop in and vanish with no transition.
-            It stays translucent so it never competes with the message you're reading behind it,
-            and `pointer-events-none` while hidden keeps it from eating taps on the message. */}
+        {/* Jump to latest. Always mounted and faded by opacity rather than unmounted */}
         <button
           type="button"
           aria-label="Scroll to latest message"
@@ -316,8 +300,6 @@ export default function ChatPane({
         <div className="px-4 pb-2">
           <div className="max-w-3xl mx-auto flex items-center gap-2 text-xs text-muted-foreground bg-zinc-100 dark:bg-zinc-800 rounded-xl px-3 py-2">
             <FolderKanban className="h-3 w-3 shrink-0" />
-            {/* A long project name has nothing to truncate it and pushes this non-wrapping row —
-                which also holds the Remove button — past its container at any width. */}
             <span className="min-w-0 truncate">Project: <span className="font-medium">{projectName}</span></span>
             <span className="text-zinc-400 hidden sm:inline">· System prompt active</span>
             <button type="button" onClick={handleRemoveFromProject} className="ml-auto rounded px-2 py-1 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Remove</button>

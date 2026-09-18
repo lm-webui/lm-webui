@@ -5,6 +5,7 @@ import { fetchSettings } from "@/utils/api";
 import { useSessionManagement } from "@/features/sessions/useSessionManagement";
 import { useModelManagement } from "@/features/models/useModelManagement";
 import { useAllModels } from "@/features/models/useAllModels";
+import { MODELS_CHANGED_EVENT } from "@/features/models/modelEvents";
 import { useUIStateManagement } from "@/features/ui/useUIStateManagement";
 import { useChatStore, useActiveMessages, useActiveChatId, useSetActiveChat, useCreateNewChat, useImageGenerationLoading, useConversationCreationLoading, selectConversations } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
@@ -152,6 +153,17 @@ export default function IndexEnhanced() {
       sessionLoadStoredApiKeys();
     }
   }, [selectedLLM, isAuthenticated]);
+
+  // Saving or deleting a provider key changes which providers count as connected, and that
+  // snapshot gates the openai/google fetch (modelService's PROVIDERS_REQUIRING_API_KEY). Reload
+  // it on the same signal so those models appear without switching provider first — storedApiKeys
+  // is already a dependency of loadAllModels, so the model reload follows on its own.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const onChanged = () => sessionLoadStoredApiKeys();
+    window.addEventListener(MODELS_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(MODELS_CHANGED_EVENT, onChanged);
+  }, [isAuthenticated, sessionLoadStoredApiKeys]);
 
   // Update available models when LLM provider changes - only when authenticated
   useEffect(() => {

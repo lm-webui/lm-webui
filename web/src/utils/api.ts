@@ -572,6 +572,19 @@ const activeFetchPromises: Record<string, Promise<string[] | Record<string, stri
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
 
 /**
+ * Drop every cached model list so the next fetch actually reaches the providers.
+ * In-flight promises go too: one started before a credential change would otherwise be
+ * returned to the caller asking for post-change data.
+ *
+ * ponytail: a request already in flight still resolves and can re-cache a pre-change list;
+ * the next refresh overwrites it. Not worth abort plumbing.
+ */
+export function clearModelsCache(): void {
+  for (const key of Object.keys(modelsCache)) delete modelsCache[key];
+  for (const key of Object.keys(activeFetchPromises)) delete activeFetchPromises[key];
+}
+
+/**
  * Unified model fetching function
  * 
  * @param provider - Provider name (e.g., 'openai', 'google', 'gguf'). If not provided, fetches all providers.
@@ -712,27 +725,6 @@ export async function fetchModels(
   } catch (error) {
     throw error;
   }
-}
-
-/**
- * Refresh model cache for a provider
- * 
- * @param provider - Provider name (optional, refreshes all if not provided)
- */
-export async function refreshModelsCache(provider?: string): Promise<void> {
-  // For GGUF models, no refresh needed as they're local files
-  if (provider === 'gguf') {
-    return;
-  }
-  
-  // For API providers, use the refresh endpoint
-  const url = new URL(`${URL_BASE}/api/models/api/refresh`);
-  if (provider) {
-    url.searchParams.set('provider', provider);
-  }
-  await authFetch(url.toString(), {
-    method: 'POST',
-  });
 }
 
 // Backward compatibility alias (keep only the one that's actually used)

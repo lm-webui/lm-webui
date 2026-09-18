@@ -43,16 +43,6 @@ jobs:
       - name: Smoke test tarball
         run: bash ./scripts/smoke-tarball.sh lm-webui.tar.gz
 
-      # Hand the frontend to the desktop job so the release builds it exactly once. It lands at
-      # web/dist in that job because tauri's frontendDist (../../web/dist) and build-sidecar.sh
-      # both read that path.
-      - name: Upload frontend bundle for the desktop job
-        uses: actions/upload-artifact@v4
-        with:
-          name: web-dist
-          path: web/dist
-          retention-days: 1
-
       - name: Create release + upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -87,45 +77,42 @@ jobs:
           cache: npm
           cache-dependency-path: desktop/package-lock.json
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
-
-      # The frontend was built once, in the `build` job. Rebuilding it here would mean two builds
-      # of the same commit that can quietly diverge. The output is platform-independent JS/CSS —
-      # rollup's platform-specific binaries are build-time only, and nothing in web/vite.config.ts
-      # branches on platform.
-      - uses: actions/download-artifact@v4
-        with:
-          name: web-dist
-          path: web/dist
 
       - name: Install desktop dependencies
         run: |
           cd desktop
           npm install
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements-build.txt
 
+      # No frontend and no backend to assemble: the app is a shell that loads whatever the
+      # natively installed backend serves on :7070. Nothing here reads web/dist, so nothing
+      # here needs the `build` job's output.
       - name: Build macOS DMG
         run: |
-          test -f web/dist/index.html   # fail here, not 400 lines into tauri
           cd desktop
           npm run version:sync
-          # Override beforeBuildCommand so tauri does not rebuild the frontend it was just given.
-          # build:sidecar must stay — it populates src-tauri/web-dist and
-          # src-tauri/binaries/lm-webui-backend, both bundle.resources.
-          npm run tauri -- build --bundles dmg \
-            --config '{"build":{"frontendDist":"../../web/dist","beforeBuildCommand":"npm run build:sidecar"}}'
+          npm run tauri -- build --bundles dmg
 
       - name: Rename DMG to stable download name
         run: |
           dmg=$(find desktop/src-tauri/target/release/bundle/dmg -name '*.dmg' -type f | head -n 1)
           test -n "$dmg"
           cp "$dmg" LM-WebUI-macos-arm64.dmg
+
+      # Both checks below shipped broken in 0.8.18 and cost users a "LM-WebUI is damaged
+      # and can't be opened" dialog plus a blank app icon. Tauri only writes CFBundleIconFile
+      # when bundle.icon is set, and only seals the bundle when a signing identity exists
+      # (bundle.macOS.signingIdentity "-" gives the free ad-hoc signature). Neither failure
+      # errors the build, so assert on the built artifact instead of trusting the config.
+      - name: Verify DMG app is signed and carries an icon
+        run: |
+          hdiutil attach LM-WebUI-macos-arm64.dmg -nobrowse -readonly
+          app="/Volumes/LM-WebUI/LM-WebUI.app"
+          test -d "$app"
+          codesign --verify --deep --strict "$app"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIconFile" "$app/Contents/Info.plist"
+          test -f "$app/Contents/Resources/icon.icns"
 
       - name: Upload macOS DMG
         env:

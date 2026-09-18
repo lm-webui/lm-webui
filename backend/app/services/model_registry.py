@@ -239,13 +239,17 @@ class ModelRegistry:
         for provider, strategy in self._strategies.items():
             if strategy is None:
                 continue
+            # Resolve per user so a saved Ollama URL applies here too, not only on the
+            # single-provider path. get_strategy returns the same object for aliases
+            # (gemini/google), so the dedupe below still collapses them.
+            resolved = self.get_strategy(provider, user_id) or strategy
             # Skip aliases — same adapter object produces duplicate models
-            adapter_id = id(strategy)
+            adapter_id = id(resolved)
             if adapter_id in seen:
                 continue
             seen.add(adapter_id)
-            key = api_keys.get(provider) or api_keys.get(strategy.get_backend_name())
-            tasks.append(strategy.fetch_models(key, session))
+            key = api_keys.get(provider) or resolved.get_backend_name()
+            tasks.append(resolved.fetch_models(key, session))
             
         results = await asyncio.gather(*tasks, return_exceptions=True)
         

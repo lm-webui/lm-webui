@@ -1,12 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "LM-WebUI",
-  "version": "0.8.3",
+  "version": "0.8.18",
   "identifier": "com.lmwebui.desktop",
   "build": {
-    "beforeDevCommand": "npm run build:web",
-    "beforeBuildCommand": "npm run build:web && npm run build:sidecar",
-    "frontendDist": "../../web/dist",
+    "beforeDevCommand": "npm --prefix ../web run dev",
+    "frontendDist": "../loader",
     "devUrl": "http://localhost:5177"
   },
   "app": {
@@ -17,9 +16,15 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "resources": [
-      "web-dist",
-      "binaries/lm-webui-backend"
-    ]
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

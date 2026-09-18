@@ -253,9 +253,6 @@ export function Message({
         "group animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
         message.role === "user"
           ? "ml-auto md:-mr-2"
-          // No desktop right margin: the old `md:mr-20` inset the assistant row 80px from the
-          // right edge, so assistant replies were visibly narrower than the column. The bleed
-          // (-ml-2 -mr-2) applies at every width, so mobile is untouched.
           : "-ml-2 -mr-2",
         isMobile ? "max-w-full" : "max-w-4xl",
       )}
@@ -283,11 +280,6 @@ export function Message({
             <div
               className={cn(
                 "prose max-w-none dark:prose-invert",
-                // overflow-wrap is inherited, so this one class wraps long unbroken tokens (URLs,
-                // hashes, long identifiers) across every markdown descendant — p, li, td, inline
-                // code. Without it a single such token pushes the message list wider than the
-                // viewport. Code blocks are unaffected: their <pre> keeps `white-space: pre`, and
-                // wrapping is disabled wherever white-space forbids it.
                 "break-words",
                 isMobile ? "prose-sm text-sm" : "prose-base text-base",
                 "[&>*:first-child]:mt-0 [&>*:last-child]:mb-0",

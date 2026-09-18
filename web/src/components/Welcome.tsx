@@ -10,17 +10,7 @@ interface WelcomeProps {
 export function Welcome({ user, children, onAction }: WelcomeProps) {
   const userName = user?.email?.split("@")[0] || "User";
 
-  // The composer is one of the `children` below and the ancestor `main` is overflow-hidden, so
-  // without a scroll container here a viewport too short for the stack — a small window, or the
-  // mobile keyboard shrinking the dynamic viewport — clips the composer with no way to reach it.
-  // overflow-x-hidden is not decoration: a bare overflow-y-auto computes overflow-x to auto, which
-  // would make this screen draggable sideways.
-  //
-  // `my-auto` (not `flex-1`, and not justify-start) is what keeps the stack centred at EVERY width:
-  // auto margins absorb the free space when the content fits, and collapse to zero when it doesn't,
-  // so an overflowing stack starts at the top and stays scrollable instead of being pinned off the
-  // top edge. `justify-center` alone could not do that — centred overflow is unreachable, which is
-  // why the mobile view used to sit hard against the top.
+  // The composer is one of the `children` below and the ancestor `main` is overflow-hidden,
   return (
     <div className="flex flex-col items-center justify-center h-full w-full max-w-3xl mx-auto px-4 bg-transparent overflow-y-auto overflow-x-hidden">
       <div className="flex flex-col items-center justify-center w-full space-y-8 my-auto max-md:py-6">
@@ -45,7 +35,7 @@ export function Welcome({ user, children, onAction }: WelcomeProps) {
           {children}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-2 w-full max-w-2xl animate-in slide-in-from-bottom-8 duration-1000 fade-in">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-xs md:text-md px-2 w-full max-w-2xl animate-in slide-in-from-bottom-8 duration-1000 fade-in">
             {[
               { label: "Create image", icon: "🍌" },
               { label: "Write docs", icon: <FileText className="h-4 w-4" /> },

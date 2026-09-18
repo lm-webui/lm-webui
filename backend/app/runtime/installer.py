@@ -3,6 +3,7 @@ Runtime Installer — executes host-level runtime installs via subprocess.
 Runs on native host — subprocess.run() works directly.
 """
 import logging
+import shutil
 import subprocess
 import sys
 from typing import Dict, Optional
@@ -11,16 +12,31 @@ from .detector import RuntimeType
 logger = logging.getLogger(__name__)
 
 
+def _venv_pip(subcommand: str) -> str:
+    """A pip command that targets this service's own venv.
+
+    Never a bare `pip`: these run with shell=True, so `pip` resolves to whatever is first on
+    PATH — on macOS that is Homebrew's python, which refuses outright (PEP 668
+    externally-managed-environment) and would install into the wrong interpreter anyway.
+    `python -m pip` is not enough either: install.sh builds the venv with uv, which ships no
+    pip of its own, so prefer uv against our interpreter and keep `-m pip` for pip-based venvs.
+    """
+    if shutil.which("uv"):
+        return f"uv pip {subcommand} --python {sys.executable}"
+    # pip prompts before uninstalling; uv has no -y and does not need one.
+    return f"{sys.executable} -m pip {subcommand}{' -y' if subcommand.startswith('uninstall') else ''}"
+
+
 class RuntimeInstaller:
     """Installs runtimes on the host via subprocess."""
 
     INSTALL_COMMANDS = {
-        "mlx": ("pip install mlx mlx-lm mlx-optiq",),
+        "mlx": (_venv_pip("install mlx mlx-lm mlx-optiq"),),
         "comfyui": ("git clone https://github.com/comfyanonymous/ComfyUI ~/ComfyUI", f"{sys.executable} -m pip install -r ~/ComfyUI/requirements.txt",),
     }
 
     UNINSTALL_COMMANDS = {
-        "mlx": ("pip uninstall mlx mlx-lm mlx-optiq -y",),
+        "mlx": (_venv_pip("uninstall mlx mlx-lm mlx-optiq"),),
         "comfyui": ("rm -rf ~/ComfyUI",),
     }
 

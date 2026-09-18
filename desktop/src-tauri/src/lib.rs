@@ -1,98 +1,71 @@
-use std::{fs, path::PathBuf, process::{Child, Command, Stdio}, sync::Mutex, thread, time::Duration};
-use tauri::{Manager, RunEvent, Url, WebviewUrl, WebviewWindowBuilder};
+use std::{thread, time::Duration};
 
-struct Backend(Mutex<Option<Child>>);
+use tauri::{Url, WebviewUrl, WebviewWindowBuilder};
 
-fn data_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    app.path().app_data_dir().map_err(|e| e.to_string())
-}
+// The backend is installed natively, not bundled: install.sh lays it down in ~/.lmwebui and
+// registers a launchd/systemd service that binds this port with KeepAlive, so it is normally
+// already answering by the time this app launches. The app is a shell around that server —
+// it neither ships nor spawns a copy, which is what lets the user run the real thing with
+// working MLX/llama.cpp instead of a frozen binary.
+//
+// 127.0.0.1, not "localhost": on macOS /etc/hosts maps localhost to ::1 first, and the
+// service binds IPv4 only (uvicorn --host 0.0.0.0), so "localhost" is refused.
+const BACKEND_URL: &str = "http://127.0.0.1:7070";
+const DEV_URL: &str = "http://localhost:5177";
 
-fn start_backend(app: &tauri::AppHandle) -> Result<(Child, u16), String> {
-    let port = portpicker::pick_unused_port().ok_or("No free localhost port available")?;
-    let root = data_root(app)?;
-    for name in ["data", "media", "models", "secrets", "logs"] {
-        fs::create_dir_all(root.join(name)).map_err(|e| e.to_string())?;
-    }
+// Tauri's default window title is "Tauri". It only lasts until a page loads, but that is long
+// enough to show in the title bar and the window switcher.
+const WINDOW_TITLE: &str = "LM WebUI";
 
-    let resource_dir = app.path().resource_dir().map_err(|e| e.to_string())?;
-    let binary = resource_dir.join("binaries").join(if cfg!(windows) {
-        "lm-webui-backend.exe"
-    } else {
-        "lm-webui-backend"
-    });
-    let binary = std::env::var_os("LMWEBUI_BACKEND")
-        .map(PathBuf::from)
-        .unwrap_or(binary);
-    if !binary.exists() {
-        return Err(format!("Backend sidecar not found: {}", binary.display()));
-    }
-
-    // Keep the sidecar's stderr: with Stdio::null() a failed boot is undiagnosable.
-    let stderr = fs::File::create(root.join("logs").join("stderr.log"))
-        .map(Stdio::from)
-        .unwrap_or_else(|_| Stdio::null());
-
-    let child = Command::new(binary)
-        .current_dir(&resource_dir)
-        .env("APP_ENVIRONMENT", "production")
-        .env("APP_SERVER_HOST", "127.0.0.1")
-        .env("APP_SERVER_PORT", port.to_string())
-        .env("LMWEBUI_BASE_DIR", &root)
-        .env("LMWEBUI_DATA_DIR", root.join("data"))
-        .env("LMWEBUI_MEDIA_DIR", root.join("media"))
-        .env("LMWEBUI_MODELS_DIR", root.join("models"))
-        .env("LMWEBUI_CONFIG_PATH", root.join("config.yaml"))
-        .env("LMWEBUI_WEB_DIST", resource_dir.join("web-dist"))
-        .env("CORS_ORIGINS", format!("http://127.0.0.1:{port}"))
-        .stdout(Stdio::null())
-        .stderr(stderr)
-        .spawn()
-        .map_err(|e| format!("Failed to start backend: {e}"))?;
-
-    Ok((child, port))
-}
-
-fn wait_for_backend(port: u16) -> Result<(), String> {
-    let url = format!("http://127.0.0.1:{port}/api/health");
-    for _ in 0..120 {
-        if let Ok(response) = ureq::get(&url).call() {
-            if response.status().as_u16() < 500 {
-                return Ok(());
-            }
-        }
-        thread::sleep(Duration::from_millis(250));
-    }
-    Err(format!("Backend did not become ready at {url}"))
+// Same predicate the old in-process wait used: a backend that is up but not yet reporting
+// ready still counts, so a slow start does not read as absent.
+fn backend_ready() -> bool {
+    ureq::get(&format!("{BACKEND_URL}/api/health"))
+        .call()
+        .map(|r| r.status().as_u16() < 500)
+        .unwrap_or(false)
 }
 
 pub fn run() {
     tauri::Builder::default()
-        .manage(Backend(Mutex::new(None)))
         .setup(|app| {
-            if cfg!(debug_assertions) && std::env::var_os("LMWEBUI_BACKEND").is_none() {
-                let url: Url = "http://localhost:5177"
-                    .parse()
-                    .map_err(|e| format!("Invalid development URL: {e}"))?;
-                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url)).build()?;
+            // Dev talks to the Vite server directly; there is no server to wait on.
+            if cfg!(debug_assertions) {
+                let url: Url = DEV_URL.parse().map_err(|e| format!("Invalid development URL: {e}"))?;
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url))
+                    .title(WINDOW_TITLE)
+                    .build()?;
                 return Ok(());
             }
-            let (child, port) = start_backend(app.handle())?;
-            wait_for_backend(port)?;
-            *app.state::<Backend>().0.lock().map_err(|_| "Backend lock poisoned")? = Some(child);
-            let url: Url = format!("http://127.0.0.1:{port}").parse().map_err(|e| format!("Invalid backend URL: {e}"))?;
-            let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url)).build()?;
+
+            let backend: Url = BACKEND_URL.parse().map_err(|e| format!("Invalid backend URL: {e}"))?;
+
+            if backend_ready() {
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::External(backend))
+                    .title(WINDOW_TITLE)
+                    .build()?;
+                return Ok(());
+            }
+
+            // Not answering yet — either mid-start or not installed. Show the bundled status
+            // page and swap it for the real UI as soon as the server comes up. The polling
+            // lives here rather than in the page because the page is served from the webview's
+            // own origin, so its fetch to :7070 would be blocked by CORS.
+            let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title(WINDOW_TITLE)
+                .build()?;
+
+            // Detached: the process owns this thread, so it ends when the app does.
+            thread::spawn(move || loop {
+                if backend_ready() {
+                    let _ = window.navigate(backend.clone());
+                    return;
+                }
+                thread::sleep(Duration::from_millis(1000));
+            });
+
             Ok(())
         })
-        .build(tauri::generate_context!())
-        .expect("error while building LM-WebUI desktop application")
-        .run(|app, event| {
-            if let RunEvent::Exit = event {
-                if let Ok(mut backend) = app.state::<Backend>().0.lock() {
-                    if let Some(mut child) = backend.take() {
-                        let _ = child.kill();
-                        let _ = child.wait();
-                    }
-                }
-            }
-        });
+        .run(tauri::generate_context!())
+        .expect("error while running LM-WebUI desktop application");
 }

@@ -67,16 +67,6 @@ export default function Composer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [modelOpen, setModelOpen] = useState(false);
   const isMobile = useIsMobile();
-
-  // Image mode disables web search, but the user's *preference* is left alone — the suppression is
-  // derived here rather than written back to the state.
-  //
-  // This used to save/restore `isSearchEnabled` through a Composer-local ref, which broke in the
-  // case it had to survive: `isImageMode` is also reset by useChatCreation's send `finally`, which
-  // runs outside this component. Switch views mid-generation and the ref died with the unmounted
-  // Composer, so the restore never ran and `isSearchEnabled` — owned by useUIStateManagement, which
-  // stays mounted — stayed false for good. The toggle lives inside the "+" popover, so nothing
-  // showed it, and every later search silently did not happen.
   const searchActive = isSearchEnabled && !isImageMode;
 
   useEffect(() => {
@@ -168,10 +158,10 @@ export default function Composer({
   };
 
   return (
-    <div className="border-none backdrop-blur-sm bg-transparent pt-2">
+    <div className="border-none backdrop-blur-sm bg-transparent pt-1">
       <Popover open={modelOpen} onOpenChange={setModelOpen}>
       <PopoverAnchor asChild>
-      <div className="mx-auto flex flex-col rounded-3xl border border-zinc-400/40 bg-transparent dark:border-zinc-800/90 shadow-inner transition-all duration-200 relative">
+      <div className="mx-auto flex flex-col rounded-4xl border border-zinc-400/40 bg-primary-foreground dark:border-zinc-800/70 shadow-inner transition-all duration-200 relative">
         {uploadedFiles.length > 0 && (
           <div className="px-4 pt-3 pb-1 flex flex-wrap gap-2">
             {uploadedFiles.map(({ file, previewUrl }, index) => (
@@ -226,9 +216,7 @@ export default function Composer({
           />
         </div>
 
-        {/* max-md:flex-wrap is the backstop — the model trigger and send button together can
-            exceed the row at 320px, and nothing in the row can shrink. */}
-        <div className="flex items-center justify-between px-2 pb-2 pl-3 md:px-3 md:pb-3 md:pl-4 max-md:flex-wrap">
+        <div className="flex items-center justify-between px-2 pb-2 pl-3 md:px-3 md:pb-3 md:pl-2 max-md:flex-wrap">
           <div className="flex items-center gap-1">
             <input
               type="file"
@@ -238,7 +226,6 @@ export default function Composer({
               ref={fileInputRef}
               onChange={handleFileSelect}
             />
-            {/* Unified "+" menu: upload + tool toggles (frontier style) */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button
@@ -306,18 +293,10 @@ export default function Composer({
               </PopoverContent>
             </Popover>
 
-            {/* Active tool badges inline.
-                Two things had to be right for this to be visible on a phone:
-                  • `hidden sm:inline-flex` made it `display: none` below 640px — fixed.
-                  • `text-neutral-600` with no dark variant is ~2.4:1 on the dark composer
-                    background, i.e. invisible. Phones default to dark mode, which is why it still
-                    "did not show" after the first fix.
-                Neutral pill in the composer's own zinc, with the surface drawn from the same
-                colour at low opacity — no accent tint, the glyph is the signal. */}
             {searchActive && (
               <span
                 title="Web search is on"
-                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-zinc-500/10 text-zinc-600 dark:text-zinc-400 border border-zinc-500/20"
+                className="inline-flex items-center gap-1 rounded-full p-0.5 text-[10px] font-medium text-neutral-400/50 dark:text-neutral-600/50"
               >
                 <Globe className="w-4 h-4" />
               </span>
@@ -343,8 +322,8 @@ export default function Composer({
                         "imagen",
                         "-image",
                         "gemini-3",
-                        "gemini-2.5-flash-image",
-                        "gguf",
+                        "-flash-image",
+                        "sd",
                       ].some((k) => m.toLowerCase().includes(k)),
                     )
                   : availableModels || []
@@ -383,7 +362,7 @@ export default function Composer({
       </div>
       </PopoverAnchor>
       </Popover>
-      <div className="flex items-center justify-center text-[7px] text-neutral-500/50 mt-1 -mb-1">
+      <div className="flex items-center justify-center text-[7px] text-neutral-500/50 mt-1 -mb-2.5">
         <p>LLM can make mistakes, please double check</p>
       </div>
     </div>

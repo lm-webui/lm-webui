@@ -18,13 +18,14 @@ web/dist/
 web/coverage/
 # Desktop (Tauri) build artifacts — Rust target dir is large; Cargo.lock IS committed
 desktop/src-tauri/target/
-desktop/src-tauri/binaries/
-desktop/src-tauri/web-dist/
-desktop/.pyinstaller/
+desktop/src-tauri/gen/schemas/
 # Environment Var
-web/.env.local
-web/.env.production
+# Wildcard rather than one line per mode: a bare web/.env is loaded by Vite in EVERY mode,
+# so an unnamed mode file used to slip through unnoticed.
+web/.env*
+!web/.env.example
 backend/.env
+!backend/.env.example
 secrets/
 .secrets/
 .dev

@@ -230,9 +230,16 @@ async def health():
 
 # CORS — explicit origins (browsers reject `*` with credentials).
 # Override via CORS_ORIGINS (comma-separated) for the deployed origin.
+#
+# Both spellings of loopback are listed because they are distinct origins to a browser. The
+# desktop app has to load the UI from 127.0.0.1 — "localhost" resolves to ::1 first on macOS
+# and the service binds IPv4 only — so trusting just "localhost" rejected every preflighted
+# request out of the packaged app with a bare 400.
 _cors_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", "").split(",") if o.strip()] or [
     "http://localhost:5177",
+    "http://127.0.0.1:5177",
     "http://localhost:7070",
+    "http://127.0.0.1:7070",
 ]
 app.add_middleware(
     CORSMiddleware,

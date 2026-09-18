@@ -146,7 +146,14 @@ ensure_mlx() {
   if [ "$(uname)" = "Darwin" ]; then
     if [ -f "$LMWEBUI_HOME/.venv/bin/python" ] && ! "$LMWEBUI_HOME/.venv/bin/python" -c "import mlx" 2>/dev/null; then
       echo "   Installing MLX (Apple Silicon)..."
-      "$LMWEBUI_HOME/.venv/bin/python" -m pip install mlx mlx-lm mlx-optiq --quiet 2>&1 || echo "   ⚠️ MLX install failed (Apple Silicon only)."
+      # `python -m pip` is not enough: the venv is built with uv and ships no pip, so this
+      # silently failed on every update (the || swallowed "No module named pip"). Missing
+      # mlx is a no-op here, which is why it went unnoticed. Same pattern as install.sh.
+      if command -v uv &>/dev/null; then
+        uv pip install mlx mlx-lm mlx-optiq --python "$LMWEBUI_HOME/.venv/bin/python" --quiet 2>&1 || echo "   ⚠️ MLX install failed (Apple Silicon only)."
+      else
+        "$LMWEBUI_HOME/.venv/bin/python" -m pip install mlx mlx-lm mlx-optiq --quiet 2>&1 || echo "   ⚠️ MLX install failed (Apple Silicon only)."
+      fi
     else
       echo "   MLX: present"
     fi

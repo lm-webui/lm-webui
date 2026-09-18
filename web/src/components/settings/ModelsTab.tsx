@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { fetchModels, listApiKeys } from "@/utils/api";
+import { MODELS_CHANGED_EVENT } from "@/features/models/modelEvents";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,59 +58,64 @@ export function ModelsTab() {
   }, []);
 
   // Load models and connection status
-  useEffect(() => {
-    const loadModelsAndConnections = async () => {
-      setIsLoading(true);
-      try {
-        // Get stored API keys to determine connected providers (backend provider names)
-        const storedKeys = await listApiKeys();
-        const connected = new Set(storedKeys.map((key: any) => key.provider));
-        setConnectedProviders(connected);
+  const loadModelsAndConnections = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // Get stored API keys to determine connected providers (backend provider names)
+      const storedKeys = await listApiKeys();
+      const connected = new Set(storedKeys.map((key: any) => key.provider));
+      setConnectedProviders(connected);
 
-        const backendToFrontendMapping: Record<string, string> = {
-          'openai': 'openai',
-          'google': 'google',
-          'anthropic': 'anthropic',
-          'xai': 'xai',
-          'deepseek': 'deepseek',
-          'vllm': 'vllm',
-          'ollama': 'ollama',
-          'gguf': 'gguf',
-          'mlx': 'mlx',
-        };
+      const backendToFrontendMapping: Record<string, string> = {
+        'openai': 'openai',
+        'google': 'google',
+        'anthropic': 'anthropic',
+        'xai': 'xai',
+        'deepseek': 'deepseek',
+        'vllm': 'vllm',
+        'ollama': 'ollama',
+        'gguf': 'gguf',
+        'mlx': 'mlx',
+      };
 
-        // Fetch all models from backend
-        const allModelsResponse = await fetchModels(undefined, { allProviders: true });
-        const modelsByProvider = allModelsResponse as Record<string, string[]>;
+      // Fetch all models from backend
+      const allModelsResponse = await fetchModels(undefined, { allProviders: true });
+      const modelsByProvider = allModelsResponse as Record<string, string[]>;
 
-        // Convert to our format
-        const providerData: Record<string, { models: ModelInfo[] }> = {};
+      // Convert to our format
+      const providerData: Record<string, { models: ModelInfo[] }> = {};
 
-        Object.entries(modelsByProvider).forEach(([backendProvider, modelNames]) => {
-          // Map backend provider name to frontend provider name
-          const frontendProvider = backendToFrontendMapping[backendProvider] || backendProvider;
+      Object.entries(modelsByProvider).forEach(([backendProvider, modelNames]) => {
+        // Map backend provider name to frontend provider name
+        const frontendProvider = backendToFrontendMapping[backendProvider] || backendProvider;
 
-          // Convert model names to ModelInfo objects
-          const models: ModelInfo[] = modelNames.map(name => ({
-            id: name,
-            name: name,
-            provider: frontendProvider,
-          }));
+        // Convert model names to ModelInfo objects
+        const models: ModelInfo[] = modelNames.map(name => ({
+          id: name,
+          name: name,
+          provider: frontendProvider,
+        }));
 
-          providerData[frontendProvider] = { models };
-        });
+        providerData[frontendProvider] = { models };
+      });
 
-        setProviders(providerData);
-      } catch (error: any) {
-        console.error("Failed to load models:", error);
-        toast.error("Failed to load models from providers");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadModelsAndConnections();
+      setProviders(providerData);
+    } catch (error: any) {
+      console.error("Failed to load models:", error);
+      toast.error("Failed to load models from providers");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  // On mount, and again whenever a provider key or URL changes elsewhere in the app. This tab
+  // fetches every provider under a single cache key, so without its own listener it kept showing
+  // the pre-save lists even after the rest of the UI refreshed.
+  useEffect(() => {
+    loadModelsAndConnections();
+    window.addEventListener(MODELS_CHANGED_EVENT, loadModelsAndConnections);
+    return () => window.removeEventListener(MODELS_CHANGED_EVENT, loadModelsAndConnections);
+  }, [loadModelsAndConnections]);
 
   // Keep the selected provider on a connected one once the key list is known.
   useEffect(() => {

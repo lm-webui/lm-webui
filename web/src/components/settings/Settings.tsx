@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { fetchSettings, updateSettings, addApiKey, fetchModels, fetchImageModels, authFetch } from "@/utils/api";
+import { notifyModelsChanged } from "@/features/models/modelEvents";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -71,33 +72,13 @@ export function Settings({
   const [visionModels, setVisionModels] = useState<string[]>([]);
   const [localSearchEngine, setLocalSearchEngine] = useState("duckduckgo");
 
-  useEffect(() => {
-    const loadSettings = async () => {
-      try {
-        const settings = await fetchSettings();
-        setOpenAIKey(settings.openAIKey || "");
-        setOllamaEndpoint(settings.ollamaEndpoint || "http://localhost:11434");
-
-                        setGoogleKey(settings.googleKey || "");
-        setStreamingEnabled(settings.streamingEnabled !== false);
-        setTemperature([settings.temperature || 0.7]);
-        setMaxTokens([settings.max_tokens || settings.maxTokens || 2048]);
-        setTopP([settings.topP || 0.9]);
-        setSystemPrompt(settings.systemPrompt || systemPrompt);
-        setAutoTitleGeneration(settings.autoTitleGeneration !== false);
-        setImageProvider(settings.defaultImageProvider || "openai");
-        setImageModel(settings.defaultImageModel || "");
-        setVisionModel(settings.defaultVisionModel || "");
-        setLocalSearchEngine(settings.selectedSearchEngine || "duckduckgo");
-      } catch (error) {
-        console.error("Failed to load settings:", error);
-      }
-    };
-
-    if (isOpen || inline) {
-      loadSettings();
-      setLoadingModels(true);
-      Promise.all([
+  // Pulls the text/image/vision lists behind the Default Model dropdowns. Extracted from the
+  // effect below so saving settings can refresh them in place: the dialog closes on save, so
+  // without this the new key or URL would only show up on reopen.
+  const loadModelLists = useCallback(async () => {
+    setLoadingModels(true);
+    try {
+      await Promise.all([
         fetchModels(undefined, { allProviders: true }).then((res: any) => {
           const grouped = res as Record<string, string[]>;
           const all: string[] = [];
@@ -132,9 +113,40 @@ export function Settings({
         authFetch("/api/runtimes/vision/status").then((res: any) => {
           setVisionModels((res?.bundles || []).map((b: any) => b.name));
         }).catch(() => {}),
-      ]).finally(() => setLoadingModels(false));
+      ]);
+    } finally {
+      setLoadingModels(false);
     }
-  }, [isOpen, inline]);
+  }, []);
+
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const settings = await fetchSettings();
+        setOpenAIKey(settings.openAIKey || "");
+        setOllamaEndpoint(settings.ollamaEndpoint || "http://localhost:11434");
+
+                        setGoogleKey(settings.googleKey || "");
+        setStreamingEnabled(settings.streamingEnabled !== false);
+        setTemperature([settings.temperature || 0.7]);
+        setMaxTokens([settings.max_tokens || settings.maxTokens || 2048]);
+        setTopP([settings.topP || 0.9]);
+        setSystemPrompt(settings.systemPrompt || systemPrompt);
+        setAutoTitleGeneration(settings.autoTitleGeneration !== false);
+        setImageProvider(settings.defaultImageProvider || "openai");
+        setImageModel(settings.defaultImageModel || "");
+        setVisionModel(settings.defaultVisionModel || "");
+        setLocalSearchEngine(settings.selectedSearchEngine || "duckduckgo");
+      } catch (error) {
+        console.error("Failed to load settings:", error);
+      }
+    };
+
+    if (isOpen || inline) {
+      loadSettings();
+      loadModelLists();
+    }
+  }, [isOpen, inline, loadModelLists]);
 
   const saveSettings = async () => {
     const settings = {
@@ -169,6 +181,13 @@ export function Settings({
         );
         // Continue with settings save even if API key save fails
       }
+
+      // Saving here changes the OpenAI/Google keys and the Ollama endpoint, so the model
+      // lists every other surface is showing are stale. Clearing the cache is what makes
+      // the reload actually re-probe; before this the fetch was re-issued but the cache
+      // answered with the pre-save list.
+      notifyModelsChanged();
+      await loadModelLists();
 
       setIsOpen(false);
       toast.success("Settings saved successfully!");
