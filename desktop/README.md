@@ -41,6 +41,29 @@ Produces the bundle under `src-tauri/target/release/bundle/`. On a machine witho
 backend installed the app opens a status page and swaps in the real UI as soon as
 `http://localhost:7070/api/health` answers.
 
+## Releasing the macOS DMG
+
+```sh
+./scripts/release-dmg.sh [tag]      # tag defaults to v<version in package.json>
+```
+
+Builds the DMG here and attaches it to an existing GitHub release. There is no CI job for
+this: the build and the release are done on the same machine so the artifact that gets
+tested is the artifact that ships. The script also re-checks the things that shipped broken
+in 0.8.18 — signature, icon, and no bundled backend — because none of them make the build
+fail on their own.
+
+Needs only a macOS host, Rust, node, git and curl. `gh` is optional: with it the asset is
+uploaded automatically, without it the script builds and verifies as usual and prints the
+release page to drag the DMG onto.
+
+The DMG is uploaded as a **release asset**, never committed. It is a multi-MB binary and git
+keeps every version forever, so each rebuild would permanently grow every clone.
+
+Downloaders always get a Gatekeeper prompt, wherever the DMG is hosted — macOS quarantines
+anything downloaded and a locally built DMG only opens because it was never quarantined. See
+macOS signing below for the one thing that actually removes it.
+
 ## macOS signing
 
 `bundle.macOS.signingIdentity` is `"-"`, which is Tauri's ad-hoc signature. It seals the
