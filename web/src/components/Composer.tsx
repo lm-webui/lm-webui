@@ -306,9 +306,15 @@ export default function Composer({
               </PopoverContent>
             </Popover>
 
-            {/* Active tool badges inline */}
+            {/* Active tool badges inline.
+                Shown at every width: `hidden sm:inline-flex` made this `display: none` below
+                640px, so on a phone the search toggle gave no confirmation at all — the only
+                other sign of the state is the dot inside the "+" popover, which closes. */}
             {isSearchEnabled && (
-              <span className="hidden sm:inline-flex items-center gap-1 text-[10px] text-neutral-600 px-2 py-0.5 font-medium">
+              <span
+                title="Web search is on"
+                className="inline-flex items-center gap-1 text-[10px] text-neutral-600 px-2 py-0.5 font-medium"
+              >
                 <Globe className="w-4 h-4" />
               </span>
             )}
