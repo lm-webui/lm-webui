@@ -14,11 +14,20 @@ from app.chat.session_manager import get_chat_session_manager
 from app.chat.service import (
     ensure_conversation_exists,
     save_message,
-    should_summarize_conversation,
+)
+from app.memory import (
+    generate_summary,
+    get_conversation_messages,
+    get_unsummarized_messages,
+    should_summarize,
 )
 from app.services.usage_tracking import record_usage, estimate_tokens
 
 logger = logging.getLogger(__name__)
+
+# Conversations with a summarisation task in flight. Without this, a conversation that keeps
+# crossing the token threshold spawns overlapping background summaries — each one a provider call.
+_summarizing: set[str] = set()
 
 # Follow-ups that plausibly reference previously attached files (vs. chit-chat like "thanks").
 _FOLLOWUP_QUESTION = (
@@ -41,7 +50,11 @@ def _build_sources_event(ctx) -> ModelEvent:
     """
     from app.capabilities.results import MultimodalResult, RetrievalResult, SearchResult, VisionResult
 
-    context_used = {"memory": False, "rag": False, "vision": False, "web_search": False, "audio": False}
+    # "memory" is the one flag no capability sets: it reports whether a conversation summary was
+    # injected into the prompt, which the prompt builder records in ctx.context_info. It used to be
+    # hardcoded False forever, so the UI's memory badge could never light up.
+    context_used = {"memory": bool(getattr(ctx, "context_info", {}).get("memory")),
+                    "rag": False, "vision": False, "web_search": False, "audio": False}
     sources: list[dict] = []
     retrieved_images: list[str] = []
     search_query = ""
@@ -186,9 +199,8 @@ class OrchestratorController:
                     if not msg or not _is_followup_question(msg):
                         chat_request.file_references = []
                     else:
-                        from app.chat.service import get_conversation_messages
                         latest: list = []
-                        for m in reversed(get_conversation_messages(actual_conversation_id) or []):
+                        for m in reversed(get_conversation_messages(actual_conversation_id, user_id) or []):
                             att = (m.get("metadata") or {}).get("attachments")
                             if isinstance(att, list) and att:
                                 latest = att
@@ -342,16 +354,32 @@ class OrchestratorController:
                     duration_ms=int((time.monotonic() - usage_started) * 1000),
                 )
 
-            # 7. Background Task: rolling conversation summary.
-            # Runs after the response streams, in a separate asyncio task (the GGUF
-            # inference inside is thread-offloaded), so it never blocks the reply.
-            if should_summarize_conversation(actual_conversation_id):
+            # 7. Background task: roll the conversation summary forward.
+            # Fire-and-forget *after* the response has streamed, so a slow (or failing) provider
+            # call can never delay or break the reply the user already received.
+            if should_summarize(actual_conversation_id, user_id):
                 try:
-                    from app.chat.service import generate_conversation_summary_llm, get_last_n_messages
-                    hist = get_last_n_messages(actual_conversation_id, n=20)
-                    asyncio.create_task(
-                        generate_conversation_summary_llm(actual_conversation_id, hist, user_id)
-                    )
+                    # One at a time per conversation. The old code was cheap to duplicate because it
+                    # bailed at a missing local model file; now each run is a real provider call, so
+                    # overlapping tasks on a long conversation would be a real spend.
+                    if actual_conversation_id not in _summarizing:
+                        _summarizing.add(actual_conversation_id)
+
+                        async def _summarize(cid=actual_conversation_id, pid=provider_id,
+                                             mid=model_id, key=ctx.api_key, burl=base_url):
+                            try:
+                                # Only what the summary does not already cover — feeding it the same window the prompt
+                                # injects made the summary a lossy duplicate of visible text.
+                                hist = get_unsummarized_messages(cid, user_id)
+                                await generate_summary(
+                                    cid, hist, user_id,
+                                    provider_id=pid or "", model_id=mid or "",
+                                    api_key=key, base_url=burl,
+                                )
+                            finally:
+                                _summarizing.discard(cid)
+
+                        asyncio.create_task(_summarize())
                 except Exception as exc:
                     logger.warning("Summary scheduling failed: %s", exc)
 

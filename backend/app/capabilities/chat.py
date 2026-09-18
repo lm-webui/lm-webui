@@ -55,7 +55,11 @@ async def execute(ctx: CapabilityContext) -> Tuple[Any, GenerateRequest]:
         ctx.chat_request.message,
         ctx.results,
         ctx.conversation_id,
+        ctx.user_id,
         system_prompt=ctx.system_prompt,
+        # Reports back what went in (was a conversation summary used?) so the controller can fill
+        # in `context_used.memory` without repeating the summary read.
+        info=ctx.context_info,
     )
     # Linked-video transcript (YouTube summary) — inject as context so the LLM summarizes it.
     if getattr(ctx, "transcript", ""):

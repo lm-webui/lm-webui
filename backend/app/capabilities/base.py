@@ -26,6 +26,10 @@ class CapabilityContext:
     # mutable outputs
     results: List[Any] = field(default_factory=list)
     messages: List[dict] = field(default_factory=list)
+    # What the prompt builder actually injected — e.g. {"memory": True} when a conversation summary
+    # made it into the prompt. Filled in by build_messages so the controller can report it in
+    # `context_used` without re-reading the summary it just read.
+    context_info: dict = field(default_factory=dict)
     images: Optional[List[str]] = None
     vision_model: str = ""
     vision_provider: Any = None

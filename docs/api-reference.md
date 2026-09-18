@@ -72,7 +72,7 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 | PATCH | `/api/history/conversation/{id}/metadata` | Update conversation metadata |
 | GET | `/api/history/conversation/{id}/files` | Files attached to a conversation |
 | GET | `/api/history/stats` | History statistics |
-| GET | `/api/context/{conversation_id}` | Conversation context (RAG) |
+| GET | `/api/context/{conversation_id}` | Conversation memory for the caller: rolling summary + recent turns |
 
 ## Models
 

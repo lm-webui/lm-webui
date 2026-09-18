@@ -1,7 +1,6 @@
 """PromptBuilder — the only place that merges typed capability results into LLM messages."""
 from __future__ import annotations
 
-import re
 from typing import Any, List
 
 from .results import FileResult, MultimodalResult, RetrievalResult, SearchResult, VisionResult
@@ -50,19 +49,6 @@ def _approx_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
-# Signals that the current request depends on prior context (pronouns/references) —
-# only then do we inject full conversation history. A standalone request gets minimal history.
-_FOLLOWUP_RE = re.compile(
-    r"\b(it|this|that|those|they|them|the above|the (file|doc|pdf|image|picture|chart)|"
-    r"go (deeper|further)|more (detail|on)|explain|refer|mention|earlier|before|"
-    r"continue|go on|proceed|again)\b", re.I)
-
-
-def _is_followup(message: str) -> bool:
-    m = (message or "").strip()
-    return bool(m.rstrip().endswith("?") or _FOLLOWUP_RE.search(m))
-
-
 def _trim(sections: List[str], budget: int) -> List[str]:
     """Keep sections in priority order while the total stays within `budget`."""
     used = 0
@@ -76,20 +62,29 @@ def _trim(sections: List[str], budget: int) -> List[str]:
     return kept
 
 
+# How many turns to fetch before budget-trimming. Deliberately larger than what usually fits:
+# the budget trims anyway, so this only ever adds context on long conversations.
+HISTORY_FETCH = 20
+
+
 def build_messages(
     user_message: str,
     results: List[Any],
     conversation_id: str,
+    user_id: int,
     system_prompt: str = "",
+    info: dict | None = None,
 ) -> List[dict]:
     """Construct messages from user_message + typed results + conversation history.
 
     Enforces a bounded prompt so generation time stays consistent regardless of history
     length: capability context is capped to `context_token_budget`, history (summary +
     recent messages) to `history_token_budget`, and the current user message is always kept.
-    Full history is injected only for follow-ups that reference prior context.
+
+    History is injected on every turn — the budget is the only limiter. Pass `info` to receive
+    what was injected (currently `{"memory": bool}`) without re-querying for it.
     """
-    from app.chat.service import get_conversation_summary, get_last_n_messages
+    from app.memory import assemble
     from app.core.config_manager import get_config
     try:
         ctx_budget = get_config().rag.context_token_budget
@@ -117,27 +112,31 @@ def build_messages(
     if context:
         system_prompt += CONTEXT_INTRO + context
 
-    # 2. Bounded history — only for follow-ups that reference prior context. The summary is
-    #    merged into the system prompt (one system message), recent messages added as turns.
-    followup = _is_followup(user_message)
-    if followup:
-        summary = get_conversation_summary(conversation_id)
-        if summary:
-            system_prompt += f"\n\nConversation Summary (prior turns): {summary}"
-        recent = get_last_n_messages(conversation_id, n=5)  # chronological (oldest first)
-        # Keep newest messages that fit the budget (drop oldest first).
-        kept: List[dict] = []
-        used = 0
-        for m in recent:
-            cost = _approx_tokens(m["content"])
-            if used + cost > hist_budget:
-                break
-            kept.append(m)
-            used += cost
+    # 2. Bounded history — ALWAYS, not only for follow-up-shaped messages. The old gate required a
+    #    "?" or a pronoun, so "write a README" arrived with no conversation at all and the model
+    #    had to guess what the conversation was about. hist_budget is the only limiter now.
+    #    The summary goes into the system prompt (one system message); recent turns become messages.
+    #    One call, so the owner is applied to both reads in the same place.
+    mem = assemble(conversation_id, user_id, limit=HISTORY_FETCH)
+    if mem.summary:
+        system_prompt += f"\n\nConversation Summary (prior turns): {mem.summary}"
+    if info is not None:
+        # Lets the caller report `context_used.memory` without a second query.
+        info["memory"] = mem.has_summary
+
+    # Fetch generously and let the budget trim: a short conversation costs nothing extra, a long
+    # one gives the model far more to work with than the old fixed 5.
+    kept: List[dict] = []
+    used = 0
+    for m in reversed(mem.recent):      # walk newest → oldest, stop when the budget is spent
+        cost = _approx_tokens(m["content"])
+        if used + cost > hist_budget:
+            break
+        kept.insert(0, m)               # re-reverse into chronological order
+        used += cost
 
     messages: List[dict] = [{"role": "system", "content": system_prompt}]
-    if followup:
-        messages.extend(kept)
+    messages.extend(kept)
 
     # 3. Current user message — always kept (the anchor).
     messages.append({"role": "user", "content": user_message})

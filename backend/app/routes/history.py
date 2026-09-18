@@ -8,9 +8,9 @@ Uses unified conversation manager for consistent operations.
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from app.security.auth.dependencies import get_current_user
 from app.database import get_db
+from app.memory import get_conversation_messages
 from app.chat.service import (
     get_user_conversations,
-    get_conversation_messages,
     update_conversation_title,
     archive_conversation,
     restore_conversation,
@@ -50,17 +50,17 @@ async def list_conversations(
 
 @router.get("/conversation/{conversation_id}")
 async def get_conversation(conversation_id: str, user_id: dict = Depends(get_current_user)):
-    """Get specific conversation with messages"""
-    # Use unified conversation manager
-    messages = get_conversation_messages(conversation_id)
-    
-    # Verify conversation belongs to user and get title
+    """Get specific conversation with messages."""
+    # Ownership is enforced inside the query now, so the read cannot return another user's
+    # conversation — previously the messages were fetched first and only then checked.
+    messages = get_conversation_messages(conversation_id, user_id["id"])
+
     db = get_db()
     conv = db.execute(
         "SELECT id, title FROM conversations WHERE id = ? AND user_id = ?",
         (conversation_id, user_id["id"])
     ).fetchone()
-    
+
     if not conv:
         raise HTTPException(404, "Conversation not found")
     

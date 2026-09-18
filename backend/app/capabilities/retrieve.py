@@ -21,10 +21,10 @@ async def execute(ctx: CapabilityContext) -> RetrievalResult:
 
     if rag_cfg is not None and getattr(rag_cfg, "enabled", False) and getattr(rag_cfg, "query_rewrite", False) and ctx.conversation_id:
         try:
-            from app.chat.service import get_last_n_messages
+            from app.memory import get_recent_turns
             from app.rag.query_rewriter import rewrite_query
             _key = get_user_api_key(ctx.user_id, ctx.provider_id)
-            history = get_last_n_messages(ctx.conversation_id, n=6)
+            history = get_recent_turns(ctx.conversation_id, ctx.user_id, limit=6)
             rag_query = await rewrite_query(ctx.chat_request.message, history, ctx.provider, ctx.model_id, _key)
         except Exception as exc:
             logger.warning("Query rewrite skipped: %s", exc)
