@@ -15,6 +15,15 @@ LMWEBUI_HOME="${LMWEBUI_HOME:-$HOME/.lmwebui}"
 # The one source: a release tarball. There is no git-clone path — two source layouts meant every
 # consumer branched on them, and the branches drifted apart.
 RELEASE_URL="https://github.com/lm-webui/lm-webui/releases/latest/download/lm-webui.tar.gz"
+# The desktop app is a separate release asset, fetched here rather than linked, because how it
+# is downloaded decides whether macOS will open it at all. See install_macos_app().
+#
+# DESKTOP_DMG_URL is only the conventional name. The tarball is always published by CI under a
+# fixed name, but the DMG has shipped as both LM-WebUI-macos-arm64.dmg (release-dmg.sh) and
+# Tauri's own LM-WebUI_<version>_<arch>.dmg (a hand-uploaded build), so any hardcoded path 404s
+# the moment the name changes. resolve_desktop_dmg_url() asks what the release actually carries.
+RELEASE_API="https://api.github.com/repos/lm-webui/lm-webui/releases/latest"
+DESKTOP_DMG_URL="https://github.com/lm-webui/lm-webui/releases/latest/download/LM-WebUI-macos-arm64.dmg"
 
 print_banner() {
   echo -e "${BLUE}"
@@ -325,6 +334,113 @@ install_cli() {
   fi
 }
 
+resolve_desktop_dmg_url() {
+  # Print the download URL of the newest release's DMG asset, or nothing if it has none.
+  #
+  # The asset name is not dependable (see DESKTOP_DMG_URL), so ask the API instead of guessing.
+  # python3 is already required by this installer — lan_ip() and the version checks use it.
+  curl -fsSL --max-time 20 "$RELEASE_API" 2>/dev/null | python3 -c '
+import sys, json
+try:
+    assets = json.load(sys.stdin).get("assets", [])
+except Exception:
+    sys.exit(0)
+dmg = [a["browser_download_url"] for a in assets
+       if a.get("name", "").endswith(".dmg") and a.get("browser_download_url")]
+print(dmg[0] if dmg else "")
+' 2>/dev/null
+}
+
+install_macos_app() {
+  # Apple Silicon only — the published DMG is arm64.
+  #
+  # The app is downloaded with curl rather than clicked from the releases page, and that is the
+  # entire point of this step. Browsers tag every download with com.apple.quarantine, and
+  # Gatekeeper only consults spctl for quarantined files. The app is ad-hoc signed (it has no
+  # Developer ID — see desktop/README.md), which spctl always reports as "rejected", so a
+  # browser-downloaded copy is refused with "Apple cannot check it for malicious software"
+  # while this byte-identical file opens normally. curl sets no quarantine attribute, so the
+  # check never runs and no signature change is needed.
+  [ "$(uname)" = "Darwin" ] || return 0
+  if [ "$(uname -m)" != "arm64" ]; then
+    log_info "Desktop app: skipping (the published DMG is Apple Silicon only)."
+    return 0
+  fi
+  command -v hdiutil >/dev/null 2>&1 || return 0
+
+  # Opt-in, always. The app is a GUI extra on top of the CLI and the web UI, and it is the only
+  # thing this installer writes outside $LMWEBUI_HOME — it lands in /Applications. Linux never
+  # reaches this function at all, and on macOS a plain `curl | bash` must not silently drop an
+  # app into /Applications, so the default answer is no.
+  #
+  #   unset            ask (default no)
+  #   LMWEBUI_INSTALL_APP=1   install without asking, for scripted setups
+  #   LMWEBUI_INSTALL_APP=0   never
+  case "${LMWEBUI_INSTALL_APP:-ask}" in
+    0|false|no)
+      log_info "Desktop app: skipped (LMWEBUI_INSTALL_APP=$LMWEBUI_INSTALL_APP)."
+      return 0 ;;
+    1|true|yes) ;;
+    *)
+      # stdin is this script itself when it runs as `curl | bash`, so a plain `read` would
+      # consume the script. Ask the terminal instead. The subshell probe is not the same as
+      # `-r`: the device can exist yet be unopenable (no controlling terminal), and a bare
+      # failed redirection would print a raw "device not configured" error mid-install.
+      if ( : < /dev/tty ) 2>/dev/null; then
+        printf "%s" "   Also install the desktop app to /Applications? [y/N] "
+        local reply=""
+        read -r reply < /dev/tty || true
+        case "$reply" in
+          [yY]*) ;;
+          *)
+            log_info "Desktop app: skipped. Re-run with LMWEBUI_INSTALL_APP=1, or install the DMG from the releases page."
+            return 0 ;;
+        esac
+      else
+        log_info "Desktop app: skipped — no terminal to confirm. Use LMWEBUI_INSTALL_APP=1 to install it."
+        return 0
+      fi ;;
+  esac
+
+  local dest="/Applications/LM-WebUI.app"
+  [ -d "$dest" ] && log_info "Desktop app: replacing the existing /Applications/LM-WebUI.app."
+
+  log_info "Downloading desktop app..."
+  local url
+  url="$(resolve_desktop_dmg_url)"
+  [ -n "$url" ] || url="$DESKTOP_DMG_URL"
+
+  local work; work="$(mktemp -d)"
+  local dmg="$work/LM-WebUI.dmg"
+  if ! curl -fsSL --retry 3 --retry-delay 2 -o "$dmg" "$url"; then
+    log_warning "Desktop app download failed — skipping. Get it from the releases page."
+    rm -rf "$work"; return 0
+  fi
+
+  local mnt="$work/mnt"; mkdir -p "$mnt"
+  if ! hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt" >/dev/null 2>&1; then
+    log_warning "Desktop app image would not mount — skipping."
+    rm -rf "$work"; return 0
+  fi
+  if [ ! -d "$mnt/LM-WebUI.app" ]; then
+    log_warning "No LM-WebUI.app inside the disk image — skipping."
+    hdiutil detach "$mnt" >/dev/null 2>&1 || true; rm -rf "$work"; return 0
+  fi
+
+  rm -rf "$dest"
+  if cp -R "$mnt/LM-WebUI.app" /Applications/ 2>/dev/null; then
+    # Belt and braces. curl sets no quarantine, but if anything in the fetch chain ever did, the
+    # app would be blocked exactly as a browser download is.
+    xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
+    log_success "Desktop app: /Applications/LM-WebUI.app"
+  else
+    log_warning "Could not copy the app into /Applications — skipping."
+  fi
+
+  hdiutil detach "$mnt" >/dev/null 2>&1 || true
+  rm -rf "$work"
+}
+
 wait_for_ready() {
   log_info "Waiting for application to start..."
   local spin='-\|/'
@@ -376,6 +492,7 @@ main() {
   check_gguf_runtime
   install_service
   install_cli
+  install_macos_app
   wait_for_ready
   show_instructions
 }

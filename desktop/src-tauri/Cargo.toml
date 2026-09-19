@@ -1,6 +1,6 @@
 [package]
 name = "lm-webui-desktop"
-version = "0.8.20"
+version = "0.8.21"
 description = "LM-WebUI desktop application"
 authors = ["LM-WebUI"]
 edition = "2021"

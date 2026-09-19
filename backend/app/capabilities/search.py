@@ -54,6 +54,78 @@ def _clean_query(message: str) -> str:
     return " ".join(kept + urls)[:200]
 
 
+# The rewrite prompt is deliberately terse. It runs on every search, before the search, so its
+# output is capped hard (48 tokens) — anything longer is the model explaining itself, which
+# _sanitize_query then throws away.
+REWRITE_INSTRUCTION = (
+    "Rewrite the user's message as a web search query. "
+    "Reply with the query only: no quotes, no explanation, no trailing punctuation. "
+    "Keep names, versions and numbers exactly as written. "
+    "If the message is already a good query, repeat it unchanged."
+)
+
+
+def _sanitize_query(raw: str) -> str:
+    """Pull a query out of whatever the model actually returned.
+
+    Returns "" when nothing usable came back, which makes the caller fall back to
+    _clean_query — a failed rewrite must never cost the user their search.
+    """
+    lines = [ln.strip() for ln in (raw or "").splitlines() if ln.strip()]
+    if not lines:
+        return ""
+    text = lines[0]
+    # A label on its own line — "Here is the query:" — carries nothing; the query is the next one.
+    if text.endswith(":") and len(lines) > 1:
+        text = lines[1]
+    # "Search query: X" — keep the part after the label. Split on ": " rather than ":" so a
+    # search operator keeps its prefix: "site:docs.python.org ..." has no space after the colon
+    # and is all query, while a label always does.
+    if ": " in text:
+        head, _, tail = text.partition(": ")
+        if len(head) <= 20 and tail.strip():
+            text = tail.strip()
+    text = text.strip().strip('"\'`“”').strip().rstrip(".").strip()
+    # A paragraph back means it ignored the instruction and answered instead.
+    if not text or len(text) > 200:
+        return ""
+    return text
+
+
+async def _rewrite_query(ctx: CapabilityContext) -> str:
+    """Ask the model for a search query instead of mining one out of the sentence.
+
+    _clean_query can only strip stopwords, so it cannot resolve "what about the second one?" or
+    reorder a comparison into something an index responds to. This is one small non-streaming
+    generation on the user's own model, the same shape as vision._describe: it runs inside the
+    capability, uses the provider already on the context, and returns "" on any failure.
+    """
+    message = (ctx.chat_request.message or "").strip() if ctx.chat_request else ""
+    if not message or not ctx.provider or not ctx.model_id:
+        return ""
+    try:
+        from app.providers.schemas import GenerateRequest
+        req = GenerateRequest(
+            model=ctx.model_id,
+            messages=[
+                {"role": "system", "content": REWRITE_INSTRUCTION},
+                {"role": "user", "content": message[:1000]},
+            ],
+            max_tokens=48,
+            temperature=0.0,
+            stream=False,
+        )
+        resp = await ctx.provider.generate(req)
+        query = _sanitize_query(getattr(resp, "content", "") or "")
+        if query:
+            logger.info("Query rewrite: %r -> %r", message[:60], query[:60])
+        return query
+    except Exception as exc:
+        # Never fatal: the caller falls back to keyword extraction.
+        logger.warning("Query rewrite failed (%s); falling back to keyword extraction", exc)
+        return ""
+
+
 def _get_search_cx(user_id: int) -> str | None:
     """Read the user's stored Google Programmable Search Engine ID (cx)."""
     try:
@@ -102,7 +174,19 @@ async def execute(ctx: CapabilityContext) -> None:
     if not message:
         return SearchResult()
     try:
-        query = _clean_query(message)[:200]
+        # Model-written query first; keyword extraction is the fallback, not the default. This
+        # stage keeps the planner's LIVE/WEB_HINTS gate, so the only change is query quality —
+        # whether a search runs at all is still decided upstream.
+        #
+        # The fallback is silent by design but logged, because it is expected rather than
+        # exceptional: reasoning models (Qwen3-style, granite, zeto-*) spend the whole token
+        # budget in the `reasoning` field and return empty `content`, and no prompt or parameter
+        # on the Ollama endpoint talks them out of it. Those models keep today's behaviour.
+        rewritten = await _rewrite_query(ctx)
+        if not rewritten:
+            logger.info("Query rewrite unavailable for %s; using keyword extraction",
+                        ctx.model_id or "unknown model")
+        query = (rewritten or _clean_query(message))[:200]
         engine, searxng_url = _get_search_config(ctx.user_id)
         from app.search import get_search_provider
         from app.search.fetch import enrich

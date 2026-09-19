@@ -64,6 +64,21 @@ Downloaders always get a Gatekeeper prompt, wherever the DMG is hosted — macOS
 anything downloaded and a locally built DMG only opens because it was never quarantined. See
 macOS signing below for the one thing that actually removes it.
 
+### Installing the app via install.sh
+
+`install.sh` can install this app, but only on Apple Silicon and only when asked. It fetches
+the DMG with curl rather than sending users to a browser, for the reason above: curl sets no
+quarantine attribute, so Gatekeeper never gets the chance to refuse the ad-hoc signature.
+
+```sh
+curl -fsSL https://lmwebui.com/install.sh | bash                      # backend only (default)
+LMWEBUI_INSTALL_APP=1 curl -fsSL … | bash                             # also install the app
+```
+
+On macOS with a terminal it asks first, defaulting to no. Linux and Intel Macs skip it
+entirely — the published DMG is arm64. It is the only thing this installer writes outside
+`~/.lmwebui`, which is why it is never automatic.
+
 ## macOS signing
 
 `bundle.macOS.signingIdentity` is `"-"`, which is Tauri's ad-hoc signature. It seals the
