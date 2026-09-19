@@ -81,6 +81,18 @@ pass "code signature verifies"
   || fail "CFBundleIconFile is missing — the app would show a generic icon"
 [ -f "$app/Contents/Resources/icon.icns" ] || fail "Resources/icon.icns is missing"
 pass "icon present"
+
+# The deployment target is a declared floor, and a newer SDK can silently round it up —
+# Apple drops old targets from new SDKs over time. When that happens the app stops running on
+# every macOS older than the build machine's, which stays invisible until a user on an older
+# release cannot open it. Compare against tauri.conf.json so the config stays the one source
+# of truth and an SDK bump fails here instead of shipping.
+want_min="$(node -p "require('./desktop/src-tauri/tauri.conf.json').bundle.macOS.minimumSystemVersion")"
+got_min="$(vtool -show-build "$app/Contents/MacOS/lm-webui-desktop" | awk '/minos/{print $2}')"
+[ "$got_min" = "$want_min" ] \
+  || fail "deployment target is $got_min but tauri.conf.json declares $want_min — the app will not open on any macOS older than $got_min"
+pass "deployment target $got_min (matches tauri.conf.json)"
+
 [ ! -e "$app/Contents/Resources/binaries" ] || fail "a backend is bundled — the app must stay a shell"
 pass "no bundled backend"
 

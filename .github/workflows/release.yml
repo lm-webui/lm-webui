@@ -57,3 +57,85 @@ jobs:
           done
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || exit 1
           gh release upload "$GITHUB_REF_NAME" lm-webui.tar.gz --clobber
+
+  desktop-macos:
+    # The `build` job creates the release this one uploads to.
+    needs: build
+    # `macos-14` is the free arm64 (Apple Silicon) runner and matches the
+    # LM-WebUI-macos-arm64.dmg name / "Apple Silicon" claim. `macos-14-xlarge` is a
+    # PAID larger runner (Team/Enterprise) — it blocks free repos before any step runs.
+    # ponytail: to build Intel instead, use macos-14-large and rename to
+    # LM-WebUI-macos-x86_64.dmg — never publish a mislabeled binary.
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      # rust-toolchain.toml pins the channel, so this compiler is the same one a local build
+      # uses. Previously this installed "stable", which moved with every Rust release: CI and
+      # local binaries carried different rustc std hashes and differed by 4 code pages even
+      # with identical dependencies. rustup installs the pinned toolchain on demand.
+      - name: Install Rust toolchain
+        run: |
+          rustup show active-toolchain
+          rustc -vV
+
+      # `npm ci`, not `npm install`: the lock is in sync, and a release should not resolve
+      # whatever the registry happened to publish that day.
+      - name: Install desktop dependencies
+        run: cd desktop && npm ci
+
+      # The steps from here down mirror scripts/release-dmg.sh — that script is the local
+      # path to this same artifact, so keep the two in step.
+      - name: Build macOS DMG
+        run: |
+          cd desktop
+          npm run version:sync
+          npm run tauri -- build --bundles dmg
+
+      - name: Rename DMG to stable download name
+        run: |
+          # Newest by mtime: older DMGs accumulate in bundle/dmg, and `find | head -1` can
+          # pick a stale one from a previous version.
+          dmg=$(ls -t desktop/src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          test -n "$dmg"
+          cp "$dmg" LM-WebUI-macos-arm64.dmg
+
+      # Assert on the built artifact, not the config: Tauri writes CFBundleIconFile only when
+      # bundle.icon is set, and seals the bundle only when a signing identity exists. Neither
+      # failure errors the build, and both shipped broken in 0.8.18 as a "damaged and can't be
+      # opened" dialog and a blank icon. Mount with -mountpoint so a stale /Volumes entry
+      # cannot make the check pass against the wrong image.
+      - name: Verify the built app
+        run: |
+          mnt=$(mktemp -d)
+          hdiutil attach LM-WebUI-macos-arm64.dmg -nobrowse -readonly -mountpoint "$mnt"
+          app="$mnt/LM-WebUI.app"
+          test -d "$app"
+          codesign --verify --deep --strict "$app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$app/Contents/Info.plist")" = "icon.icns"
+          test -f "$app/Contents/Resources/icon.icns"
+          # The deployment target is a declared floor, and a newer SDK can silently round it
+          # up — Apple drops old targets from new SDKs over time. When that happens the app
+          # stops running on every macOS older than the runner's, and nobody notices until a
+          # user on an older release cannot open it. Comparing against tauri.conf.json makes
+          # a runner/SDK bump fail here instead of shipping, and keeps that config the single
+          # source of truth.
+          want_min="$(node -p "require('./desktop/src-tauri/tauri.conf.json').bundle.macOS.minimumSystemVersion")"
+          got_min="$(vtool -show-build "$app/Contents/MacOS/lm-webui-desktop" | awk '/minos/{print $2}')"
+          test "$got_min" = "$want_min" \
+            || { echo "deployment target is $got_min but tauri.conf.json declares $want_min — the app will not open on any macOS older than $got_min" >&2; exit 1; }
+          test ! -e "$app/Contents/Resources/binaries"
+          hdiutil detach "$mnt"
+
+      - name: Upload macOS DMG
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" LM-WebUI-macos-arm64.dmg --clobber

@@ -3,6 +3,7 @@ MLX Provider Implementation — local inference on Apple Silicon via mlx-lm.
 Loads models from ~/.lmwebui/models/mlx/<name>/ after download.
 Runs in-process (native install) — no external server needed.
 """
+import importlib.util
 import logging
 import asyncio
 import os
@@ -12,11 +13,11 @@ from typing import List, Optional, AsyncGenerator
 from ..base import BaseProvider
 from ..schemas import ModelMetadata, GenerateRequest, GenerateResponse, ModelEvent
 
-try:
-    from mlx_lm import load as _mlx_load, generate as _mlx_generate
-    HAS_MLX = True
-except ImportError:
-    HAS_MLX = False
+# Probed by spec, not imported. `import mlx_lm` pulls in MLX/Metal and allocates at module scope,
+# so importing it here made every `import app.providers.factory` — and therefore the whole app, and
+# every test that touches a route — pay for a framework most installs never use. It is imported
+# lazily at first generate() instead. find_spec answers "is it installed" without executing it.
+HAS_MLX = importlib.util.find_spec("mlx_lm") is not None
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,9 @@ class MLXProvider(BaseProvider):
             prompt += "<|im_start|>assistant\n"
 
             async def _run():
+                # Imported here so the cost lands on the one call that needs it. A broken install
+                # raises ImportError into the except below and surfaces as an error event.
+                from mlx_lm import load as _mlx_load, generate as _mlx_generate
                 loop = asyncio.get_event_loop()
                 model, tokenizer = await loop.run_in_executor(None, lambda: _mlx_load(model_path))
                 resp = await loop.run_in_executor(

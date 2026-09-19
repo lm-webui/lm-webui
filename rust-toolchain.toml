@@ -1,0 +1,15 @@
+# Pins the compiler for both local and CI builds.
+#
+# Without this, the CI job installed "stable" at run time, which resolved to whatever Rust
+# happened to be current that day. Verified by comparing a CI DMG against a local one for the
+# same commit: the two binaries embedded different rustc std hashes
+# (/rustc/48a229ce… vs /rustc/88d9e12a…), the crate set was identical, and the size differed
+# by 4 code pages (~17 KB) purely from the compiler change. A toolchain that drifts every six
+# weeks with no commit to blame makes "rebuild and compare" useless.
+#
+# Root-level on purpose: rustup searches upward from the working directory, so this applies
+# whether cargo runs from the repo root or from desktop/src-tauri.
+#
+# Bumping this is a deliberate act — change it here, and local and CI move together.
+[toolchain]
+channel = "1.98.0"
