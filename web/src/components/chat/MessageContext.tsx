@@ -2,10 +2,9 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ChevronDown, ChevronUp, Brain, FileText, Search, Clock, AudioLines, ExternalLink } from "lucide-react";
+import { ChevronDown, ChevronUp, Brain, FileText, Clock, AudioLines, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchTool, type SearchResult } from "@/components/ui/search-tool";
-import SearchSourceCard from "@/components/rag/SearchSourceCard";
 
 interface MessageContextProps {
   message: {
@@ -78,16 +77,6 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
     });
   }
 
-  // Search used
-  if (message.searchUsed) {
-    contextBadges.push({
-      icon: Search,
-      label: "Web search",
-      variant: "outline" as const,
-      className: "border-green-300 text-green-700 dark:border-green-800 dark:text-green-300",
-    });
-  }
-
   // Transcribed audio/video
   if (message.context_used?.audio) {
     contextBadges.push({
@@ -126,23 +115,7 @@ if (contextBadges.length === 0 && otherSources.length === 0 && webResults.length
 
       {/* Web search results */}
       {webResults.length > 0 && (
-        <>
-          <SearchTool query={message.searchQuery || ""} results={webResults} defaultOpen />
-          <div className="mt-2 space-y-2">
-            {webSources.map((source) => (
-              <SearchSourceCard
-                key={source.id}
-                title={source.title}
-                source={source.source}
-                domain={source.domain}
-                provider={source.provider}
-                snippet={source.snippet}
-                publishedAt={source.publishedAt}
-                retrievedAt={source.retrievedAt}
-              />
-            ))}
-          </div>
-        </>
+        <SearchTool query={message.searchQuery || ""} results={webResults} />
       )}
 
       {/* Citations inline support */}

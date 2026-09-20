@@ -363,7 +363,7 @@ export function Message({
                         {React.Children.map(children, (child, index) => {
                           if (typeof child === "string") {
                             return (
-                              <CitationParser key={index} content={child} />
+                              <CitationParser key={index} content={child} sources={message.sources} />
                             );
                           }
                           return child;

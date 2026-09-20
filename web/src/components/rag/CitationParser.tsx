@@ -4,9 +4,10 @@ import { useContextStore } from '@/store/contextStore';
 interface CitationParserProps {
   content: string;
   className?: string;
+  sources?: Array<any> | undefined;
 }
 
-export function CitationParser({ content, className }: CitationParserProps) {
+export function CitationParser({ content, className, sources = [] }: CitationParserProps) {
   const { activeContext } = useContextStore();
 
   // Parse content and extract citations
@@ -49,6 +50,14 @@ export function CitationParser({ content, className }: CitationParserProps) {
 
   // Get source for citation number
   const getCitationSource = (citationNumber: number) => {
+    const messageSource = sources[citationNumber - 1];
+    if (messageSource) {
+      return {
+        ...messageSource,
+        type: messageSource.type || 'web',
+        content: messageSource.snippet || messageSource.title || messageSource.source || 'Web source',
+      };
+    }
     if (!activeContext) return null;
 
     // Create a flat array of all sources with citation numbers
@@ -90,11 +99,15 @@ export function CitationParser({ content, className }: CitationParserProps) {
         } else if (part.type === 'citation' && part.number) {
           const source = getCitationSource(part.number);
           if (source) {
+            const domain = source.domain || (() => {
+              try { return new URL(source.source).hostname.replace(/^www\./, ''); } catch { return ''; }
+            })();
             return (
               <CitationHoverCard
                 key={index}
                 citationNumber={part.number}
                 source={source}
+                displayLabel={source.type === 'web' && domain ? domain : undefined}
               />
             );
           } else {

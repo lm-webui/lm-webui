@@ -19,12 +19,14 @@ interface CitationHoverCardProps {
   citationNumber: number;
   source: CitationSource;
   className?: string;
+  displayLabel?: string;
 }
 
 export function CitationHoverCard({
   citationNumber,
   source,
-  className
+  className,
+  displayLabel,
 }: CitationHoverCardProps) {
   const getSourceIcon = () => {
     if (source.type === 'summary' || !source.filename) {
@@ -56,10 +58,10 @@ export function CitationHoverCard({
     <HoverCard>
       <HoverCardTrigger asChild>
         <button className={cn(
-          "inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded border border-primary/20 transition-colors mx-0.5",
+          "inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium text-foreground bg-neutral-500/50 hover:bg-neutral-500/70 rounded-full transition-colors mx-0.5 align-baseline",
           className
         )}>
-          {citationNumber}
+          {displayLabel || citationNumber}
         </button>
       </HoverCardTrigger>
       <HoverCardContent

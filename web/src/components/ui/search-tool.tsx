@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ExternalLink, FileText, ChevronRight, Globe2 } from "lucide-react";
+import { ExternalLink, FileText, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShimmerText } from "@/components/ui/shimmer";
 
@@ -75,7 +75,6 @@ export const SearchTool = React.memo(function SearchTool({
         )}
       >
         <div className="flex items-center gap-2 min-w-0 text-sm text-muted-foreground">
-          <Globe2 className="h-3.5 w-3.5 shrink-0" />
           <span className="font-[450] whitespace-nowrap shrink-0">
             {isAnimating ? (
               <ShimmerText>Searching...</ShimmerText>
