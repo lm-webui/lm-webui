@@ -171,13 +171,13 @@ install_dependencies() {
   if command -v uv &>/dev/null; then
     uv venv "$LMWEBUI_HOME/.venv" --python 3.12 --clear 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv" --clear
     export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
-    uv pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
+    uv pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
   else
     $PYTHON -m venv "$LMWEBUI_HOME/.venv"
     source "$LMWEBUI_HOME/.venv/bin/activate"
     $PYTHON -m ensurepip --upgrade 2>/dev/null || true
     pip install --upgrade pip --quiet 2>&1 || true
-    pip install -r "$LMWEBUI_HOME/requirements.txt" --quiet
+    pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
   fi
   log_success "Dependencies installed"
 }

@@ -315,11 +315,65 @@ __fetch_release() {
   rm -f "$tgz"
 }
 
+installed_version() {
+  [ -f "$LMWEBUI_HOME/package.json" ] || return 0
+  "$LMWEBUI_HOME/.venv/bin/python" - "$LMWEBUI_HOME/package.json" 2>/dev/null <<'PY' || true
+import json, sys
+try:
+    print(json.load(open(sys.argv[1])).get("version", "unknown"))
+except Exception:
+    print("unknown")
+PY
+}
+
+latest_version() {
+  curl -fsSL --max-time 10 "https://api.github.com/repos/lm-webui/lm-webui/releases/latest" 2>/dev/null \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name", "unknown").lstrip("v"))' 2>/dev/null || true
+}
+
 case "${1:-status}" in
   __install-tree)
     # Internal — install.sh publishes this script from the release tree and then calls this to lay
     # that tree down. Not for humans; no stability promise, and deliberately absent from `help`.
     __install_tree "${2:?usage: lm-webui __install-tree <release-tree>}"
+    ;;
+
+  rebuild)
+    SRC="${2:-$(pwd)}"
+    [ -f "$SRC/web/package.json" ] && [ -f "$SRC/backend/app/main.py" ] || {
+      echo "❌ Usage: lm-webui rebuild [source-directory]"
+      echo "   Expected web/package.json and backend/app/main.py"
+      exit 1
+    }
+    command -v npm >/dev/null 2>&1 || { echo "❌ npm is required for rebuild"; exit 1; }
+    echo "🔨 Rebuilding LM-WebUI from $SRC..."
+    (cd "$SRC/web" && npm ci && npm run build)
+    [ -f "$SRC/web/dist/index.html" ] || { echo "❌ Frontend build produced no web/dist/index.html"; exit 1; }
+
+    BUILD_TREE="$(mktemp -d)"
+    trap 'rm -rf "$BUILD_TREE"' EXIT
+    mkdir -p "$BUILD_TREE/app" "$BUILD_TREE/web"
+    cp -r "$SRC/backend/app/." "$BUILD_TREE/app/"
+    cp -r "$SRC/web/dist" "$BUILD_TREE/web/dist"
+    cp "$SRC/backend/requirements.txt" "$SRC/backend/requirements.lock" "$BUILD_TREE/"
+    cp "$SRC/backend/config.yaml" "$BUILD_TREE/config.yaml"
+    cp "$SRC/package.json" "$BUILD_TREE/package.json"
+    cp "$SRC/scripts/lmwebui" "$BUILD_TREE/lmwebui"
+    __install_tree "$BUILD_TREE"
+    rm -rf "$BUILD_TREE"
+    trap - EXIT
+    echo "   Installing locked Python dependencies..."
+    if command -v uv >/dev/null 2>&1; then
+      export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
+      [ -x "$LMWEBUI_HOME/.venv/bin/python" ] || uv venv "$LMWEBUI_HOME/.venv"
+      uv pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
+    else
+      [ -x "$LMWEBUI_HOME/.venv/bin/python" ] || python3 -m venv "$LMWEBUI_HOME/.venv"
+      "$LMWEBUI_HOME/.venv/bin/python" -m pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
+    fi
+    reinstall_service || true
+    "$0" start
+    echo "✅ Rebuild complete: LM-WebUI $(installed_version)"
     ;;
 
   start)
@@ -342,6 +396,11 @@ case "${1:-status}" in
       tries=$((tries + 1))
       sleep 1
     done
+    if ! curl -sf --max-time 5 "$API/api/health" 2>/dev/null | grep -q '"ready":true'; then
+      echo "❌ Service did not become ready within 30 seconds"
+      diagnose
+      exit 1
+    fi
     # `"$0" status`, like every other re-invocation here. A bare `status` is not a function —
     # `status)` is a case pattern — so this died with "command not found" (exit 127) and `start`
     # never printed the health summary or the URL it exists to print. `update` calls
@@ -434,7 +493,21 @@ except Exception:
 
     # If anything fails after this point, bring the (old) service back up so a
     # bad update never leaves the app offline.
-    _restart_on_fail() { echo "⚠️ Update failed — restarting previous service."; "$0" start || true; }
+    TMP=""
+    BACKUP=""
+    _restart_on_fail() {
+      local code=$?
+      if [ -n "$BACKUP" ] && [ -d "$BACKUP" ]; then
+        echo "⚠️ Update failed — restoring previous application tree."
+        rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
+        mv "$BACKUP/app" "$LMWEBUI_HOME/app" 2>/dev/null || true
+        mv "$BACKUP/web" "$LMWEBUI_HOME/web" 2>/dev/null || true
+      fi
+      rm -rf "$TMP" "$BACKUP"
+      echo "⚠️ Update failed — restarting previous service."
+      "$0" start || true
+      exit "$code"
+    }
     trap '_restart_on_fail' ERR
 
     # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
@@ -445,23 +518,31 @@ except Exception:
     # second copy, and that is exactly how it came to clobber config.yaml while install.sh did not.
     TMP="$(mktemp -d)"
     echo "   Downloading latest release..."
+    BEFORE_VERSION="$(installed_version)"
+    TARGET_VERSION="$(latest_version)"
+    [ -n "$TARGET_VERSION" ] && echo "   Installed: $BEFORE_VERSION · Latest: $TARGET_VERSION"
     __fetch_release "$TMP"
     echo "   Installing release tree (config.yaml preserved)..."
+    BACKUP="$(mktemp -d)"
+    mv "$LMWEBUI_HOME/app" "$BACKUP/app"
+    mv "$LMWEBUI_HOME/web" "$BACKUP/web"
     __install_tree "$TMP"
     rm -rf "$TMP"
 
     # Update Python deps (including new ones added in update)
-    if [ -f "$LMWEBUI_HOME/.venv/bin/activate" ]; then
-      source "$LMWEBUI_HOME/.venv/bin/activate"
+    if [ ! -x "$LMWEBUI_HOME/.venv/bin/python" ]; then
       if command -v uv &>/dev/null; then
-        export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
-        uv pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
-        uv pip install llama-cpp-python --quiet 2>/dev/null || true
+        uv venv "$LMWEBUI_HOME/.venv" --python 3.12 2>/dev/null || uv venv "$LMWEBUI_HOME/.venv"
       else
-        pip install --upgrade pip --quiet 2>&1 || true
-        pip install -r "$LMWEBUI_HOME/requirements.txt" --upgrade --quiet
-        pip install llama-cpp-python --quiet 2>&1 || true
+        python3 -m venv "$LMWEBUI_HOME/.venv"
       fi
+    fi
+    if command -v uv &>/dev/null; then
+      export VIRTUAL_ENV="$LMWEBUI_HOME/.venv"
+      uv pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
+    else
+      "$LMWEBUI_HOME/.venv/bin/python" -m pip install --upgrade pip --quiet
+      "$LMWEBUI_HOME/.venv/bin/python" -m pip install -r "$LMWEBUI_HOME/requirements.lock" --quiet
     fi
 
     # Runtime ensure — Vision (llama-server), GGUF binaries, MLX (Apple), service unit.
@@ -473,10 +554,13 @@ except Exception:
     reinstall_service || true
 
     # Frontend ships prebuilt in the tarball (web/dist) — no npm build needed.
-    "$0" start || true
-    trap - ERR  # success — don't restart again
+    "$0" start
+    rm -rf "$BACKUP"
+    BACKUP=""
+    trap - ERR
     echo ""
     echo "✅ LM-WebUI updated successfully."
+    echo "   Installed version: $(installed_version)"
     echo "   Data preserved at $LMWEBUI_HOME/data/"
     echo "   Models at $LMWEBUI_HOME/models/"
     ;;
@@ -510,6 +594,7 @@ except Exception:
     echo "  runtime   Show GGUF/llama-server/Vision runtime health"
     echo "  version   Show the installed version"
     echo "  update    Update code from GitHub, preserve data"
+    echo "  rebuild   Build and install from a local source checkout"
     echo ""
     echo "Environment:"
     echo "  LMWEBUI_HOME  Data directory (default: ~/.lmwebui)"
@@ -517,7 +602,7 @@ except Exception:
 
   *)
     echo "Unknown command: $1"
-    echo "Usage: lm-webui <start|stop|restart|status|open|logs|runtime|version|update>"
+    echo "Usage: lm-webui <start|stop|restart|status|open|logs|runtime|version|update|rebuild> [source-directory]"
     exit 1
     ;;
 esac
