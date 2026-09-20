@@ -333,13 +333,20 @@ case "${1:-status}" in
         launchctl load "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Failed to start"
         ;;
     esac
-    # Wait (bounded) so the URL printed below is one that is actually answering.
+    # Wait (bounded) so the URL printed below is one that is actually answering. Test for
+    # "ready":true, not just a 200 — the health route answers as soon as the app is up, while it
+    # is still loading config, so a bare 200 made `start` report "Starting up…" on a service that
+    # was healthy a second later. install.sh uses the same readiness check.
     tries=0
-    while [ "$tries" -lt 30 ] && ! curl -sf --max-time 5 "$API/api/health" >/dev/null 2>&1; do
+    while [ "$tries" -lt 30 ] && ! curl -sf --max-time 5 "$API/api/health" 2>/dev/null | grep -q '"ready":true'; do
       tries=$((tries + 1))
       sleep 1
     done
-    status
+    # `"$0" status`, like every other re-invocation here. A bare `status` is not a function —
+    # `status)` is a case pattern — so this died with "command not found" (exit 127) and `start`
+    # never printed the health summary or the URL it exists to print. `update` calls
+    # `"$0" start || true`, which swallowed the 127 and still reported success.
+    "$0" status
     ;;
 
   stop)
