@@ -1,26 +1,45 @@
 import { ChatConversation, ChatMessage } from '../types/chat-ui';
 
-export const mapToMessage = (msg: any): ChatMessage => {
+export const normalizeSource = (source: any, index = 0) => ({
+  id: source?.id || `src_${index}`,
+  title: source?.title || 'Source',
+  type: source?.type || 'document',
+  snippet: source?.snippet || '',
+  source: source?.source || '',
+  domain: source?.domain || '',
+  provider: source?.provider || '',
+  publishedAt: source?.publishedAt || source?.published_at || '',
+  retrievedAt: source?.retrievedAt || source?.retrieved_at || '',
+});
+
+export const normalizePersistedMessage = (msg: any): any => {
+  const metadata = msg?.metadata || {};
+  const contextUsed = msg?.context_used || metadata.context_used || {};
+  const rawSources = msg?.sources || metadata.sources || [];
   return {
-    id: msg.id,
-    role: msg.role as any,
-    content: msg.content,
-    created_at: msg.created_at || (msg.timestamp ? msg.timestamp.toISOString() : new Date().toISOString()),
-    metadata: msg.metadata || {},
-    isLoading: msg.isLoading,
-    generatedImageUrl: msg.generatedImageUrl || msg.metadata?.generatedImageUrl,
-    type: msg.type,
-    model: msg.model,
-    fileAttachments: msg.fileAttachments || msg.metadata?.attachments || undefined,
-    searchUsed: msg.searchUsed ?? msg.search_used,
-    searchQuery: msg.searchQuery || msg.search_query,
-    sources: msg.sources,
-    context_used: msg.context_used,
-    retrievedImages: msg.retrievedImages || msg.retrieved_images,
-    documentsReferenced: msg.documentsReferenced,
-    memoryUsed: msg.memoryUsed,
-    citations: msg.citations,
+    id: msg?.id,
+    role: msg?.role as any,
+    content: msg?.content || '',
+    created_at: msg?.created_at || (msg?.timestamp ? msg.timestamp.toISOString() : new Date().toISOString()),
+    metadata,
+    isLoading: msg?.isLoading,
+    generatedImageUrl: msg?.generatedImageUrl || metadata.generatedImageUrl,
+    type: msg?.type,
+    model: msg?.model || metadata.model,
+    fileAttachments: msg?.fileAttachments || metadata.attachments || undefined,
+    searchUsed: msg?.searchUsed ?? msg?.search_used ?? !!contextUsed.web_search,
+    searchQuery: msg?.searchQuery || msg?.search_query || metadata.search_query || '',
+    sources: rawSources.map(normalizeSource),
+    context_used: contextUsed,
+    retrievedImages: msg?.retrievedImages || msg?.retrieved_images || metadata.retrieved_images || [],
+    documentsReferenced: msg?.documentsReferenced ?? !!contextUsed.rag,
+    memoryUsed: msg?.memoryUsed ?? !!contextUsed.memory,
+    citations: msg?.citations || metadata.citations || [],
   };
+};
+
+export const mapToMessage = (msg: any): ChatMessage => {
+  return normalizePersistedMessage(msg);
 };
 
 export const mapToConversation = (conv: any): ChatConversation => {

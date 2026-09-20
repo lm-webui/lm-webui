@@ -259,9 +259,10 @@ class OrchestratorController:
                     f"⚠️ Vision isn't ready: {reason}\nYour message was answered without image analysis.\n\n"
                 )
 
-            # Surface the multimodal context the capabilities collected, so the client can
-            # render sources/citations/badges/retrieved-images.
-            yield _build_sources_event(ctx)
+            # Use one source payload for both the live UI and persisted history.
+            sources_event = _build_sources_event(ctx)
+            sources_data = sources_event.data or {}
+            yield sources_event
 
             # Load user inference preferences from DB
             try:
@@ -352,6 +353,14 @@ class OrchestratorController:
                     user_id,
                     "assistant",
                     response_content,
+                    metadata={
+                        "context_used": sources_data.get("context_used", {}),
+                        "sources": sources_data.get("sources", []),
+                        "retrieved_images": sources_data.get("retrieved_images", []),
+                        "search_query": sources_data.get("search_query", ""),
+                        "search_provider": sources_data.get("search_provider", ""),
+                        "retrieved_at": sources_data.get("retrieved_at", ""),
+                    },
                     model=req.model,
                     provider=getattr(provider_to_use, "id", provider_id) or provider_id,
                 )

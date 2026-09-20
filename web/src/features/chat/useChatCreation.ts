@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ChatService, ChatRequest } from "./chatService";
 import { useChatStore, useAddMessage, useFinalizeMessage, useActiveChatId, useSetActiveChat, useCreateNewChat, useStartConversationCreation, useCompleteConversationCreation, useUpdateConversation } from "@/store/chatStore";
 import { useShallow } from 'zustand/react/shallow';
+import { normalizeSource } from '@/utils/chatUtils';
 
 // Generate unique message IDs to prevent conflicts
 const generateMessageId = (prefix: string = 'msg'): string => {
@@ -12,17 +13,7 @@ const generateMessageId = (prefix: string = 'msg'): string => {
 // Normalize the backend `sources` payload into the shape MessageContext renders
 // (adds id; counts document/image sources for the "N documents" badge).
 function normalizeSources(raw: any[] = []) {
-  return raw.map((s, i) => ({
-    id: s.id || `src_${i}`,
-    title: s.title || "Source",
-    type: (s.type as string) || "document",
-    snippet: s.snippet || "",
-    source: s.source || "",
-    domain: s.domain || "",
-    provider: s.provider || "",
-    publishedAt: s.published_at || "",
-    retrievedAt: s.retrieved_at || "",
-  }));
+  return raw.map(normalizeSource);
 }
 function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_images?: string[]; search_query?: string } = {}) {
   const cu = data.context_used || {};

@@ -160,17 +160,47 @@ ensure_mlx() {
   fi
 }
 
+LINUX_SERVICE_SCOPE="system"
+
+detect_linux_service_scope() {
+  [ "$(uname)" = "Linux" ] || return 0
+  if sudo -n systemctl cat lmwebui >/dev/null 2>&1; then
+    LINUX_SERVICE_SCOPE="system"
+  elif systemctl --user cat lmwebui >/dev/null 2>&1; then
+    LINUX_SERVICE_SCOPE="user"
+  else
+    LINUX_SERVICE_SCOPE="system"
+  fi
+}
+
+linux_service() {
+  detect_linux_service_scope
+  if [ "$LINUX_SERVICE_SCOPE" = "user" ]; then
+    systemctl --user "$@"
+  else
+    sudo systemctl "$@"
+  fi
+}
+
 reinstall_service() {
   # Recreate the service unit so PATH/ExecStart changes take effect (idempotent).
   case "$(uname)" in
     Linux)
+      detect_linux_service_scope
+      local unit_dir="/etc/systemd/system"
+      local service_user_line="User=$USER"
+      if [ "$LINUX_SERVICE_SCOPE" = "user" ]; then
+        unit_dir="$HOME/.config/systemd/user"
+        mkdir -p "$unit_dir"
+        service_user_line=""
+      fi
       cat > /tmp/lmwebui.service << SERVICEEOF
 [Unit]
 Description=LM-WebUI
 After=network.target
 [Service]
 Type=simple
-User=$USER
+$service_user_line
 WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
 Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
@@ -181,10 +211,19 @@ Restart=on-failure
 WantedBy=multi-user.target
 SERVICEEOF
       if command -v systemctl &>/dev/null; then
-        sudo mv /tmp/lmwebui.service /etc/systemd/system/lmwebui.service
-        sudo systemctl daemon-reload
-        sudo systemctl enable lmwebui 2>/dev/null || true
-        echo "   systemd unit refreshed."
+        if [ "$LINUX_SERVICE_SCOPE" = "user" ]; then
+          mv /tmp/lmwebui.service "$unit_dir/lmwebui.service"
+          systemctl --user daemon-reload
+          systemctl --user enable lmwebui
+        else
+          sudo mv /tmp/lmwebui.service "$unit_dir/lmwebui.service"
+          sudo systemctl daemon-reload
+          sudo systemctl enable lmwebui
+        fi
+        echo "   systemd unit refreshed ($LINUX_SERVICE_SCOPE)."
+      else
+        echo "❌ systemctl is unavailable" >&2
+        return 1
       fi ;;
     Darwin)
       PLIST_PATH="$HOME/Library/LaunchAgents/com.lmwebui.server.plist"
@@ -379,7 +418,7 @@ case "${1:-status}" in
   start)
     case "$(uname)" in
       Linux)
-        sudo systemctl start lmwebui 2>/dev/null || systemctl --user start lmwebui 2>/dev/null || echo "Could not start service"
+        linux_service start
         ;;
       Darwin)
         launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || true
@@ -411,7 +450,7 @@ case "${1:-status}" in
   stop)
     case "$(uname)" in
       Linux)
-        sudo systemctl stop lmwebui 2>/dev/null || systemctl --user stop lmwebui 2>/dev/null || echo "Could not stop service"
+        linux_service stop
         ;;
       Darwin)
         launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Service not running"
@@ -487,9 +526,18 @@ except Exception:
     echo "   Data at $LMWEBUI_HOME/data/ will be preserved."
     echo ""
 
+    # Resolve and authenticate the service manager before stopping anything. Falling back from a
+    # system service to a user service is how Linux updates can leave the old process running.
+    sudo -v 2>/dev/null || true
+    detect_linux_service_scope
+
     # Stop the app first so files aren't locked during replace/build
-    "$0" stop || true
+    "$0" stop
     sleep 1
+    if linux_service is-active --quiet; then
+      echo "❌ LM-WebUI service is still active after stop; refusing to update" >&2
+      exit 1
+    fi
 
     # If anything fails after this point, bring the (old) service back up so a
     # bad update never leaves the app offline.
@@ -509,9 +557,6 @@ except Exception:
       exit "$code"
     }
     trap '_restart_on_fail' ERR
-
-    # Cache sudo credentials up front so later sudo calls don't prompt/hang mid-run
-    sudo -v 2>/dev/null || true
 
     # Fetch the release, then hand it to the same routine install.sh uses. Ownership repair, the
     # stale clone-layout cleanup and the config.yaml guard all live in there — this used to be a
@@ -551,10 +596,17 @@ except Exception:
     check_gguf_runtime || true
     ensure_mlx || true
     echo "   Refreshing service unit..."
-    reinstall_service || true
+    reinstall_service
 
     # Frontend ships prebuilt in the tarball (web/dist) — no npm build needed.
     "$0" start
+    if [ -n "$TARGET_VERSION" ] && [ "$TARGET_VERSION" != "unknown" ]; then
+      RUNNING_VERSION="$(curl -sf --max-time 5 "$API/api/health" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("version", "unknown"))')"
+      [ "$RUNNING_VERSION" = "$TARGET_VERSION" ] || {
+        echo "❌ Running backend version $RUNNING_VERSION does not match release $TARGET_VERSION" >&2
+        exit 1
+      }
+    fi
     rm -rf "$BACKUP"
     BACKUP=""
     trap - ERR

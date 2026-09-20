@@ -46,10 +46,10 @@ export function CitationHoverCard({
   };
 
   const getSourceColor = () => {
-    if (source.type === 'summary') return 'text-purple-400 border-purple-400/20 bg-purple-950/20';
-    if (source.role) return 'text-green-400 border-green-400/20 bg-green-950/20';
-    if (source.filename) return 'text-blue-400 border-blue-400/20 bg-blue-950/20';
-    return 'text-gray-400 border-gray-400/20 bg-gray-950/20';
+    if (source.type === 'summary') return 'text-purple-400 border-purple-400/20';
+    if (source.role) return 'text-green-400 border-green-400/20';
+    if (source.filename) return 'text-blue-400 border-blue-400/20';
+    return 'text-gray-400 border-gray-400/20';
   };
 
   const Icon = getSourceIcon();
@@ -68,7 +68,7 @@ export function CitationHoverCard({
         className={cn(
           // max-md: not portaled, so a fixed w-80 (320px) is wider than the message column at a
           // 320px viewport and gets clipped by the chat's overflow-x.
-          "w-80 p-4 border-2 max-md:w-[calc(100vw-2rem)]",
+          "w-80 p-4 border-2 bg-neutral-300/70 dark:bg-neutral-700/70 max-md:w-[calc(100vw-2rem)]",
           getSourceColor()
         )}
         side="top"

@@ -126,22 +126,14 @@ export const useChatStore = create<ChatStore>()(
 
         try {
           const { getConversationWithFiles } = await import('@/utils/api');
+          const { normalizePersistedMessage } = await import('@/utils/chatUtils');
           const { messages: backendMessages } = await getConversationWithFiles(chatId);
 
           if (backendMessages && backendMessages.length > 0) {
             const state = get();
             const conversation = state.conversations[chatId];
             if (conversation) {
-              const formattedMessages = backendMessages.map((msg: any) => ({
-                id: msg.id?.toString() || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                role: (msg.role === 'user' || msg.role === 'assistant') ? msg.role : 'user',
-                content: msg.content || '',
-                created_at: msg.created_at || msg.timestamp || new Date().toISOString(),
-                model: msg.model || msg.metadata?.model,
-                // Restore persisted attachments + generated image so the bubble shows them after reload.
-                fileAttachments: msg.metadata?.attachments || undefined,
-                generatedImageUrl: msg.metadata?.generatedImageUrl || undefined,
-              }));
+              const formattedMessages = backendMessages.map(normalizePersistedMessage);
 
               set(state => ({
                 conversations: {
@@ -751,6 +743,7 @@ export const useChatStore = create<ChatStore>()(
           const messages = conversationData.messages;
 
           if (messages && Array.isArray(messages)) {
+            const { normalizePersistedMessage } = await import('@/utils/chatUtils');
             // Update store with recovered data
             set(state => ({
               conversations: {
@@ -758,7 +751,7 @@ export const useChatStore = create<ChatStore>()(
                 [chatId]: {
                   id: chatId,
                   title: conversationData.title || 'Recovered Chat',
-                  messages: messages,
+                  messages: messages.map(normalizePersistedMessage),
                   created_at: conversationData.created_at || new Date().toISOString(),
                   isBackendConfirmed: true,
                 },
