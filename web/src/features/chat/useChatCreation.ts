@@ -18,6 +18,10 @@ function normalizeSources(raw: any[] = []) {
     type: (s.type as string) || "document",
     snippet: s.snippet || "",
     source: s.source || "",
+    domain: s.domain || "",
+    provider: s.provider || "",
+    publishedAt: s.published_at || "",
+    retrievedAt: s.retrieved_at || "",
   }));
 }
 function sourcesToFields(data: { context_used?: any; sources?: any[]; retrieved_images?: string[]; search_query?: string } = {}) {
@@ -53,7 +57,7 @@ interface UseChatCreationOptions {
 
 export function useChatCreation(options?: UseChatCreationOptions) {
   const [internalIsLoading, setInternalIsLoading] = useState(false);
-  const [searchStatus, setSearchStatus] = useState<string>("");
+  const [searchStatus, setSearchStatus] = useState<{ stage: string; message: string } | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Zustand state management
@@ -151,7 +155,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
     startConversationCreation();
     
     // Reset search status
-    setSearchStatus("");
+    setSearchStatus(null);
 
     // Initialize AbortController for the current request
     abortControllerRef.current = new AbortController();
@@ -199,7 +203,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           if (chunk && !receivedContent) {
             receivedContent = true;
             // Tokens have started — stop showing the search shimmer.
-            setSearchStatus("");
+            setSearchStatus(null);
           }
           if (chunk) receivedContent = true;
           if (targetIdRef.current && targetConversationId) {
@@ -207,7 +211,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
           }
         },
         onStatus: (stage: string, message: string) => {
-          setSearchStatus(message || stage);
+          setSearchStatus({ stage, message: message || stage });
         },
         onSources: (data) => {
           // Attach multimodal context to the streamed message live.
@@ -276,7 +280,7 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       if (hookOptions.isImageMode && options?.setIsImageMode) {
         options.setIsImageMode(false);
       }
-      setSearchStatus(""); // Clear search status
+      setSearchStatus(null); // Clear search status
       abortControllerRef.current = null; // Clear the controller
     }
     return sent;

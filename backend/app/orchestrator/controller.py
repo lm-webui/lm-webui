@@ -5,6 +5,8 @@ Coordinates chat flow: Session → Context → Generation → Persistence.
 import logging
 import asyncio
 import time
+from datetime import datetime, timezone
+from urllib.parse import urlparse
 from typing import AsyncGenerator, Optional, Dict, Any, List
 from app.providers.schemas import ModelEvent
 from app.providers.factory import ProviderFactory
@@ -58,6 +60,8 @@ def _build_sources_event(ctx) -> ModelEvent:
     sources: list[dict] = []
     retrieved_images: list[str] = []
     search_query = ""
+    search_provider = ""
+    retrieved_at = ""
 
     for r in (ctx.results or []):
         if isinstance(r, RetrievalResult) and r.chunks:
@@ -81,10 +85,15 @@ def _build_sources_event(ctx) -> ModelEvent:
         elif isinstance(r, SearchResult) and r.items:
             context_used["web_search"] = True
             search_query = r.query
+            search_provider = r.provider
+            retrieved_at = datetime.now(timezone.utc).isoformat()
             for it in r.items[:10]:
                 url = it.get("url") or ""
                 title = it.get("title") or url or "Web result"
-                sources.append({"title": title, "type": "web", "snippet": it.get("snippet") or "", "source": url})
+                sources.append({"title": title, "type": "web", "snippet": it.get("snippet") or "", "source": url,
+                                "domain": urlparse(url).netloc.removeprefix("www."),
+                                "provider": search_provider, "retrieved_at": retrieved_at,
+                                "published_at": it.get("published_at") or it.get("date")})
         elif isinstance(r, VisionResult) and getattr(r, "ready", False):
             context_used["vision"] = True
             if r.text:
@@ -105,6 +114,8 @@ def _build_sources_event(ctx) -> ModelEvent:
         "sources": sources,
         "retrieved_images": retrieved_images,
         "search_query": search_query,
+        "search_provider": search_provider,
+        "retrieved_at": retrieved_at,
     })
 
 

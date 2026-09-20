@@ -42,7 +42,10 @@ export function MessageContext({ message, isMobile }: MessageContextProps) {
   // generic Sources panel so web sources aren't duplicated.
   const webSources = (message.sources || []).filter(s => s.type === "web");
   const otherSources = (message.sources || []).filter(s => s.type !== "web");
-  const webResults: SearchResult[] = webSources.map(s => ({ title: s.title, source: s.source || "" }));
+  const webResults: SearchResult[] = webSources.map(s => ({
+    title: s.title, source: s.source || "", domain: s.domain, provider: s.provider,
+    date: s.publishedAt || s.retrievedAt, snippet: s.snippet,
+  }));
 
   const contextBadges = [];
 

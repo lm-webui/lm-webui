@@ -156,7 +156,7 @@ export async function chatWithModel(req: ChatRequest): Promise<any> {
 export interface StreamCallbacks {
   onToken?: (token: string) => void;
   onStatus?: (stage: string, message: string) => void;
-  onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[] }) => void;
+  onSources?: (data: { context_used?: any; sources?: any[]; retrieved_images?: string[]; search_query?: string; search_provider?: string; retrieved_at?: string }) => void;
   onImage?: (imageUrl: string) => void;
   onDone?: () => void;
   onError?: (err: Error) => void;

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { FileText, ChevronRight } from "lucide-react";
+import { ExternalLink, FileText, ChevronRight, Globe2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ShimmerText } from "@/components/ui/shimmer";
 
@@ -16,6 +16,9 @@ export type SearchResult = {
   title: string;
   source: string;
   date?: string;
+  domain?: string;
+  provider?: string;
+  snippet?: string;
 };
 
 export type SearchToolProps = {
@@ -72,11 +75,12 @@ export const SearchTool = React.memo(function SearchTool({
         )}
       >
         <div className="flex items-center gap-2 min-w-0 text-sm text-muted-foreground">
+          <Globe2 className="h-3.5 w-3.5 shrink-0" />
           <span className="font-[450] whitespace-nowrap shrink-0">
             {isAnimating ? (
               <ShimmerText>Searching...</ShimmerText>
             ) : (
-              `Found ${totalResults} result${totalResults === 1 ? "" : "s"}`
+              `Web search · ${totalResults} result${totalResults === 1 ? "" : "s"}`
             )}
           </span>
         </div>
@@ -91,13 +95,9 @@ export const SearchTool = React.memo(function SearchTool({
       </button>
       {expandable && isOpen && (
         <div className="rounded-[10px] overflow-hidden bg-muted/30 border border-border">
-          <div className="flex items-center px-2.5 py-0 border-b border-border h-7 text-xs gap-1">
-            <span className="font-medium">
-              Searched for
-            </span>{" "}
-            <span className="text-muted-foreground truncate">
-              &ldquo;{query}&rdquo;
-            </span>
+          <div className="flex items-center justify-between gap-2 px-2.5 py-2 border-b border-border text-xs">
+            <span className="min-w-0 truncate"><span className="font-medium">Searched for</span>{" "}<span className="text-muted-foreground">&ldquo;{query}&rdquo;</span></span>
+            <span className="shrink-0 text-muted-foreground">{results[0]?.provider || "web"}</span>
           </div>
           <div className="max-h-[200px] overflow-y-auto bg-background">
             <div className="flex flex-col gap-1 p-1">
@@ -105,11 +105,10 @@ export const SearchTool = React.memo(function SearchTool({
                 const row = (
                   <>
                     <FileText className="w-4 h-4 shrink-0 text-muted-foreground" />
-                    <span className="text-sm truncate flex-1 min-w-0">{result.title}</span>
-                    {/* shrink-0 + nowrap let a long source URL win the layout fight and collapse
-                        the truncated title beside it to nothing, at any container width. */}
-                    <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap min-w-0 truncate">
-                      {result.date || result.source}
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1 text-sm font-medium truncate">{result.title}{result.source && <ExternalLink className="h-3 w-3 shrink-0" />}</span>
+                      <span className="block text-xs text-muted-foreground truncate">{result.domain || result.source}{result.date ? ` · ${result.date}` : ""}</span>
+                      {result.snippet && <span className="mt-1 block text-xs leading-4 text-muted-foreground line-clamp-2">{result.snippet}</span>}
                     </span>
                   </>
                 );

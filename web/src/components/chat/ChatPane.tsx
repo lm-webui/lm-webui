@@ -14,7 +14,7 @@ interface ChatPaneProps {
   conversation: ChatConversation | null;
   onSend: (content: string, files?: any[]) => Promise<boolean>;
   isLoading: boolean;
-  searchStatus?: string;
+  searchStatus?: { stage: string; message: string } | null;
   isThinking: boolean;
   onPauseThinking: () => void;
   isSearchEnabled: boolean;
@@ -273,7 +273,7 @@ export default function ChatPane({
               <LoadingMessage
                 showRawResponse={false}
                 isStreaming={false}
-                searchStatus={searchStatus || ""}
+                searchStatus={searchStatus}
                 isSearchEnabled={isSearchEnabled}
               />
             </div>

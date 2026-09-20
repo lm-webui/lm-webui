@@ -8,7 +8,7 @@ import { ShimmerText } from "@/components/ui/shimmer";
 interface LoadingMessageProps {
   showRawResponse?: boolean;
   isStreaming?: boolean;
-  searchStatus?: string; // live pipeline-stage message (e.g. "Searching the web…")
+  searchStatus?: { stage: string; message: string } | null;
   isSearchEnabled?: boolean;
 }
 
@@ -43,12 +43,12 @@ export function LoadingMessage({
     return () => clearInterval(id);
   }, [searchStatus]);
 
-  const statusText = searchStatus || STEPS[stepIndex];
+  const statusText = searchStatus?.message || STEPS[stepIndex];
   const Icon = stageIcon(statusText ?? "");
 
   // While a web search is actively running (pre-token), show the shimmering SearchTool
   // instead of the generic loader — fills the gap before the first token streams.
-  const isSearching = !!searchStatus && /search|web/i.test(searchStatus);
+  const isSearching = !!searchStatus && /search|web/i.test(searchStatus.stage + searchStatus.message);
   if (isSearching) {
     return (
       <div

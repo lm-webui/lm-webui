@@ -23,6 +23,7 @@ class SearchResult:
     """Web search results."""
     items: List[Any] = field(default_factory=list)
     query: str = ""
+    provider: str = ""
 
 
 @dataclass

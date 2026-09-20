@@ -219,7 +219,8 @@ async def execute(ctx: CapabilityContext) -> None:
                         sum(1 for r in results if r.content), query[:60])
             return SearchResult(items=[{"title": r.title, "url": r.url,
                                         "snippet": r.snippet, "content": r.content}
-                                       for r in results], query=query)
+                                       for r in results], query=query,
+                                provider=search_provider.name)
         logger.warning("Web search (%s) returned 0 results for: %s...", search_provider.name, query[:60])
     except Exception as exc:
         logger.warning("Web search failed: %s", exc)
