@@ -29,6 +29,9 @@ pylightxl
 xlrd
 markdown
 beautifulsoup4>=4.12.0
+# Web search (default DuckDuckGo engine). Declared, not incidental: it was previously only present
+# as an optional extra of another package, so a clean install silently fell back to the HTML scrape.
+ddgs>=9.0
 
 # OCR — scanned PDFs / images -> text (CPU, ONNX, no system deps)
 rapidocr

@@ -58,6 +58,18 @@ class TestBuildMessages:
         assert "Web search results:" in messages[0]["content"]
         assert "[1] LM-WebUI (https://lm-webui)" in messages[0]["content"]
 
+    def test_large_search_context_is_truncated_not_dropped(self):
+        """The regression: a full search section is ~9k tokens against a 2k budget, and `_trim`
+        used to drop the whole section — so the search ran, returned pages, and the model was
+        handed no web context at all and reported "I cannot search the web". The head (framing +
+        first results) must survive the budget."""
+        pages = [{"title": f"Page {i}", "url": f"https://e.com/{i}", "content": "x" * 12000}
+                 for i in range(1, 4)]
+        messages = build_messages("latest news", [SearchResult(items=pages, query="q")], "conv_1", USER)
+        content = messages[0]["content"]
+        assert "already been run" in content, "SEARCH_INTRO was dropped with the section"
+        assert "[1] Page 1 (https://e.com/1)" in content, "no result rows survived"
+
     def test_vision_context_injected(self):
         res = VisionResult(text="A red apple on a desk.")
         messages = build_messages("What is in this image?", [res], "conv_1", USER)

@@ -47,10 +47,17 @@ pass "frontend bundle has assets"
 
 # install.sh and lmwebui each carry their own copy of the service unit, and they have drifted:
 # LMWEBUI_BASE_DIR was added to one and not the other, so an `update` rewrote the unit WITHOUT it,
-# undoing what a fresh install had just written. Any divergence in the LMWEBUI_* variables means
-# the two disagree about the environment the service runs in.
-grep -oE 'LMWEBUI_[A-Z_]+' "$tree/install.sh" | sort -u > "$work/env.install"
-grep -oE 'LMWEBUI_[A-Z_]+' "$tree/lmwebui"   | sort -u > "$work/env.cli"
+# undoing what a fresh install had just written. Any divergence in the variables the SERVICE UNIT
+# sets means the two disagree about the environment the service runs in.
+#
+# Scoped to the service unit's own declarations — `Environment=NAME=` (systemd) and `<key>NAME</key>`
+# (launchd) — rather than every LMWEBUI_* token in the file. Grepping all tokens also collected
+# install-time knobs: LMWEBUI_INSTALL_APP is read once by install.sh to decide whether to copy the
+# desktop app into /Applications, and it has no business appearing in the service unit. That false
+# positive failed this check on v0.8.22 and v0.8.23, so the release job never published a tarball
+# and `lm-webui update` stayed pinned to the last release that did.
+grep -oE '(Environment=|<key>)LMWEBUI_[A-Z_]+' "$tree/install.sh" | sed 's/^Environment=//;s/^<key>//' | sort -u > "$work/env.install"
+grep -oE '(Environment=|<key>)LMWEBUI_[A-Z_]+' "$tree/lmwebui"    | sed 's/^Environment=//;s/^<key>//' | sort -u > "$work/env.cli"
 if ! diff -q "$work/env.install" "$work/env.cli" >/dev/null; then
   fail "install.sh and lmwebui disagree on LMWEBUI_* env vars:
 $(diff "$work/env.install" "$work/env.cli" | sed 's/^/       /')"

@@ -50,15 +50,30 @@ def _approx_tokens(text: str) -> int:
 
 
 def _trim(sections: List[str], budget: int) -> List[str]:
-    """Keep sections in priority order while the total stays within `budget`."""
+    """Keep sections in priority order while the total stays within `budget`.
+
+    The section that overflows is TRUNCATED, not dropped. Dropping it was silent and total: web
+    search fetches up to three pages of up to 12k chars each (`search.fetch.MAX_CHARS`) — ~9k tokens
+    — against this budget's 2000, so the entire search section was discarded before the prompt. The
+    model then had no web context, no `SEARCH_INTRO`, and reported "I cannot search the web" while
+    the search had in fact run and returned results. Partial context is worth far more than none.
+
+    The kept end is the head: both section kinds lead with what the model needs to interpret the
+    rest (SEARCH_INTRO and the numbered result list for search; the citation index for retrieval)
+    and the bulk follows, so a tail-truncation would keep text and discard its framing.
+    """
     used = 0
     kept: List[str] = []
     for s in sections:
         cost = _approx_tokens(s)
-        if used + cost > budget:
-            break
-        used += cost
-        kept.append(s)
+        if used + cost <= budget:
+            used += cost
+            kept.append(s)
+            continue
+        remaining = budget - used
+        if remaining > 0:
+            kept.append(s[: remaining * 4])          # inverse of _approx_tokens
+        break
     return kept
 
 

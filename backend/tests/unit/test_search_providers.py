@@ -49,9 +49,14 @@ class _Resp:
 
 
 def _parse(monkeypatch, body):
-    """Run the provider against a canned response — no network."""
+    """Run the provider against a canned response — no network.
+
+    Neutralises the `ddgs` primary path so these cases exercise the scrape fallback, which is what
+    they were written for. Without this they would reach the network and test `ddgs` instead.
+    """
     import app.search.duckduckgo as ddg
 
+    monkeypatch.setattr(ddg, "_ddgs_text", lambda q, limit: [])
     monkeypatch.setattr(ddg.requests, "post", lambda *a, **kw: _Resp(body))
     import asyncio
     return asyncio.run(DuckDuckGoProvider().search("anything", limit=5))
@@ -76,6 +81,7 @@ def test_parses_old_markup(monkeypatch):
 def _parse_status(monkeypatch, body, status):
     import app.search.duckduckgo as ddg
 
+    monkeypatch.setattr(ddg, "_ddgs_text", lambda q, limit: [])
     monkeypatch.setattr(ddg.requests, "post", lambda *a, **kw: _Resp(body, status))
     import asyncio
     return asyncio.run(DuckDuckGoProvider().search("anything"))
@@ -91,9 +97,50 @@ def test_transport_error_is_empty(monkeypatch):
     def boom(*a, **kw):
         raise OSError("network down")
 
+    monkeypatch.setattr(ddg, "_ddgs_text", lambda q, limit: [])
     monkeypatch.setattr(ddg.requests, "post", boom)
     import asyncio
     assert asyncio.run(DuckDuckGoProvider().search("anything")) == []
+
+
+# ── ddgs primary path + the fallback composition ──────────────────────────
+
+DDGS_ROWS = [
+    {"title": "First", "href": "https://example.com/one", "body": "body one"},
+    {"title": "No href — skipped", "href": "", "body": "x"},
+]
+
+
+def _via_ddgs(monkeypatch, rows):
+    import asyncio
+    import app.search.duckduckgo as ddg
+
+    monkeypatch.setattr(ddg, "_ddgs_text", lambda q, limit: rows)
+    return asyncio.run(DuckDuckGoProvider().search("anything"))
+
+
+def test_ddgs_rows_map_to_results(monkeypatch):
+    results = _via_ddgs(monkeypatch, DDGS_ROWS)
+    assert [r.url for r in results] == ["https://example.com/one"]
+    assert results[0].title == "First"
+    assert results[0].snippet == "body one"
+
+
+def test_falls_back_to_scrape_when_ddgs_yields_nothing(monkeypatch):
+    """The composition that matters: ddgs returning empty (uninstalled, changed API, or DDG
+    refusing it) must still produce results from the scrape rather than a silent zero."""
+    results = _parse(monkeypatch, DDG_HTML)
+    assert len(results) == 2
+
+
+def test_ddgs_winning_means_the_scrape_is_not_called(monkeypatch):
+    import app.search.duckduckgo as ddg
+
+    def boom(*a, **kw):
+        raise AssertionError("scrape should not run when ddgs returned rows")
+
+    monkeypatch.setattr(ddg.requests, "post", boom)
+    assert len(_via_ddgs(monkeypatch, DDGS_ROWS)) == 1
 
 
 # ── SearXNG ───────────────────────────────────────────────────────────────
@@ -318,16 +365,16 @@ def test_clean_query_keeps_lone_survivor():
     "localhost", "metadata.google.internal", "0.0.0.0", "::1",
 ])
 def test_blocked_host_rejects(host):
-    from app.search.fetch import _blocked_host
+    from app.search.fetch import blocked_host
 
-    assert _blocked_host(host) is True
+    assert blocked_host(host) is True
 
 
 @pytest.mark.parametrize("host", ["example.com", "docs.python.org", "8.8.8.8"])
 def test_blocked_host_allows_public(host):
-    from app.search.fetch import _blocked_host
+    from app.search.fetch import blocked_host
 
-    assert _blocked_host(host) is False
+    assert blocked_host(host) is False
 
 
 def test_fetch_refuses_private_url():
