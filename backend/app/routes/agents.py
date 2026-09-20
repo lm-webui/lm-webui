@@ -1,6 +1,7 @@
 """Agent Hub routes — chat wrapper around host CLI agents (admin-only)."""
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +22,8 @@ from app.agents.parser import parse
 from app.agents.sessions import sessions
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+
+logger = logging.getLogger(__name__)
 
 # Live print-mode process per *session*, so approval requests reach the exact process that
 # emitted them. Keyed by agent it was not: two sessions for one agent clobbered each other and
@@ -80,23 +83,42 @@ async def get_profile(agent: str):
 
 @router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.run"))])
 async def install_agent(agent: str, update: bool = False):
-    """Launch the trusted per-agent install command in the backend host terminal.
+    """Run the trusted per-agent install command in an Agent Hub terminal tab.
 
     update=True relaunches the install command even when already installed (npm install -g always
     fetches the latest, so the install command *is* the update command).
+
+    The install runs in one of our own ptys rather than a host GUI terminal, so its output streams
+    to the browser and survives a reload. The host terminal stays as the fallback for when the pty
+    cannot be started at all.
     """
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     if not update and detect(agent)["installed"]:
         return {"launched": False, "installed": True, "agent": agent}
+
+    command = install_cmd(agent)
+    sid = sessions.create(agent, install=True)
     try:
-        result = launch_install_terminal(agent)
-    except RuntimeError as exc:
-        # No host terminal (headless / Docker / no GUI). The UI shows the command to copy instead.
-        raise HTTPException(409, str(exc))
+        # `bash -lc` so the installers inherit a login PATH — they shell out to npm/curl.
+        # get_or_create keeps the process alive across WebSocket disconnects, so closing the tab
+        # mid-install does not abort it; reconnecting replays the backlog.
+        await terminals.get_or_create(agent, sid, ["bash", "-lc", command], sessions.get(sid)["cwd"])
+    except Exception as exc:
+        logger.warning("In-terminal install failed for %s (%s); falling back to host terminal", agent, exc)
+        sessions.delete(sid)
+        try:
+            result = launch_install_terminal(agent)
+        except RuntimeError as host_exc:
+            # No host terminal either (headless / Docker). The UI offers the command to copy.
+            raise HTTPException(409, str(host_exc))
+        forget(agent)
+        return {**result, "session_id": None}
+
     # The 24h detect cache would otherwise keep reporting 'missing' for the rest of the day.
     forget(agent)
-    return result
+    return {"launched": True, "installed": False, "agent": agent,
+            "command": command, "session_id": sid}
 
 
 @router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
@@ -378,7 +400,9 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
     if not s or s.get("agent") != agent:
         await ws.close(code=4404)
         return
-    if not detect(agent)["installed"]:
+    # An install session's terminal is running the install command precisely *because* the agent
+    # is not installed yet, so the not-installed guard must not apply to it.
+    if not s.get("install") and not detect(agent)["installed"]:
         await ws.close(code=4403, reason="agent not installed")
         return
 

@@ -340,6 +340,8 @@ export async function getAgentProfile(agent: string): Promise<{
 
 export async function installAgent(agent: string, update?: boolean): Promise<{
   launched: boolean; installed?: boolean; agent: string; command?: string;
+  /** Session whose terminal is running the install — open it to watch the output. */
+  session_id?: string | null;
 }> {
   const q = update ? '?update=1' : '';
   return authFetch(`${API_BASE_URL}/api/agents/${agent}/install${q}`, { method: 'POST' });

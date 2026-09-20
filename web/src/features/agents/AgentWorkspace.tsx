@@ -138,7 +138,7 @@ export default function AgentWorkspace() {
           <ActivityTab agent={agent} sessionId={sessionId} />
         </TabsContent>
         <TabsContent forceMount value="manage" className="flex-1 min-h-0 mt-0 data-[state=inactive]:hidden">
-          <ManageTab agent={agent} active={active} onRefresh={refresh} />
+          <ManageTab agent={agent} active={active} onRefresh={refresh} onOpenSession={resumeSession} />
         </TabsContent>
       </Tabs>
 
@@ -324,8 +324,10 @@ function ActivityTab({ agent, sessionId }: { agent: string; sessionId: string })
 /* ----------------------------- Manage tab ------------------------------- */
 /* The selected agent's detail: install state on top, its config/skill/memory files below.
  * Selection lives in the rail, so there is no card grid or drill-down here. */
-function ManageTab({ agent, active, onRefresh }: {
+function ManageTab({ agent, active, onRefresh, onOpenSession }: {
   agent: string; active: AgentInfo | undefined; onRefresh: (bust?: boolean) => Promise<any[]>;
+  /** Bring a session's terminal to the front — how an install shows its output. */
+  onOpenSession: (sid: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -355,12 +357,19 @@ function ManageTab({ agent, active, onRefresh }: {
     setInstalling(true);
     try {
       const r = await installAgent(agent, update);
-      if (r.launched) {
-        toast.success(`${update ? "Update" : "Install"} launched in a terminal.`);
-      } else {
+      if (!r.launched) {
         toast.info(`${agent} is already installed.`);
         setInstalling(false);
         return;
+      }
+      // The install runs in one of our own terminal tabs now, so open it rather than leaving the
+      // user to find a separate OS window — the output streams over the terminal socket and
+      // survives a reload. session_id is null only on the host-terminal fallback.
+      if (r.session_id) {
+        onOpenSession(r.session_id);
+        toast.success(`${update ? "Updating" : "Installing"} ${agent} — output in the Terminal tab.`);
+      } else {
+        toast.success(`${update ? "Update" : "Install"} launched in a host terminal.`);
       }
       // The install runs in an external terminal (`npm install -g` takes 30–90 s), so a single
       // re-probe can never see the result — the old 2.5 s timer reliably cached "missing" for the

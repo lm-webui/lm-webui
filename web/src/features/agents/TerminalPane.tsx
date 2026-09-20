@@ -25,11 +25,13 @@ declare global {
   }
 }
 
-// Load the vendored xterm JS/CSS once; resolves when both globals are present.
-function loadXterm(): Promise<void> {
+// Load the vendored xterm JS/CSS once. Resolves true only when BOTH globals are actually
+// present: a 404 used to resolve "successfully" (s.onerror = finish) and then throw on
+// `new window.Terminal` inside the effect, which surfaced as a blank pane with no explanation.
+function loadXterm(): Promise<boolean> {
   return new Promise((resolve) => {
     const w = window;
-    if (w.Terminal && w.FitAddon) return resolve();
+    if (w.Terminal && w.FitAddon) return resolve(true);
     if (!document.getElementById("xterm-css")) {
       const link = document.createElement("link");
       link.id = "xterm-css";
@@ -43,17 +45,41 @@ function loadXterm(): Promise<void> {
     ];
     const pending = assets.length;
     let done = 0;
-    const finish = () => { done += 1; if (done >= pending) resolve(); };
+    // A failed script still calls finish — it reports unusable rather than throwing later.
+    const finish = () => {
+      done += 1;
+      if (done >= pending) resolve(!!(w.Terminal && w.FitAddon));
+    };
     for (const a of assets) {
       if (document.getElementById(a.id)) { finish(); continue; }
       const s = document.createElement("script");
       s.id = a.id;
       s.src = a.src;
       s.onload = finish;
-      s.onerror = finish; // resolve anyway; terminal may still work partially
+      s.onerror = finish;
       document.head.appendChild(s);
     }
   });
+}
+
+// navigator.clipboard only exists in a secure context, which a LAN address is not — the app is
+// often opened as http://<lan-ip>:7070. So copy falls back to the legacy textarea trick.
+async function writeClipboard(text: string): Promise<void> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+  } catch {
+    /* denied or unavailable — use the fallback */
+  }
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } finally { ta.remove(); }
 }
 
 const DARK_THEME = {
@@ -125,6 +151,8 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   const sockRef = useRef<WebSocket | null>(null);
   const [state, setState] = useState<ConnState>("closed");
   const [ready, setReady] = useState(false);
+  // Set when the vendored engine can't load, so the pane explains itself instead of going blank.
+  const [loadError, setLoadError] = useState<string | null>(null);
   // Bumping this re-runs the connect effect, which is how "reconnect" works without a page reload.
   const [nonce, setNonce] = useState(0);
   // Why the socket dropped: 4403 = not installed / no terminal permission, 4404 = session mismatch.
@@ -157,7 +185,11 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   // 1. Load the terminal engine.
   useEffect(() => {
     let cancelled = false;
-    loadXterm().then(() => { if (!cancelled) setReady(true); });
+    loadXterm().then((ok) => {
+      if (cancelled) return;
+      if (ok) setReady(true);
+      else setLoadError("Terminal engine failed to load — /vendor/xterm assets are missing.");
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -184,6 +216,28 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     // Keyboard → pty bytes. Sending on a CONNECTING/CLOSED socket throws InvalidStateError, so
     // everything goes through send().
     term.onData((data: string) => send(new TextEncoder().encode(data)));
+    // Copy/paste. xterm binds neither: its selection is its own model rather than a DOM
+    // selection, so the browser's native ⌘C copies nothing. Paste is left to xterm's textarea
+    // unless the async clipboard API is actually available, because the textarea path is the one
+    // that works in a non-secure context. term.paste() is right for real user paste — the
+    // bracketed-paste wrapper it adds is what tells the CLI this is a paste, not typing. (That is
+    // why `press` above avoids it: there we are synthesising escape sequences, not pasting.)
+    term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+      if (e.type !== "keydown") return true;
+      const mod = e.metaKey || (e.ctrlKey && e.shiftKey); // ⌘ on macOS, Ctrl+Shift elsewhere
+      const key = e.key?.toLowerCase();
+      if (mod && key === "c") {
+        const selection = term.getSelection();
+        if (selection) { void writeClipboard(selection); return false; }
+      }
+      if (mod && key === "v" && navigator.clipboard?.readText) {
+        navigator.clipboard.readText()
+          .then((text) => { if (text) term.paste(text); })
+          .catch(() => { /* denied — the user can still paste into the textarea directly */ });
+        return false;
+      }
+      return true;
+    });
     // Terminal resize → backend window size.
     term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
       send(JSON.stringify({ type: "resize", cols, rows }));
@@ -196,6 +250,11 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   // 3. Connect the WebSocket (one PTY per (agent, session)) once the terminal can render.
   useEffect(() => {
     if (!ready || !agent || !sessionId) { setState("closed"); return; }
+    // Switching agent or session reconnects, and the server replays that session's whole backlog.
+    // The xterm instance is created once (effect 2, deps [ready]) and outlives the switch, so
+    // without this the new session's output is appended to the previous session's scrollback —
+    // two histories in one buffer with nothing between them.
+    termRef.current?.reset();
     const ws = new WebSocket(agentTerminalWsUrl(agent, sessionId));
     sockRef.current = ws;
     setState("connecting");
@@ -260,6 +319,12 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
           </button>
         )}
       </div>
+
+      {loadError && (
+        <div className="shrink-0 border-b border-border/40 bg-destructive/10 px-3 py-1 text-[.65rem] text-destructive font-mono">
+          {loadError}
+        </div>
+      )}
 
       {state !== "open" && closed && (
         <div className="shrink-0 border-b border-border/40 bg-destructive/10 px-3 py-1 text-[.65rem] text-destructive font-mono">

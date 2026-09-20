@@ -66,7 +66,10 @@ class AgentSessions:
             except OSError:
                 pass
 
-    def create(self, agent: str) -> str:
+    def create(self, agent: str, install: bool = False) -> str:
+        """New session workspace. install=True marks a session whose terminal runs the agent's
+        install command instead of the agent — the terminal WebSocket refuses to open for a
+        not-installed agent, and during an install that is exactly the case."""
         sid = uuid.uuid4().hex[:8]
         cwd = os.path.join(self._workspace(agent), sid)
         os.makedirs(cwd, exist_ok=True)
@@ -77,6 +80,7 @@ class AgentSessions:
             "runs": [],
             "active_run": None,
             "claude_session_id": None,
+            "install": install,
         }
         self._persist()
         return sid

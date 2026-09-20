@@ -17,6 +17,46 @@ import termios
 from collections import deque
 
 
+def _pty_env() -> dict:
+    """Environment for the pty child.
+
+    TERM is the reason this exists. The backend runs under launchd/systemd, whose environment
+    carries no TERM, and the child inherited that — while `isatty()` still passed on the pty
+    slave, so nothing looked wrong server-side. Every TUI gates on TERM, so an agent CLI started
+    without it drops colour, full-screen redraw and readline line-editing: it looked like a dumb
+    pipe rather than a terminal.
+
+    A TERM that is deliberately set is left alone; only unset/dumb is replaced.
+    """
+    env = dict(os.environ)
+    if env.get("TERM", "") in ("", "dumb"):
+        env["TERM"] = "xterm-256color"
+    env.setdefault("COLORTERM", "truecolor")
+    # CLIs emit box-drawing and emoji; without a UTF-8 locale they come through as mojibake.
+    if not env.get("LANG") and not env.get("LC_ALL"):
+        env["LANG"] = "en_US.UTF-8"
+    return env
+
+
+def _set_controlling_tty() -> None:
+    """Make the pty slave the child's controlling terminal.
+
+    Runs in the forked child (preexec_fn), after Popen has already dup2'd the slave onto fd 0
+    and — because start_new_session=True — called setsid(). That leaves the child a session
+    leader with *no* controlling terminal, which is the subtle half of the pty setup:
+    TIOCSWINSZ still sets the window size and the program can read it, but the kernel has no
+    foreground process group for that tty, so it never delivers SIGWINCH. Full-screen TUIs
+    therefore never redraw after the browser is resized, even though resize "works".
+
+    Deliberately one syscall: preexec_fn runs in a forked child of a threaded process, so
+    anything that allocates or takes a lock risks deadlocking before exec.
+    """
+    try:
+        fcntl.ioctl(0, termios.TIOCSCTTY, 0)
+    except OSError:
+        pass
+
+
 def _set_win_size(fd: int, cols: int, rows: int) -> None:
     try:
         fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", rows, cols, 0, 0))
@@ -61,6 +101,7 @@ class TerminalSession:
         self._proc = await asyncio.create_subprocess_exec(
             *self.cmd, cwd=self.cwd, start_new_session=True,
             stdin=slave, stdout=slave, stderr=slave,
+            env=_pty_env(), preexec_fn=_set_controlling_tty,
         )
         os.close(slave)
         loop = asyncio.get_running_loop()
