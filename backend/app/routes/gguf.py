@@ -14,6 +14,7 @@ from app.services.gguf_downloader import gguf_downloader
 from app.services.gguf_manager import list_local_models, delete_local_model, validate_gguf_file, get_model_metadata
 from app.hardware.detection import check_gguf_compatibility
 from app.security.auth.dependencies import get_current_user, require_permission
+from app.core.error_handlers import safe_path
 
 router = APIRouter(prefix="/api/models")
 
@@ -129,7 +130,8 @@ async def start_gguf_download(download_request: dict, _: dict = Depends(require_
         target_dir = None
         if subdir:
             from app.services.gguf_manager import get_models_base
-            target_dir = get_models_base() / subdir
+            # subdir is client-supplied — keep it inside the models tree.
+            target_dir = safe_path(get_models_base(), subdir)
 
         # Start download
         task_id = await gguf_downloader.start_download(file_url, filename, target_dir)

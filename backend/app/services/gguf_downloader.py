@@ -16,6 +16,9 @@ from typing import Dict, Optional
 from pathlib import Path
 from fastapi import WebSocket, WebSocketDisconnect
 
+from app.core.error_handlers import safe_path, ValidationException
+from app.search.fetch import blocked_host
+
 logger = logging.getLogger(__name__)
 
 class GGUFDownloadManager:
@@ -40,15 +43,20 @@ class GGUFDownloadManager:
             if parsed.scheme not in ('http', 'https'):
                 logger.warning(f"Blocked invalid scheme: {parsed.scheme}")
                 return False
-            
+
             hostname = parsed.hostname
             if not hostname:
+                return False
+
+            # Shared literal/localhost guard (see app/search/fetch.py:blocked_host).
+            if blocked_host(hostname):
+                logger.warning(f"Blocked host: {hostname}")
                 return False
 
             # 1. Allowlist Check
             if hostname in self.allowed_domains:
                 return True
-                
+
             # 2. DNS Resolution & IP Validation (for non-allowlisted domains)
             # Resolve hostname to IP
             try:
@@ -56,16 +64,17 @@ class GGUFDownloadManager:
             except socket.gaierror:
                 logger.warning(f"Could not resolve hostname: {hostname}")
                 return False
-            
+
             ip_addr = ipaddress.ip_address(ip)
-            
-            # Block private, loopback, and link-local addresses
-            if ip_addr.is_private or ip_addr.is_loopback or ip_addr.is_link_local:
+
+            # Block private, loopback, link-local, unspecified and reserved ranges
+            if (ip_addr.is_private or ip_addr.is_loopback or ip_addr.is_link_local
+                    or ip_addr.is_unspecified or ip_addr.is_reserved):
                 logger.warning(f"Blocked private/local IP access: {hostname} -> {ip}")
                 return False
-                
+
             return True
-            
+
         except Exception as e:
             logger.error(f"URL validation error: {e}")
             return False
@@ -86,6 +95,15 @@ class GGUFDownloadManager:
         # Validate URL before starting
         if not self._validate_url(url):
             raise ValueError("Invalid download URL. Domain not allowed or resolves to private IP.")
+
+        # Single chokepoint for the client-supplied filename — both callers (gguf.py,
+        # comfyui.py) route through here. Resolved before it can reach open(), and
+        # re-raised as ValueError so each route's existing handler turns it into a 400.
+        dest_dir = target_dir if target_dir else self.models_dir
+        try:
+            safe_path(dest_dir, filename)
+        except ValidationException:
+            raise ValueError(f"Invalid filename: {filename}")
 
         task_id = str(uuid.uuid4())
 

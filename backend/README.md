@@ -88,6 +88,16 @@ make lint            # linting
 
 Or directly: `pip install -r requirements-test.txt && pytest`
 
+With the installed app's venv (which is uv-managed and ships no pytest), side-load the test
+deps instead of modifying it:
+
+```bash
+uv venv --python ~/.lmwebui/.venv/bin/python .venv-test
+uv pip install --python .venv-test/bin/python pytest pytest-asyncio pytest-mock
+PYTHONPATH=~/.lmwebui/.venv/lib/python3.12/site-packages \
+  .venv-test/bin/python -m pytest tests/unit -q
+```
+
 ## Development
 
 1. Add a router in `app/routes/` (or a feature under `app/<feature>/`)

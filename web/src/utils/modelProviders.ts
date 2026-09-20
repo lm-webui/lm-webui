@@ -83,11 +83,6 @@ export const PROVIDER_MAPPING = {
   'mlx': 'mlx',
 } as const;
 
-export const LOCAL_STORAGE_API_KEY_MAPPING = {
-  'openai': 'openAIKey',
-  'google': 'googleKey',
-} as const;
-
 export const PROVIDERS_REQUIRING_API_KEY = [
   'openai',
   'google',

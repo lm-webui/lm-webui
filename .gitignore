@@ -2,6 +2,8 @@
 __pycache__/
 backend/venv/
 backend/.venv/
+# Test-only venv: pytest against the installed app's packages (see backend/README.md).
+backend/.venv-test/
 backend/.coverage
 backend/.coveragerc
 backend/coverage.xml

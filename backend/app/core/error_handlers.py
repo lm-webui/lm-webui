@@ -6,6 +6,7 @@ codebase actually imports. Trimming dead wrappers to keep it ~140 lines.
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional, Union
 from fastapi import HTTPException, status
 from fastapi.responses import JSONResponse
@@ -222,3 +223,20 @@ def validate_file_extension(filename: str, allowed_extensions: list) -> None:
                 "allowed_extensions": allowed_extensions
             }
         )
+
+
+def safe_path(base, candidate: str) -> Path:
+    """Resolve `candidate` under `base`, rejecting anything that escapes it.
+
+    Every path built from client input goes through here — upload filenames, model
+    subdirs, download names. Absolute paths, `../` chains and symlink escapes all
+    resolve outside `base` and raise; `sub/../x` resolves inside and is allowed.
+    """
+    base = Path(base).resolve()
+    final = (base / candidate).resolve()
+    if not final.is_relative_to(base):
+        raise ValidationException(
+            message="Invalid path",
+            details={"path": candidate}
+        )
+    return final

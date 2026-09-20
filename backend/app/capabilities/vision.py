@@ -84,6 +84,9 @@ def collect_image_data_uris(file_references: list) -> list:
     import base64
     import os as _os
     from app.database import get_db
+    from app.core.config_manager import get_media_dir
+    from app.core.error_handlers import safe_path
+    media_dir = get_media_dir()
     db = None
     try:
         db = get_db()
@@ -99,9 +102,18 @@ def collect_image_data_uris(file_references: list) -> list:
             mime = (ref.get("mime") or ref.get("content_type") or "")
             if ftype != "image" and not mime.startswith("image/"):
                 continue
-            # 1. Direct local path on the ref.
+            # 1. Direct local path on the ref. This value comes straight from the request
+            #    body, so it must resolve inside the media dir — otherwise a caller can
+            #    name any readable file and have its bytes base64'd into the vision
+            #    payload, and out to a cloud provider from there.
             url = ref.get("url")
             path = ref.get("file_path") or (url if isinstance(url, str) and not url.startswith(("http://", "https://", "data:")) else None)
+            if path:
+                try:
+                    safe_path(media_dir, str(path))
+                except Exception:
+                    logger.warning("Rejected out-of-tree vision file reference")
+                    path = None
             # 2. DB lookup by media id.
             if not path:
                 fid = ref.get("media_id") or ref.get("id")

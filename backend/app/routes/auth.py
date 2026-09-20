@@ -27,6 +27,29 @@ class LoginRequest(BaseModel):
     remember_me: bool = True
 
 
+def _cookie_secure(request: Request) -> bool:
+    """True when the request actually arrived over HTTPS, directly or via a proxy.
+
+    Cookie flags live here so they can't drift between call sites — every auth cookie
+    was previously written with a hardcoded secure=False, which sends the token in
+    cleartext on any non-loopback deployment. Stays False on the plain-HTTP LAN setups
+    this app explicitly supports.
+    """
+    return (request.url.scheme == "https"
+            or request.headers.get("x-forwarded-proto", "").lower() == "https")
+
+
+def _set_auth_cookies(response: Response, request: Request, access: str, refresh: str,
+                      access_max_age: int | None = None,
+                      refresh_max_age: int | None = None) -> None:
+    """Set both auth cookies with one set of flags."""
+    secure = _cookie_secure(request)
+    response.set_cookie("access_token", access, httponly=True, secure=secure,
+                        samesite="lax", path="/", max_age=access_max_age)
+    response.set_cookie("refresh_token", refresh, httponly=True, secure=secure,
+                        samesite="lax", path="/", max_age=refresh_max_age)
+
+
 @router.post("/pairing/create")
 async def create_pairing(request: Request, user: dict = Depends(get_current_user)):
     """Create a single-use five-minute mobile pairing link."""
@@ -39,7 +62,7 @@ async def create_pairing(request: Request, user: dict = Depends(get_current_user
 
 
 @router.post("/pairing/exchange")
-async def exchange_pairing(token: str, response: Response):
+async def exchange_pairing(token: str, request: Request, response: Response):
     """Exchange a one-time pairing token for normal auth cookies."""
     entry = _pairing_tokens.pop(token, None)
     if not entry or entry[1] < time.time():
@@ -55,12 +78,12 @@ async def exchange_pairing(token: str, response: Response):
     permissions = get_permissions_for_role(user[1])
     access = create_access_token(user_id, role=user[1], permissions=permissions)
     refresh = create_refresh_token(user_id, role=user[1], permissions=permissions)
-    response.set_cookie("access_token", access, httponly=True, samesite="lax", path="/", max_age=3600)
-    response.set_cookie("refresh_token", refresh, httponly=True, samesite="lax", path="/", max_age=604800)
+    _set_auth_cookies(response, request, access, refresh, access_max_age=3600,
+                      refresh_max_age=604800)
     return {"user": {"id": user_id, "email": user[0], "role": user[1]}}
 
 @router.post("/login")
-async def login(req: LoginRequest, response: Response):
+async def login(req: LoginRequest, request: Request, response: Response):
     """Login user and set JWT tokens as httpOnly cookies"""
     from app.database.sqlite.connection_pool import database_manager
 
@@ -86,31 +109,14 @@ async def login(req: LoginRequest, response: Response):
         access_max_age = 60*60 if req.remember_me else None
         refresh_max_age = 7*24*60*60 if req.remember_me else None
 
-        response.set_cookie(
-            key="access_token",
-            value=access,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=access_max_age
-        )
-
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=refresh_max_age
-        )
+        _set_auth_cookies(response, request, access, refresh,
+                          access_max_age=access_max_age, refresh_max_age=refresh_max_age)
 
         log_action(user_id=user_id, action="user.login")
         return {"user": {"id": user_id, "email": req.email, "role": role}, "access_token": access}
 
 @router.post("/refresh")
-async def refresh(response: Response, refresh_token: str = Cookie(None)):
+async def refresh(request: Request, response: Response, refresh_token: str = Cookie(None)):
     """Refresh access token using refresh token cookie and set new access token as httpOnly cookie"""
     if not refresh_token:
         raise HTTPException(401, "No refresh token")
@@ -119,16 +125,10 @@ async def refresh(response: Response, refresh_token: str = Cookie(None)):
         payload = verify_token(refresh_token)
         new_access = create_access_token(payload["id"], role=payload["role"], permissions=payload["permissions"])
 
-        # Set new access token as httpOnly cookie — works over HTTP on any local network
-        response.set_cookie(
-            key="access_token",
-            value=new_access,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=60*60
-        )
+        # Only the access token is rotated; the refresh cookie is left as-is.
+        response.set_cookie("access_token", new_access, httponly=True,
+                            secure=_cookie_secure(request), samesite="lax",
+                            path="/", max_age=60*60)
 
         return {"message": "Token refreshed successfully", "access_token": new_access}
     except:
@@ -143,7 +143,7 @@ async def logout(response: Response):
     return {"message": "Logged out"}
 
 @router.post("/register")
-async def register(req: LoginRequest, response: Response):
+async def register(req: LoginRequest, request: Request, response: Response):
     """Register a new user and set JWT tokens as httpOnly cookies"""
     from app.database.sqlite.connection_pool import database_manager
     
@@ -176,26 +176,8 @@ async def register(req: LoginRequest, response: Response):
         access = create_access_token(user_id, role=role, permissions=permissions)
         refresh = create_refresh_token(user_id, role=role, permissions=permissions)
         
-        # Set both tokens as httpOnly cookies — works over HTTP on any local network
-        response.set_cookie(
-            key="access_token",
-            value=access,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=60*60
-        )
-
-        response.set_cookie(
-            key="refresh_token",
-            value=refresh,
-            httponly=True,
-            secure=False,
-            samesite="lax",
-            path="/",
-            max_age=7*24*60*60
-        )
+        _set_auth_cookies(response, request, access, refresh,
+                          access_max_age=60*60, refresh_max_age=7*24*60*60)
 
         return {"user": {"id": user_id, "email": req.email, "role": role}, "access_token": access}
 

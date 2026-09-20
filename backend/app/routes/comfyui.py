@@ -21,6 +21,10 @@ router = APIRouter(prefix="/api/comfyui")
 COMFYUI_DIR = Path(os.path.expanduser(os.getenv("COMFYUI_DIR", "~/ComfyUI")))
 CHECKPOINTS_DIR = COMFYUI_DIR / "models" / "checkpoints"
 
+# Only these may land in a checkpoint dir. The preset branch is trusted; the
+# caller-supplied branch had no extension check at all, so any file type was writable.
+ALLOWED_CHECKPOINT_EXTS = (".safetensors", ".ckpt")
+
 # Preset checkpoint catalog (workflow-matched). Sizes are approximate download hints.
 PRESETS = {
     "sd15": {
@@ -72,7 +76,11 @@ async def start_download(
             raise HTTPException(status_code=400, detail=f"Unknown model_id: {model_id}")
         url, filename = preset["url"], preset["filename"]
     elif url and filename:
-        pass
+        if not filename.lower().endswith(ALLOWED_CHECKPOINT_EXTS):
+            raise HTTPException(
+                status_code=400,
+                detail=f"filename must end with {' or '.join(ALLOWED_CHECKPOINT_EXTS)}",
+            )
     else:
         raise HTTPException(
             status_code=400, detail="Provide model_id or both url and filename"

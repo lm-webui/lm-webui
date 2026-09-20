@@ -11,6 +11,7 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
+import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -30,6 +31,19 @@ import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import ImageLoadingSkeleton from "@/components/chat/ImageLoadingSkeleton";
 import { ShimmerBar, ShimmerText } from "@/components/ui/shimmer";
 import { CODE_LANGUAGE_PATTERNS } from "@/utils/chatUtils";
+
+// Model output is untrusted, but rehype-raw parses any HTML in it — so it must be
+// sanitized before reaching the DOM or a reply containing `<img onerror=...>` executes
+// in-origin. Starts from the default (GitHub) schema, extended only where the app
+// genuinely relies on what it strips: the default drops `alt` and `title` on images.
+// Everything else — event handlers, javascript: hrefs, unknown tags — stays blocked.
+const SANITIZE_SCHEMA = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    img: [...(defaultSchema.attributes?.img ?? []), "alt", "title"],
+  },
+};
 
 // Tool list processor for consistent formatting
 const formatToolList = (content: string): string => {
@@ -337,7 +351,7 @@ export function Message({
 
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
+                rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
                 children={formatToolList(sanitizeContent(message.content)) + (message.isLoading ? " ▎" : "")}
                 components={{
                   p({ children, ...props }) {
@@ -390,17 +404,6 @@ export function Message({
                     // Don't render anything if src is empty string (fixes React warning)
                     if (!src) return null;
 
-                    // Filter out problematic props that might be strings from HTML parsing
-                    const filteredProps = { ...props } as any;
-                    Object.keys(filteredProps).forEach((key) => {
-                      if (
-                        typeof filteredProps[key] === "string" &&
-                        key.startsWith("on")
-                      ) {
-                        delete filteredProps[key];
-                      }
-                    });
-
                     // Use span instead of div to avoid nesting issues in <p> tags
                     return (
                       <span className="relative group/image my-4 block">
@@ -416,7 +419,7 @@ export function Message({
                             setHasError(true);
                             handleImageError(src || "");
                           }}
-                          {...filteredProps}
+                          {...props}
                         />
                         <Button
                           size="sm"

@@ -411,20 +411,10 @@ export async function searchQuery(query: string): Promise<Array<{title: string, 
 export async function generateDocx(req: ChatRequest): Promise<string> {
   // Retrieve API key for document generation
   let apiKeyToUse = req.api_key;
-  if (!apiKeyToUse && isAuthenticated()) {
-    try {
-      // For authenticated users, try to get from backend first
-      if (req.provider === "openai") {
-        const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/openai`);
-        apiKeyToUse = apiKeyData.api_key;
-      }
-    } catch (error) {
-      // Fallback to localStorage for authenticated users if backend fails
-      apiKeyToUse = localStorage.getItem("openAIKey") || undefined;
-    }
-  } else if (!apiKeyToUse) {
-    // For unauthenticated users, try localStorage
-    apiKeyToUse = localStorage.getItem("openAIKey") || undefined;
+  if (!apiKeyToUse && isAuthenticated() && req.provider === "openai") {
+    // The backend is the source of truth for keys; nothing writes them to localStorage.
+    const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/openai`);
+    apiKeyToUse = apiKeyData.api_key;
   }
 
   const requestWithKey = { ...req, api_key: apiKeyToUse };
@@ -441,20 +431,10 @@ export async function generateDocx(req: ChatRequest): Promise<string> {
 export async function generateXlsx(req: ChatRequest): Promise<string> {
   // Retrieve API key for spreadsheet generation
   let apiKeyToUse = req.api_key;
-  if (!apiKeyToUse && isAuthenticated()) {
-    try {
-      // For authenticated users, try to get from backend first
-      if (req.provider === "openai") {
-        const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/openai`);
-        apiKeyToUse = apiKeyData.api_key;
-      }
-    } catch (error) {
-      // Fallback to localStorage for authenticated users if backend fails
-      apiKeyToUse = localStorage.getItem("openAIKey") || undefined;
-    }
-  } else if (!apiKeyToUse) {
-    // For unauthenticated users, try localStorage
-    apiKeyToUse = localStorage.getItem("openAIKey") || undefined;
+  if (!apiKeyToUse && isAuthenticated() && req.provider === "openai") {
+    // The backend is the source of truth for keys; nothing writes them to localStorage.
+    const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/openai`);
+    apiKeyToUse = apiKeyData.api_key;
   }
 
   const requestWithKey = { ...req, api_key: apiKeyToUse };
@@ -472,33 +452,11 @@ export async function generateImage(req: ChatRequest, conversationId?: string): 
   // Retrieve API key based on provider for image generation
   let apiKeyToUse = req.api_key;
   if (!apiKeyToUse && isAuthenticated()) {
-    try {
-      // Use centralized provider mapping
-      const backendProvider = (PROVIDER_MAPPING as any)[req.provider] || req.provider;
-
-      const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/${backendProvider}`);
-      apiKeyToUse = apiKeyData.api_key;
-    } catch (error) {
-      // Fallback mappings for localStorage
-      const localStorageMapping: Record<string, string> = {
-        'openai': 'openAIKey',
-        'grok': 'xaiKey',
-        'claude': 'anthropicKey',
-        'google': 'googleKey'  // Frontend uses 'google', localStorage uses 'googleKey'
-      };
-      const localStorageKey = localStorageMapping[req.provider] || `${req.provider}Key`;
-      apiKeyToUse = localStorage.getItem(localStorageKey) || undefined;
-    }
-  } else if (!apiKeyToUse) {
-    // Fallback for unauthenticated users
-    const localStorageMapping: Record<string, string> = {
-      'openai': 'openAIKey',
-      'grok': 'xaiKey',
-      'claude': 'anthropicKey',
-      'google': 'googleKey'  // Frontend uses 'google', localStorage uses 'googleKey'
-    };
-    const localStorageKey = localStorageMapping[req.provider] || `${req.provider}Key`;
-    apiKeyToUse = localStorage.getItem(localStorageKey) || undefined;
+    // Use centralized provider mapping. Keys live in the backend — nothing writes them
+    // to localStorage, so a localStorage fallback would only ever return stale values.
+    const backendProvider = (PROVIDER_MAPPING as any)[req.provider] || req.provider;
+    const apiKeyData = await authFetch(`${API_BASE_URL}/api/api_keys/${backendProvider}`);
+    apiKeyToUse = apiKeyData.api_key;
   }
 
   // Backend unified endpoint expects: { provider, model, prompt, params }

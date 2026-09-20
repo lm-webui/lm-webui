@@ -24,15 +24,16 @@ _DROP = ("script", "style", "nav", "footer", "header", "noscript", "form", "asid
 _BLOCKED_HOSTS = ("localhost", "metadata.google.internal")
 
 
-def _blocked_host(host: str) -> bool:
-    """True for hosts a search result must never be able to make us request.
+def blocked_host(host: str) -> bool:
+    """True for hosts an untrusted URL must never be able to make us request.
 
-    Result URLs come from a third party, so this is a trust boundary: without it a result pointing
-    at 127.0.0.1 or the cloud metadata endpoint turns search into an SSRF primitive.
+    Shared by search-result fetching and `/api/download`, both of which take a URL from
+    outside: without this, a URL pointing at 127.0.0.1 or the cloud metadata endpoint
+    turns either one into an SSRF primitive.
 
     ponytail: resolved pre-DNS, same ceiling as the implementation this was ported from — a host
-    that resolves to a private IP after this check still gets through. Close it with a custom
-    adapter binding to a validated IP if that ever matters.
+    that resolves to a private IP after this check still gets through, and redirects are not
+    re-validated. Close it with a custom adapter binding to a validated IP if that ever matters.
     """
     host = host.rstrip(".").lower()
     if not host or host in _BLOCKED_HOSTS or host.endswith(".localhost"):
@@ -48,7 +49,7 @@ def _fetch(url: str) -> str:
     """Page text with chrome stripped, or "" — never raises."""
     try:
         parsed = urlparse(url)
-        if parsed.scheme not in ("http", "https") or _blocked_host(parsed.hostname or ""):
+        if parsed.scheme not in ("http", "https") or blocked_host(parsed.hostname or ""):
             return ""
         resp = requests.get(url, headers={"User-Agent": UA},
                             timeout=TIMEOUT, stream=True, allow_redirects=True)

@@ -14,7 +14,6 @@ from typing import Optional, List, Dict, Any
 import json
 import logging
 import os
-import shutil
 from pathlib import Path
 
 from app.services.file_processor import FileProcessor
@@ -22,8 +21,8 @@ from app.security.auth.dependencies import get_current_user
 from app.database import get_db
 from app.core.error_handlers import (
     ValidationException, NotFoundException, BaseAPIException,
-    handle_file_processing_error, validate_required_field, validate_file_extension,
-    with_error_handling
+    validate_required_field, validate_file_extension,
+    with_error_handling, safe_path
 )
 from app.services.gguf_manager import validate_gguf_file
 from app.services.gguf_resolver import gguf_resolver
@@ -71,6 +70,48 @@ UPLOAD_TYPES = {
         'upload_dir': 'generated/reference'
     }
 }
+
+def _max_bytes(upload_type: str) -> int:
+    """The configured ceiling for an upload type — previously declared and never read."""
+    return UPLOAD_TYPES[upload_type]['max_size_mb'] * 1024 * 1024
+
+
+def _unique_dest(base: Path, filename: str) -> Path:
+    """`base`/filename, suffixed -1, -2… when taken. Traversal-safe.
+
+    The client controls `filename`, so it is resolved through safe_path before it ever
+    reaches open() — otherwise "../.." writes outside the upload directory.
+    """
+    dest = safe_path(base, filename)
+    stem, ext = dest.stem, dest.suffix
+    counter = 1
+    while dest.exists():
+        dest = safe_path(base, f"{stem}-{counter}{ext}")
+        counter += 1
+    return dest
+
+
+async def save_upload(file: UploadFile, dest: Path, max_bytes: int) -> int:
+    """Stream `file` to `dest`, aborting past `max_bytes`. Returns bytes written.
+
+    Streams rather than `await file.read()` so a 10 GB body can't be buffered into RAM,
+    and caps the stream itself because Content-Length is absent or wrong often enough
+    not to be trusted. Any partial file is removed before raising.
+    """
+    written = 0
+    with open(dest, "wb") as out:
+        while chunk := await file.read(1 << 20):
+            written += len(chunk)
+            if written > max_bytes:
+                out.close()
+                dest.unlink(missing_ok=True)
+                raise ValidationException(
+                    message=f"File exceeds {max_bytes // (1024 * 1024)} MB limit",
+                    details={"filename": dest.name},
+                )
+            out.write(chunk)
+    return written
+
 
 @router.post("/files")
 @with_error_handling(
@@ -167,29 +208,16 @@ async def _handle_general_upload(
             UPLOAD_TYPES['general']['allowed_extensions']
         )
         
-        # Read file content
-        file_content = await file.read()
-        file_size = len(file_content)
-
-        # Generate unique filename (handle duplicates)
+        # Generate unique filename (handle duplicates), guarding against traversal
         original_filename = file.filename
         file_extension = original_filename.split('.')[-1] if '.' in original_filename else 'bin'
-        filename_without_ext = original_filename.rsplit('.', 1)[0] if '.' in original_filename else original_filename
-        
-        # Check for existing files and create unique name
-        counter = 1
-        final_filename = original_filename
-        
-        while (uploads_dir / final_filename).exists():
-            final_filename = f"{filename_without_ext}-{counter}.{file_extension}"
-            counter += 1
+        file_path = _unique_dest(uploads_dir, original_filename)
+        final_filename = file_path.name
 
-        # Use Path object for better cross-platform compatibility
-        file_path = uploads_dir / final_filename
-        
         # Save file to disk
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        file_size = await save_upload(
+            file, file_path, _max_bytes('general')
+        )
 
         # Determine generic file type for DB
         file_type_db = "document"
@@ -296,18 +324,17 @@ async def _handle_model_upload(
     upload_dir = get_models_dir()
     upload_dir.mkdir(exist_ok=True)
     
-    file_path = upload_dir / file.filename
-    
+    file_path = safe_path(upload_dir, file.filename)
+
     # Check if file already exists
     if file_path.exists():
         raise ValidationException(
             message=f"File {file.filename} already exists",
             details={"filename": file.filename, "path": str(file_path)}
         )
-    
+
     # Save uploaded file
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    await save_upload(file, file_path, _max_bytes('model'))
     
     # Validate the GGUF file
     validation_result = validate_gguf_file(str(file_path))
@@ -358,27 +385,15 @@ async def _handle_image_generation_upload(
             UPLOAD_TYPES['image_generation']['allowed_extensions']
         )
         
-        # Generate unique filename
-        original_filename = file.filename
-        file_extension = original_filename.split('.')[-1]
-        filename_without_ext = original_filename.rsplit('.', 1)[0]
-        
-        counter = 1
-        final_filename = original_filename
-        
-        while (uploads_dir / final_filename).exists():
-            final_filename = f"{filename_without_ext}-{counter}.{file_extension}"
-            counter += 1
-        
-        file_path = uploads_dir / final_filename
-        
+        # Generate unique filename, guarding against traversal
+        file_path = _unique_dest(uploads_dir, file.filename)
+        final_filename = file_path.name
+
         # Save file
-        with open(file_path, "wb") as f:
-            content = await file.read()
-            f.write(content)
-        
-        file_size = len(content)
-        
+        file_size = await save_upload(
+            file, file_path, _max_bytes('image_generation')
+        )
+
         results.append({
             "filename": final_filename,
             "file_path": str(file_path),

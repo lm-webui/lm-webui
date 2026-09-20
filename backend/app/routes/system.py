@@ -4,11 +4,13 @@ System Routes
 This module provides routes for system information and health checks.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 import psutil
 import platform
 import os
 from datetime import datetime
+
+from app.security.auth.dependencies import get_current_user
 
 router = APIRouter(prefix="/api/system")
 
@@ -24,7 +26,7 @@ async def health_check():
     }
 
 @router.get("/info")
-async def system_info():
+async def system_info(_: dict = Depends(get_current_user)):
     """Get system information"""
     # Get memory usage
     memory = psutil.virtual_memory()
@@ -64,7 +66,7 @@ async def system_info():
     }
 
 @router.get("/stats")
-async def system_stats():
+async def system_stats(_: dict = Depends(get_current_user)):
     """Get application statistics"""
     from database import get_db
     

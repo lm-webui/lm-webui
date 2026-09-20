@@ -297,6 +297,21 @@ app.mount("/generated", StaticFiles(directory=str(MEDIA_DIR / "generated")), nam
 WEB_DIST = Path(os.environ.get("LMWEBUI_WEB_DIST", str(BASE_DIR / "web" / "dist"))).resolve()
 SPA_INDEX = WEB_DIST / "index.html"
 
+# The desktop shell loads this origin directly (see desktop/src-tauri/src/lib.rs), and Tauri
+# cannot inject a CSP into a page it does not serve — so the header has to come from here.
+# The Vite build emits no inline <script>, so script-src stays strict; style-src keeps
+# 'unsafe-inline' for React's inline styles and Mermaid, and the two Google Fonts hosts are
+# the only off-origin loads in index.html.
+SPA_CSP = (
+    "default-src 'self'; "
+    "script-src 'self'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src 'self' data: https://fonts.gstatic.com; "
+    "img-src 'self' data: blob: https:; "
+    "connect-src 'self' ws: wss:; "
+    "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+)
+
 
 @app.get("/{full_path:path}", include_in_schema=False)
 async def spa_serve(full_path: str):
@@ -309,7 +324,7 @@ async def spa_serve(full_path: str):
         return FileResponse(file_path)
     # SPA fallback — return index.html for any other path
     if SPA_INDEX.exists():
-        return FileResponse(SPA_INDEX)
+        return FileResponse(SPA_INDEX, headers={"Content-Security-Policy": SPA_CSP})
     raise HTTPException(status_code=404, detail="Not found")
 
 # --- Helper: Load Config ---
