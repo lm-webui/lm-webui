@@ -15,10 +15,10 @@ import { ShimmerText } from "@/components/ui/shimmer";
 export type SearchResult = {
   title: string;
   source: string;
-  date?: string;
-  domain?: string;
-  provider?: string;
-  snippet?: string;
+  date?: string | undefined;
+  domain?: string | undefined;
+  provider?: string | undefined;
+  snippet?: string | undefined;
 };
 
 export type SearchToolProps = {

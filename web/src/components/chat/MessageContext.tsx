@@ -5,6 +5,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { ChevronDown, ChevronUp, Brain, FileText, Search, Clock, AudioLines, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SearchTool, type SearchResult } from "@/components/ui/search-tool";
+import SearchSourceCard from "@/components/rag/SearchSourceCard";
 
 interface MessageContextProps {
   message: {
@@ -21,6 +22,10 @@ interface MessageContextProps {
       type: "document" | "memory" | "web" | "image" | "vision" | "transcript";
       snippet?: string;
       source?: string;
+      domain?: string;
+      provider?: string;
+      publishedAt?: string;
+      retrievedAt?: string;
       page?: number;
       date?: Date;
     }>;
@@ -121,11 +126,23 @@ if (contextBadges.length === 0 && otherSources.length === 0 && webResults.length
 
       {/* Web search results */}
       {webResults.length > 0 && (
-        <SearchTool
-          query={message.searchQuery || ""}
-          results={webResults}
-          defaultOpen
-        />
+        <>
+          <SearchTool query={message.searchQuery || ""} results={webResults} defaultOpen />
+          <div className="mt-2 space-y-2">
+            {webSources.map((source) => (
+              <SearchSourceCard
+                key={source.id}
+                title={source.title}
+                source={source.source}
+                domain={source.domain}
+                provider={source.provider}
+                snippet={source.snippet}
+                publishedAt={source.publishedAt}
+                retrievedAt={source.retrievedAt}
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Citations inline support */}

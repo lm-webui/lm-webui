@@ -32,6 +32,10 @@ export interface ChatSource {
   type: string; // "document" | "image" | "web" | "vision" | "transcript"
   snippet?: string;
   source?: string;
+  domain?: string;
+  provider?: string;
+  publishedAt?: string;
+  retrievedAt?: string;
 }
 
 // File attachment for multimodal chat
@@ -85,6 +89,13 @@ export function toChatMessage(message: any): ChatMessage {
     model: message.model,
     fileAttachments: message.fileAttachments || message.file_attachments,
     searchUsed: message.searchUsed,
+    searchQuery: message.searchQuery || message.search_query,
+    sources: message.sources,
+    context_used: message.context_used,
+    retrievedImages: message.retrievedImages || message.retrieved_images,
+    documentsReferenced: message.documentsReferenced,
+    memoryUsed: message.memoryUsed,
+    citations: message.citations,
     rawResponse: message.rawResponse,
     generatedImageUrl: message.generatedImageUrl,
     editedAt: message.editedAt || message.edited_at,

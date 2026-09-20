@@ -12,6 +12,14 @@ export const mapToMessage = (msg: any): ChatMessage => {
     type: msg.type,
     model: msg.model,
     fileAttachments: msg.fileAttachments || msg.metadata?.attachments || undefined,
+    searchUsed: msg.searchUsed ?? msg.search_used,
+    searchQuery: msg.searchQuery || msg.search_query,
+    sources: msg.sources,
+    context_used: msg.context_used,
+    retrievedImages: msg.retrievedImages || msg.retrieved_images,
+    documentsReferenced: msg.documentsReferenced,
+    memoryUsed: msg.memoryUsed,
+    citations: msg.citations,
   };
 };
 

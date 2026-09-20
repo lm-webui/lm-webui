@@ -8,7 +8,7 @@ import { ShimmerText } from "@/components/ui/shimmer";
 interface LoadingMessageProps {
   showRawResponse?: boolean;
   isStreaming?: boolean;
-  searchStatus?: { stage: string; message: string } | null;
+  searchStatus?: { stage: string; message: string } | null | undefined;
   isSearchEnabled?: boolean;
 }
 
