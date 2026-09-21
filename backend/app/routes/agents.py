@@ -402,18 +402,27 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
         return
     # An install session's terminal is running the install command precisely *because* the agent
     # is not installed yet, so the not-installed guard must not apply to it.
-    if not s.get("install") and not detect(agent)["installed"]:
+    detected = None if s.get("install") else detect(agent)
+    if detected is not None and not detected["installed"]:
         await ws.close(code=4403, reason="agent not installed")
         return
 
-    cmd = s.get("terminal_cmd") or TERMINAL_CMD[agent]
+    # Detection resolves the CLI using the service/login PATH. Reuse that absolute path for the
+    # PTY: systemd/launchd often cannot resolve the user's globally installed CLI by bare name.
+    cmd = s.get("terminal_cmd") or ([detected["path"]] if detected and detected.get("path") else TERMINAL_CMD[agent])
     if s.get("install") and terminals.get(agent, sid) is None:
         # Install jobs are not conversational sessions. Never replay a persisted install record
         # by rerunning its command after a backend restart.
         await ws.close(code=4409, reason="terminal job no longer available")
         return
-    ts = await terminals.get_or_create(agent, sid, cmd, s["cwd"])
     await ws.accept()
+    try:
+        ts = await terminals.get_or_create(agent, sid, cmd, s["cwd"])
+    except Exception as exc:
+        logger.exception("Could not start %s terminal", agent)
+        await ws.send_json({"type": "terminal_error", "message": f"Could not start terminal: {exc}"})
+        await ws.close(code=1011, reason="terminal start failed")
+        return
     token, mode = ts.attach(payload["id"])
     await ws.send_json({"type": "attached", "mode": mode})
     try:

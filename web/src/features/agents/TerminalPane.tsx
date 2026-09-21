@@ -280,6 +280,10 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
           if (control.type === "attached") setMode(control.mode);
           else if (control.type === "turn_granted") setMode("controller");
           else if (control.type === "turn_released") setMode("viewer");
+          else if (control.type === "terminal_error") {
+            setClosed({ code: 1011, reason: control.message || "terminal failed to start" });
+            setState("error");
+          }
           return;
         } catch { t.write(ev.data); }
       }
