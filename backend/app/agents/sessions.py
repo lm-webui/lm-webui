@@ -66,7 +66,7 @@ class AgentSessions:
             except OSError:
                 pass
 
-    def create(self, agent: str, install: bool = False) -> str:
+    def create(self, agent: str, install: bool = False, terminal_cmd: list[str] | None = None) -> str:
         """New session workspace. install=True marks a session whose terminal runs the agent's
         install command instead of the agent — the terminal WebSocket refuses to open for a
         not-installed agent, and during an install that is exactly the case."""
@@ -81,6 +81,7 @@ class AgentSessions:
             "active_run": None,
             "claude_session_id": None,
             "install": install,
+            "terminal_cmd": terminal_cmd,
         }
         self._persist()
         return sid
@@ -103,9 +104,9 @@ class AgentSessions:
 
     def list(self, agent: str | None = None) -> list[dict]:
         return [
-            {"sid": sid, **{k: v for k, v in s.items() if k not in ("transcript", "runs", "active_run")}}
+            {"sid": sid, **{k: v for k, v in s.items() if k not in ("transcript", "runs", "active_run", "terminal_cmd")}}
             for sid, s in self._sessions.items()
-            if agent is None or s["agent"] == agent
+            if not s.get("install") and (agent is None or s["agent"] == agent)
         ]
 
     def delete(self, sid: str) -> bool:

@@ -62,3 +62,28 @@ async def test_terminal_echo_and_exit():
             break
         await asyncio.sleep(0.05)
     assert ts.exit_code == 0
+
+
+@pytest.mark.asyncio
+async def test_terminal_output_is_broadcast_to_each_attachment():
+    """Two attached devices both receive the complete PTY stream."""
+    ts = TerminalSession("cat", ["/bin/cat"], "/tmp")
+    await ts.start()
+    first = asyncio.create_task(_pump_output(ts, 3.0))
+    second = asyncio.create_task(_pump_output(ts, 3.0))
+    ts.write(b"shared\n")
+    ts.write(b"\x04")
+    outputs = await asyncio.wait_for(asyncio.gather(first, second), timeout=3.0)
+    assert all(b"shared" in b"".join(output) for output in outputs)
+
+
+def test_terminal_turn_lease():
+    ts = TerminalSession("claude", ["true"], "/tmp")
+    first, first_mode = ts.attach(1)
+    second, second_mode = ts.attach(2)
+    assert first_mode == "controller"
+    assert second_mode == "viewer"
+    assert not ts.can_write(second)
+    assert ts.release_turn(first)
+    assert ts.request_turn(second, 2)
+    assert ts.can_write(second)

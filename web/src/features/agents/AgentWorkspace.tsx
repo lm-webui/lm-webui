@@ -76,7 +76,12 @@ export default function AgentWorkspace() {
     setTab("terminal"); // the TUI is the single interactive surface for a live agent
     try {
       const r: any = await authFetch(`/api/agents/${id}/sessions`, { method: "POST" });
-      if (seq === selectSeq.current) setSessionId(r.session_id);
+      if (seq === selectSeq.current) {
+        setSessionId(r.session_id);
+        // Keep the rail in sync immediately; the backend remains authoritative for metadata.
+        const d = await getAgentSessions(id);
+        if (seq === selectSeq.current) setSessions(d.sessions || []);
+      }
     } catch (err) {
       if (seq === selectSeq.current) {
         setSessionId("");

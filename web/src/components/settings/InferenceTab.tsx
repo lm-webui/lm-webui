@@ -74,8 +74,8 @@ export function InferenceTab({
           </div>
           <div className="space-y-2">
             <Label htmlFor="max-tokens" className="text-sm sm:text-base">Max Tokens: {maxTokens[0]}</Label>
-            <Slider id="max-tokens" min={100} max={8000} step={100} value={maxTokens} onValueChange={setMaxTokens} className="w-full" />
-            <div className="text-xs sm:text-sm text-muted-foreground">Maximum length of the response</div>
+            <Slider id="max-tokens" min={100} max={64000} step={100} value={maxTokens} onValueChange={setMaxTokens} className="w-full" />
+            <div className="text-xs sm:text-sm text-muted-foreground">Maximum response length. API/model limits may apply above 32k.</div>
           </div>
           <div className="space-y-2">
             <Label htmlFor="top-p" className="text-sm sm:text-base">Top P: {topP[0]}</Label>

@@ -62,7 +62,7 @@ def _resolve_session(agent: str, req: ChatRequest):
     return sid, s, prompt
 
 
-@router.get("", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("", dependencies=[Depends(require_permission("agents.use"))])
 async def list_agents(refresh: bool = False):
     """Installed CLI agents on the backend's own machine.
 
@@ -74,14 +74,14 @@ async def list_agents(refresh: bool = False):
     return {"agents": detect_all(refresh=refresh)}
 
 
-@router.get("/{agent}/profile", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/profile", dependencies=[Depends(require_permission("agents.use"))])
 async def get_profile(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return profile(agent)
 
 
-@router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.install"))])
 async def install_agent(agent: str, update: bool = False):
     """Run the trusted per-agent install command in an Agent Hub terminal tab.
 
@@ -98,7 +98,7 @@ async def install_agent(agent: str, update: bool = False):
         return {"launched": False, "installed": True, "agent": agent}
 
     command = install_cmd(agent)
-    sid = sessions.create(agent, install=True)
+    sid = sessions.create(agent, install=True, terminal_cmd=["bash", "-lc", command])
     try:
         # `bash -lc` so the installers inherit a login PATH — they shell out to npm/curl.
         # get_or_create keeps the process alive across WebSocket disconnects, so closing the tab
@@ -121,21 +121,21 @@ async def install_agent(agent: str, update: bool = False):
             "command": command, "session_id": sid}
 
 
-@router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.use"))])
 async def list_sessions(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return {"sessions": sessions.list(agent)}
 
 
-@router.post("/{agent}/sessions", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/sessions", dependencies=[Depends(require_permission("agents.use"))])
 async def create_session(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return {"session_id": sessions.create(agent)}
 
 
-@router.delete("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.run"))])
+@router.delete("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.manage"))])
 async def delete_session(agent: str, sid: str):
     # Deleting the session is what reaps its PTY now that a disconnect only detaches.
     await terminals.close(agent, sid)
@@ -144,7 +144,7 @@ async def delete_session(agent: str, sid: str):
     return {"ok": True}
 
 
-@router.get("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.use"))])
 async def get_session(agent: str, sid: str):
     """Return a session's transcript so the UI can restore a resumed chat."""
     s = sessions.get(sid)
@@ -153,7 +153,7 @@ async def get_session(agent: str, sid: str):
     return {"session_id": sid, "transcript": s.get("transcript", [])}
 
 
-@router.post("/{agent}/sessions/{sid}/compact", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/sessions/{sid}/compact", dependencies=[Depends(require_permission("agents.manage"))])
 async def compact_session(agent: str, sid: str):
     """Reset a session's context: clear the transcript + claude session id (next run starts fresh).
 
@@ -168,14 +168,14 @@ async def compact_session(agent: str, sid: str):
     return {"ok": True}
 
 
-@router.get("/{agent}/runs", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/runs", dependencies=[Depends(require_permission("agents.use"))])
 async def list_runs(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return {"runs": sessions.list_runs(agent)}
 
 
-@router.get("/{agent}/usage", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/usage", dependencies=[Depends(require_permission("agents.use"))])
 async def agent_usage(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
@@ -198,14 +198,14 @@ async def agent_usage(agent: str):
     }
 
 
-@router.get("/{agent}/files", dependencies=[Depends(require_permission("agents.run"))])
+@router.get("/{agent}/files", dependencies=[Depends(require_permission("agents.use"))])
 async def get_agent_files(agent: str):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
     return {"dir": str(af.config_dir(agent)), "files": af.agent_files(agent)}
 
 
-@router.put("/{agent}/files/{name}", dependencies=[Depends(require_permission("agents.run"))])
+@router.put("/{agent}/files/{name}", dependencies=[Depends(require_permission("agents.manage"))])
 async def put_agent_file(agent: str, name: str, body: dict):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
@@ -229,7 +229,7 @@ def _reject_unsupported(agent: str, req: ChatRequest) -> None:
         raise HTTPException(400, f"{agent} does not accept a skill")
 
 
-@router.post("/{agent}/chat/stream", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/chat/stream", dependencies=[Depends(require_permission("agents.use"))])
 async def chat_stream(agent: str, req: ChatRequest):
     """SSE streaming chat. Yields status/output/run/complete frames as `data: {json}\\n\\n`."""
     if agent not in AGENTS:
@@ -351,7 +351,7 @@ async def chat_stream(agent: str, req: ChatRequest):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-@router.post("/{agent}/answer", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/answer", dependencies=[Depends(require_permission("agents.use"))])
 async def answer_agent(agent: str, body: dict):
     """Resolve a permission request from the live Claude stream.
 
@@ -366,7 +366,7 @@ async def answer_agent(agent: str, body: dict):
     return {"ok": True}
 
 
-@router.post("/{agent}/auto-approve", dependencies=[Depends(require_permission("agents.run"))])
+@router.post("/{agent}/auto-approve", dependencies=[Depends(require_permission("agents.use"))])
 async def auto_approve_agent(agent: str, body: dict):
     """Allow subsequent permission requests for the given live session."""
     live = _live_sessions.get(body.get("session_id") or "")
@@ -390,7 +390,7 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
         payload = verify_token(access_token) if access_token else None
     except Exception:
         payload = None
-    if not payload or "agents.run" not in payload.get("permissions", []):
+    if not payload or not ({"agents.use", "agents.run"} & set(payload.get("permissions", []))):
         await ws.close(code=4403)
         return
     if agent not in AGENTS or agent not in TERMINAL_CMD:
@@ -406,8 +406,16 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
         await ws.close(code=4403, reason="agent not installed")
         return
 
-    ts = await terminals.get_or_create(agent, sid, TERMINAL_CMD[agent], s["cwd"])
+    cmd = s.get("terminal_cmd") or TERMINAL_CMD[agent]
+    if s.get("install") and terminals.get(agent, sid) is None:
+        # Install jobs are not conversational sessions. Never replay a persisted install record
+        # by rerunning its command after a backend restart.
+        await ws.close(code=4409, reason="terminal job no longer available")
+        return
+    ts = await terminals.get_or_create(agent, sid, cmd, s["cwd"])
     await ws.accept()
+    token, mode = ts.attach(payload["id"])
+    await ws.send_json({"type": "attached", "mode": mode})
     try:
         await ws.send_bytes(ts.backlog())  # replay history to a reconnecting client
     except Exception:
@@ -426,13 +434,23 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
             msg = await ws.receive()
             if msg.get("type") == "websocket.disconnect":
                 break
-            # Binary frames are raw pty input; text frames are control (resize).
+            # Binary frames are raw pty input; text frames are control (turn, resize, heartbeat).
             if "bytes" in msg and isinstance(msg.get("bytes"), bytes):
-                ts.write(msg["bytes"])
+                if ts.can_write(token):
+                    ts.write(msg["bytes"])
+                else:
+                    await ws.send_json({"type": "input_rejected", "reason": "turn_required"})
             elif "text" in msg:
                 try:
                     ctrl = json.loads(msg["text"])
-                    if ctrl.get("type") == "resize":
+                    if ctrl.get("type") == "request_turn":
+                        granted = ts.request_turn(token, payload["id"], payload.get("role") == "admin")
+                        await ws.send_json({"type": "turn_granted" if granted else "turn_denied"})
+                    elif ctrl.get("type") == "release_turn":
+                        await ws.send_json({"type": "turn_released", "ok": ts.release_turn(token)})
+                    elif ctrl.get("type") == "heartbeat":
+                        await ws.send_json({"type": "heartbeat", "ok": ts.heartbeat(token)})
+                    elif ctrl.get("type") == "resize" and ts.can_write(token):
                         ts.resize(int(ctrl.get("cols") or 0), int(ctrl.get("rows") or 0))
                 except (ValueError, TypeError):
                     pass
@@ -445,3 +463,4 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
             await out_task
         except asyncio.CancelledError:
             pass
+        ts.detach(token)

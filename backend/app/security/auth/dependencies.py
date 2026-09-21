@@ -18,7 +18,7 @@ ALL_PERMISSIONS = [
     "projects.manage",
     "audit.view",
     "runtime.view", "runtime.configure", "runtime.install", "runtime.control",
-    "agents.run",  # admin-only: runs host CLI agents (claude/codex/opencode/hermes)
+    "agents.use", "agents.manage", "agents.install", "agents.run",  # legacy admin alias
 ]
 
 DEFAULT_USER_PERMISSIONS = [
@@ -27,6 +27,7 @@ DEFAULT_USER_PERMISSIONS = [
     "settings.read",
     "projects.manage",
     "runtime.view",
+    "agents.use",
 ]
 
 

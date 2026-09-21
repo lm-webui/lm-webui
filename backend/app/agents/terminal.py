@@ -14,6 +14,8 @@ import os
 import pty
 import struct
 import termios
+import time
+import uuid
 from collections import deque
 
 
@@ -75,7 +77,13 @@ class TerminalSession:
         self._cols, self._rows = cols, rows
         self._proc: asyncio.subprocess.Process | None = None
         self._master: int | None = None
-        self._queue: asyncio.Queue = asyncio.Queue()
+        # Each attachment gets its own queue. A shared queue makes two devices compete for
+        # chunks, so each viewer sees only a random half of the terminal output.
+        self._subscribers: set[asyncio.Queue] = set()
+        self._attachments: dict[str, int] = {}
+        self._controller: str | None = None
+        self._controller_user: int | None = None
+        self._lease_until = 0.0
         # Bounded output buffer for reconnect replay. ponytail: deque(maxlen); a full backlog drops
         # the oldest bytes — acceptable, the CLI restates context if the user needs it.
         self._backlog: deque[bytes] = deque(maxlen=backlog)
@@ -93,6 +101,56 @@ class TerminalSession:
     def backlog(self) -> bytes:
         """All output since the session started (for replay to a reconnecting client)."""
         return b"".join(self._backlog)
+
+    def attach(self, user_id: int) -> tuple[str, str]:
+        token = uuid.uuid4().hex
+        self._attachments[token] = user_id
+        self._expire_controller()
+        if self._controller is None:
+            self._grant(token)
+            return token, "controller"
+        return token, "viewer"
+
+    def detach(self, token: str) -> None:
+        self._attachments.pop(token, None)
+        if token == self._controller:
+            self._controller = None
+            self._controller_user = None
+            self._lease_until = 0
+
+    def request_turn(self, token: str, user_id: int, admin: bool = False) -> bool:
+        self._expire_controller()
+        if token not in self._attachments or self._attachments[token] != user_id:
+            return False
+        if self._controller is None or admin:
+            self._grant(token)
+            return True
+        return token == self._controller
+
+    def release_turn(self, token: str) -> bool:
+        self._expire_controller()
+        if token != self._controller:
+            return False
+        self._controller = None
+        self._controller_user = None
+        self._lease_until = 0
+        return True
+
+    def can_write(self, token: str) -> bool:
+        self._expire_controller()
+        return token == self._controller
+
+    def _grant(self, token: str) -> None:
+        self._controller = token
+        self._controller_user = self._attachments[token]
+        self._lease_until = time.monotonic() + 60
+
+    def _expire_controller(self) -> None:
+        if self._controller and time.monotonic() >= self._lease_until:
+            token = self._controller
+            self._controller = None
+            self._controller_user = None
+            self._lease_until = 0
 
     async def start(self) -> None:
         master, slave = pty.openpty()
@@ -119,7 +177,8 @@ class TerminalSession:
             self._teardown()
             return
         self._backlog.append(data)
-        self._queue.put_nowait(data)
+        for queue in tuple(self._subscribers):
+            queue.put_nowait(data)
 
     async def _wait(self) -> None:
         assert self._proc is not None
@@ -140,15 +199,21 @@ class TerminalSession:
             except OSError:
                 pass
             self._master = None
-        self._queue.put_nowait(None)  # sentinel: end of output
+        for queue in tuple(self._subscribers):
+            queue.put_nowait(None)  # sentinel: end of output
 
     async def output(self):
-        """Yield raw output bytes until the session closes (then stops)."""
-        while True:
-            data = await self._queue.get()
-            if data is None:
-                return
-            yield data
+        """Yield raw output for one attachment until the session closes."""
+        queue: asyncio.Queue = asyncio.Queue()
+        self._subscribers.add(queue)
+        try:
+            while True:
+                data = await queue.get()
+                if data is None:
+                    return
+                yield data
+        finally:
+            self._subscribers.discard(queue)
 
     def write(self, data: bytes) -> None:
         if self._master is not None:
@@ -156,6 +221,12 @@ class TerminalSession:
                 os.write(self._master, data)
             except OSError:
                 pass
+
+    def heartbeat(self, token: str) -> bool:
+        if self.can_write(token):
+            self._lease_until = time.monotonic() + 60
+            return True
+        return False
 
     def resize(self, cols: int, rows: int) -> None:
         if self._master is not None:

@@ -140,7 +140,7 @@ def test_inline_auth_websockets_still_gate_themselves(path):
 
     source = inspect.getsource(agents_routes.agent_terminal)
     assert "verify_token" in source, f"{path} no longer verifies a token"
-    assert "agents.run" in source, f"{path} no longer requires the admin permission"
+    assert "agents.use" in source, f"{path} no longer requires the agent permission"
 
 
 # ── download route regressions ────────────────────────────────────────────

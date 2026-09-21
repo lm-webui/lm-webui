@@ -157,6 +157,7 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   const [nonce, setNonce] = useState(0);
   // Why the socket dropped: 4403 = not installed / no terminal permission, 4404 = session mismatch.
   const [closed, setClosed] = useState<{ code: number; reason: string } | null>(null);
+  const [mode, setMode] = useState<"controller" | "viewer">("controller");
 
   const send = (data: string | Uint8Array) => {
     const s = sockRef.current;
@@ -263,6 +264,7 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     let errored = false;
     ws.onopen = () => {
       setState("open");
+      setMode("viewer");
       try { fitRef.current?.fit(); } catch { /* ignore */ }
       termRef.current?.focus(); // refocus on connect/reconnect/session switch
       const t = termRef.current;
@@ -272,7 +274,15 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       const t = termRef.current;
       if (!t) return;
       if (ev.data instanceof ArrayBuffer) t.write(new Uint8Array(ev.data));
-      else if (typeof ev.data === "string") t.write(ev.data);
+      else if (typeof ev.data === "string") {
+        try {
+          const control = JSON.parse(ev.data);
+          if (control.type === "attached") setMode(control.mode);
+          else if (control.type === "turn_granted") setMode("controller");
+          else if (control.type === "turn_released") setMode("viewer");
+          return;
+        } catch { t.write(ev.data); }
+      }
     };
     // onerror always precedes onclose; setting state here would be overwritten by onclose a tick
     // later, so it only records that the drop was not clean.
@@ -312,6 +322,10 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
           <TerminalIcon className="h-3.5 w-3.5" /> {agent} · interactive
         </span>
+        {state === "open" && mode === "viewer" && (
+          <button onClick={() => send(JSON.stringify({ type: "request_turn" }))}
+            className="text-[.65rem] text-primary hover:underline">request control</button>
+        )}
         {state !== "open" && (
           <button onClick={connect} className="text-[.65rem] text-primary hover:underline flex items-center gap-1">
             {state === "connecting" ? <Loader2 className="h-3 w-3 animate-spin" /> : <WifiOff className="h-3 w-3" />}
@@ -329,6 +343,12 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       {state !== "open" && closed && (
         <div className="shrink-0 border-b border-border/40 bg-destructive/10 px-3 py-1 text-[.65rem] text-destructive font-mono">
           socket closed ({closed.code}{closed.reason ? `: ${closed.reason}` : ""})
+        </div>
+      )}
+
+      {state === "open" && mode === "viewer" && (
+        <div className="shrink-0 border-b border-border/40 bg-muted/30 px-3 py-1 text-[.65rem] text-muted-foreground">
+          View-only attachment. Request control to interact with this terminal.
         </div>
       )}
 
