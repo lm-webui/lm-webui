@@ -61,3 +61,6 @@ AGENTS.md
 data/
 .lmwebui/
 landing/
+models/
+media/
+lm-webui-pro/
