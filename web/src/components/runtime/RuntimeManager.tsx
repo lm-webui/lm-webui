@@ -14,6 +14,7 @@ import { DownloadsProvider } from "@/features/downloads/useDownloads";
 import { LlamaCppTab } from "./LlamaCppTab";
 import { MLXTab } from "./MLXTab";
 import { ImageGenTab } from "./ImageGenTab";
+import type { ComfyuiStatus, ComfyuiInstallState } from "./ImageGenTab";
 import { Loader2, CheckCircle, Server, ScanLine, Download, AlertTriangle, RefreshCw } from "lucide-react";
 import { RiImageAiFill } from "react-icons/ri";
 import { SiHuggingface, SiApple } from "react-icons/si";
@@ -84,8 +85,9 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [installingMlx, setInstallingMlx] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [detectedExternals, setDetectedExternals] = useState<DetectedExternal[]>([]);
-  const [comfyuiConnected, setComfyuiConnected] = useState(false);
-  const [comfyuiEndpoint, setComfyuiEndpoint] = useState("http://host.docker.internal:8188");
+  const [comfyuiEndpoint, setComfyuiEndpoint] = useState("http://127.0.0.1:8188");
+  const [comfyuiStatus, setComfyuiStatus] = useState<ComfyuiStatus | null>(null);
+  const [comfyuiInstall, setComfyuiInstall] = useState<ComfyuiInstallState | null>(null);
   const [comfyDownloadOpen, setComfyDownloadOpen] = useState(false);
   const [comfyPresets, setComfyPresets] = useState<any[]>([]);
   const [comfyProgress, setComfyProgress] = useState<Record<string, number>>({});
@@ -110,6 +112,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       fetchGgufConfig();
       scanExternals();
       fetchGpuInfo();
+      fetchComfyuiStatus();
     }
   }, [inline, open]);
 
@@ -183,7 +186,6 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
 
       // Auto-detect ComfyUI
       const comfy = detected.find((d: DetectedExternal) => d.type === "comfyui");
-      setComfyuiConnected(!!comfy);
       if (comfy?.endpoint) setComfyuiEndpoint(comfy.endpoint);
     } catch (error) {
       console.error("Scan failed:", error);
@@ -272,9 +274,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
         method: "POST",
         body: JSON.stringify({ runtime_type: "comfyui", endpoint: comfyuiEndpoint }),
       });
-      setComfyuiConnected(true);
-      toast.success("ComfyUI connected");
-      await fetchRuntimes();
+      toast.success("ComfyUI connected — image generation will use this endpoint");
+      await Promise.all([fetchRuntimes(), fetchComfyuiStatus()]);
     } catch (error: any) {
       toast.error(error.message || "Failed to connect ComfyUI");
     }
@@ -282,7 +283,88 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
 
   const disconnectComfyui = async () => {
     toast.info("ComfyUI disconnected (remove endpoint to fully unregister)");
-    setComfyuiConnected(false);
+  };
+
+  // ── Managed ComfyUI engine ─────────────────────────────────────────
+  const fetchComfyuiStatus = async () => {
+    try {
+      const data = await authFetch("/api/runtimes/comfyui/status");
+      setComfyuiStatus(data);
+    } catch (error) {
+      console.error("Failed to fetch ComfyUI status:", error);
+    }
+  };
+
+  // The install clones a repo and pulls torch, so it runs server-side in the background —
+  // poll until it settles rather than awaiting the request.
+  const pollComfyuiInstall = () => {
+    const timer = setInterval(async () => {
+      try {
+        const state = await authFetch("/api/runtimes/comfyui/install-status");
+        setComfyuiInstall(state);
+        if (state.status === "completed") {
+          clearInterval(timer);
+          toast.success("ComfyUI installed");
+          await fetchComfyuiStatus();
+        } else if (state.status === "failed") {
+          clearInterval(timer);
+          toast.error(state.error || "ComfyUI install failed");
+        }
+      } catch {
+        clearInterval(timer);
+      }
+    }, 1500);
+  };
+
+  const installComfyui = async () => {
+    setComfyuiInstall({ status: "running", step: "starting", error: null, log_tail: "" });
+    try {
+      await authFetch("/api/runtimes/comfyui/install", { method: "POST" });
+      pollComfyuiInstall();
+    } catch (error: any) {
+      setComfyuiInstall({ status: "failed", step: "", error: error.message });
+      toast.error(error.message || "ComfyUI install failed");
+    }
+  };
+
+  const startComfyui = async () => {
+    setComfyuiInstall({ status: "running", step: "starting ComfyUI" });
+    try {
+      const res = await authFetch("/api/runtimes/comfyui/start", { method: "POST" });
+      setComfyuiInstall(null);
+      if (res?.success) {
+        toast.success("ComfyUI started");
+      } else {
+        toast.error(res?.error || "ComfyUI failed to start");
+      }
+    } catch (error: any) {
+      setComfyuiInstall(null);
+      toast.error(error.message || "ComfyUI failed to start");
+    } finally {
+      await fetchComfyuiStatus();
+    }
+  };
+
+  const stopComfyui = async () => {
+    try {
+      await authFetch("/api/runtimes/comfyui/stop", { method: "POST" });
+      toast.success("ComfyUI stopped");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to stop ComfyUI");
+    } finally {
+      await fetchComfyuiStatus();
+    }
+  };
+
+  const uninstallComfyui = async () => {
+    try {
+      await authFetch("/api/runtimes/comfyui/uninstall", { method: "POST" });
+      toast.success("ComfyUI removed");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to uninstall ComfyUI");
+    } finally {
+      await fetchComfyuiStatus();
+    }
   };
 
   const openComfyDownload = async () => {
@@ -313,6 +395,8 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             clearInterval(poll);
             setComfyDownloading(null);
             toast.success(s.status === "exists" ? "Model already exists" : "Model downloaded");
+            // Refresh so the running-engine view lists the new checkpoint.
+            void fetchComfyuiStatus();
           } else if (s.status === "failed" || s.status === "cancelled") {
             clearInterval(poll);
             setComfyDownloading(null);
@@ -540,7 +624,12 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
 
           <TabsContent value="comfyui" className="m-0 overflow-y-auto scrollbar-hide flex-1">
           <ImageGenTab
-            comfyuiConnected={comfyuiConnected}
+            comfyuiStatus={comfyuiStatus}
+            comfyuiInstall={comfyuiInstall}
+            installComfyui={installComfyui}
+            startComfyui={startComfyui}
+            stopComfyui={stopComfyui}
+            uninstallComfyui={uninstallComfyui}
             comfyuiEndpoint={comfyuiEndpoint}
             setComfyuiEndpoint={setComfyuiEndpoint}
             detectedExternals={detectedExternals}

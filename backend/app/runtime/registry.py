@@ -27,10 +27,16 @@ class RuntimeRegistry:
             registry_path: Path to registry JSON file
         """
         if registry_path is None:
-            data_dir = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                "..", "..", "data"
-            )
+            # The app's configured data dir, not a path relative to this file — the old
+            # hardcoded repo-relative location ignored LMWEBUI_BASE_DIR, so an isolated
+            # instance (tests, a second deployment) read and wrote another install's state.
+            try:
+                from app.core.config_manager import get_data_dir
+                data_dir = str(get_data_dir())
+            except Exception:  # config unavailable (very early import) — keep it local
+                data_dir = os.path.join(
+                    os.path.dirname(os.path.dirname(__file__)), "..", "..", "data"
+                )
             os.makedirs(data_dir, exist_ok=True)
             registry_path = os.path.join(data_dir, "runtime_registry.json")
 
@@ -59,9 +65,23 @@ class RuntimeRegistry:
             logger.error(f"Failed to save registry: {e}")
 
     def _update_from_detection(self, detected: Dict[str, Dict]) -> None:
-        """Store detected runtimes into the registry."""
+        """Store detected runtimes into the registry.
+
+        A user-registered external endpoint outranks detection: it was set deliberately, and
+        the detector only knows about the managed engine — overwriting would silently discard
+        the endpoint on the next refresh, which is what used to happen.
+        """
         from datetime import datetime
         for runtime_type, info in detected.items():
+            existing = self._runtimes.get(runtime_type, {})
+            if existing.get("source") == "external" and existing.get("endpoint"):
+                self._runtimes[runtime_type] = {
+                    **existing,
+                    # Keep reporting live managed state, but never the endpoint.
+                    "installed": info.get("installed", existing.get("installed", False)),
+                    "last_checked": datetime.now().isoformat(),
+                }
+                continue
             self._runtimes[runtime_type] = {
                 "installed": info.get("installed", False),
                 "status": info.get("status", "unknown"),

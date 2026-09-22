@@ -11,6 +11,9 @@
     "dompurify": ">=3.4.12"
   },
   "scripts": {
+    "preinstall": "node ../scripts/assert-not-root.mjs",
+    "predev": "node ../scripts/assert-not-root.mjs",
+    "prebuild": "node ../scripts/assert-not-root.mjs",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

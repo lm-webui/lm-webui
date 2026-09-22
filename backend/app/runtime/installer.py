@@ -7,24 +7,27 @@ import shutil
 import subprocess
 import sys
 from typing import Dict, Optional
-from .detector import RuntimeType
 
 logger = logging.getLogger(__name__)
 
 
-def _venv_pip(subcommand: str) -> str:
-    """A pip command that targets this service's own venv.
+def _venv_pip(subcommand: str, python: Optional[str] = None) -> str:
+    """A pip command that targets a specific interpreter's environment.
 
     Never a bare `pip`: these run with shell=True, so `pip` resolves to whatever is first on
     PATH — on macOS that is Homebrew's python, which refuses outright (PEP 668
     externally-managed-environment) and would install into the wrong interpreter anyway.
     `python -m pip` is not enough either: install.sh builds the venv with uv, which ships no
     pip of its own, so prefer uv against our interpreter and keep `-m pip` for pip-based venvs.
+
+    `python` defaults to this service's own venv; pass one to target another environment
+    (e.g. ComfyUI's dedicated venv, which is where torch must land).
     """
+    target = python or sys.executable
     if shutil.which("uv"):
-        return f"uv pip {subcommand} --python {sys.executable}"
+        return f"uv pip {subcommand} --python {target}"
     # pip prompts before uninstalling; uv has no -y and does not need one.
-    return f"{sys.executable} -m pip {subcommand}{' -y' if subcommand.startswith('uninstall') else ''}"
+    return f"{target} -m pip {subcommand}{' -y' if subcommand.startswith('uninstall') else ''}"
 
 
 class RuntimeInstaller:
@@ -32,20 +35,10 @@ class RuntimeInstaller:
 
     INSTALL_COMMANDS = {
         "mlx": (_venv_pip("install mlx mlx-lm mlx-optiq"),),
-        "comfyui": ("git clone https://github.com/comfyanonymous/ComfyUI ~/ComfyUI", f"{sys.executable} -m pip install -r ~/ComfyUI/requirements.txt",),
     }
 
     UNINSTALL_COMMANDS = {
         "mlx": (_venv_pip("uninstall mlx mlx-lm mlx-optiq"),),
-        "comfyui": ("rm -rf ~/ComfyUI",),
-    }
-
-    START_COMMANDS = {
-        "comfyui": ("cd ~/ComfyUI && python main.py --port 8188 --listen 0.0.0.0 &",),
-    }
-
-    STOP_COMMANDS = {
-        "comfyui": ("kill $(lsof -ti:8188) 2>/dev/null || true",),
     }
 
     def _run(self, cmd: str, timeout: int = 600) -> Dict:
@@ -108,23 +101,9 @@ class RuntimeInstaller:
                 logger.warning(f"Uninstall command warning: {e}")
         return {"success": True, "runtime_type": runtime_type}
 
-    def start(self, runtime_type: str) -> Dict:
-        """Start a runtime process."""
-        cmds = self.START_COMMANDS.get(runtime_type)
-        if not cmds:
-            return {"success": False, "error": f"No start command for {runtime_type}"}
-        for cmd in cmds:
-            subprocess.Popen(cmd, shell=True)
-        return {"success": True, "runtime_type": runtime_type}
-
-    def stop(self, runtime_type: str) -> Dict:
-        """Stop a runtime process."""
-        cmds = self.STOP_COMMANDS.get(runtime_type)
-        if not cmds:
-            return {"success": False, "error": f"No stop command for {runtime_type}"}
-        for cmd in cmds:
-            subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-        return {"success": True, "runtime_type": runtime_type}
+    # start/stop live on the runtime objects that own a Popen handle (ComfyUIRuntime,
+    # VisionRuntime). The old shell versions detached with `&`, so the PID was lost and a
+    # stop had to guess by port — a start could report success on a process that never ran.
 
 
 # Singleton

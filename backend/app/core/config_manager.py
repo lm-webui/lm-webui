@@ -161,12 +161,21 @@ class VisionConfig(BaseModel):
     cache_type_v: str = Field(default="q8_0", description="KV cache type for V")
 
 
+class ComfyUIConfig(BaseModel):
+    """ComfyUI image-generation runtime (managed headless engine)."""
+    port: int = Field(default=8188, ge=1, le=65535, description="ComfyUI server port")
+    # Leave empty to use the managed default of <base_dir>/comfyui. Set this (or COMFYUI_DIR)
+    # only to point at an engine installed elsewhere.
+    dir: str = Field(default="", description="ComfyUI install directory (empty = managed default)")
+    startup_timeout_s: int = Field(default=180, ge=10, description="Seconds to wait for a ready server")
+
+
 class AppConfig(BaseModel):
     """Main application configuration"""
     environment: Environment = Field(default=Environment.DEVELOPMENT, description="Application environment")
     debug: bool = Field(default=False, description="Enable debug mode")
     api_v1_prefix: str = Field(default="/api", description="API v1 prefix")
-    
+
     # Sub-configurations
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
@@ -175,6 +184,7 @@ class AppConfig(BaseModel):
     rag: RAGConfig = Field(default_factory=RAGConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     vision: VisionConfig = Field(default_factory=VisionConfig)
+    comfyui: ComfyUIConfig = Field(default_factory=ComfyUIConfig)
     
     class Config:
         env_prefix = "APP_"
@@ -398,6 +408,10 @@ def is_testing() -> bool:
     return config_manager.get_config().environment == Environment.TESTING
 
 # Path resolution helpers
+def get_base_dir() -> Path:
+    """Get absolute path to the app's root data directory (e.g. ~/.lmwebui)."""
+    return Path(get_paths_config().base_dir).expanduser().resolve()
+
 def get_media_dir() -> Path:
     """Get absolute path to media directory"""
     paths_config = get_paths_config()

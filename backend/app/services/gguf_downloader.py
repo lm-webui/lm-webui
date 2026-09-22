@@ -21,6 +21,13 @@ from app.search.fetch import blocked_host
 
 logger = logging.getLogger(__name__)
 
+# aiohttp's ClientSession defaults to a 300s *total* timeout. That silently capped every
+# download at five minutes: a 4.3 GB checkpoint died at ~76% on every attempt, and no model
+# large enough to be worth downloading could ever finish. Bound inactivity instead of
+# duration — a slow-but-progressing transfer runs as long as it needs, while a stalled one
+# still fails promptly.
+DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=120)
+
 class GGUFDownloadManager:
     """Manages GGUF downloads with WebSocket progress tracking"""
     
@@ -140,6 +147,8 @@ class GGUFDownloadManager:
             filename: Target filename
             target_dir: Optional target directory; defaults to the text-GGUF dir.
         """
+        # Bound before the try so the failure handler can clean up no matter how early it trips.
+        file_path: Optional[Path] = None
         try:
             dest_dir = target_dir if target_dir else self.models_dir
             dest_dir.mkdir(parents=True, exist_ok=True)
@@ -163,7 +172,7 @@ class GGUFDownloadManager:
             await self._notify_websockets(task_id)
             
             # Download with progress
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=DOWNLOAD_TIMEOUT) as session:
                 async with session.get(url) as response:
                     if response.status != 200:
                         error_msg = f"Download failed with status {response.status}"
@@ -250,8 +259,21 @@ class GGUFDownloadManager:
             await self._notify_websockets(task_id)
             
         except Exception as e:
-            error_msg = f"Download failed: {str(e)}"
-            logger.error(f"Download error for {filename}: {e}")
+            # A dropped connection lands here, not on the byte-count check below — and it
+            # leaves a truncated multi-GB file that looks like a complete model to every
+            # later scan (list_checkpoints, ComfyUI's own /models/checkpoints, load attempts).
+            # Delete it: a partial file is worse than none.
+            if file_path is not None:
+                try:
+                    file_path.unlink(missing_ok=True)
+                    logger.info(f"Removed partial download: {file_path.name}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Could not remove partial {file_path}: {cleanup_error}")
+            # Some aiohttp exceptions stringify to "", which surfaced as a bare
+            # "Download failed: " with no cause. Fall back to the exception class name.
+            reason = str(e) or type(e).__name__
+            error_msg = f"Download failed: {reason}"
+            logger.error(f"Download error for {filename}: {reason}")
             self.download_tasks[task_id].update({
                 "status": "failed",
                 "error": error_msg

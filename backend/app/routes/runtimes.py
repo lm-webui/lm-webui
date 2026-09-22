@@ -7,9 +7,6 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from app.runtime import (
-    RuntimeRegistry,
-    RuntimeDetector,
-    RuntimeType,
     get_runtime_registry,
     get_runtime_detector,
     get_runtime_installer,
@@ -47,7 +44,6 @@ async def get_runtimes(_: dict = Depends(require_permission("runtime.view"))):
 async def scan_runtimes(_: dict = Depends(require_permission("runtime.view"))):
     """Scan localhost for running external runtimes."""
     detector = get_runtime_detector()
-    import asyncio
     detected = await detector.detect_external_all()
     return {"detected": detected}
 
@@ -108,8 +104,21 @@ async def install_runtime(
     runtime_type: str,
     _: dict = Depends(require_permission("runtime.install"))
 ):
-    """Install a runtime on the host via subprocess."""
-    if runtime_type not in {"mlx", "comfyui"}:
+    """Install a runtime on the host via subprocess.
+
+    ComfyUI's install clones a repo and pulls torch (2-5 GB), so it runs as a background
+    task — the call returns immediately and the client polls /api/runtimes/comfyui/install-status.
+    """
+    if runtime_type == "comfyui":
+        import asyncio
+        from app.services import comfyui_runtime as cr
+
+        if cr.install_state()["status"] == "running":
+            return cr.install_state()
+        asyncio.create_task(cr.install())
+        return {**cr.install_state(), "status": "running"}
+
+    if runtime_type != "mlx":
         raise HTTPException(400, f"Runtime '{runtime_type}' does not support auto-install")
     from app.services import host_agent
     if host_agent.enabled():
@@ -130,10 +139,50 @@ async def uninstall_runtime(
     _: dict = Depends(require_permission("runtime.install"))
 ):
     """Uninstall a runtime from the host."""
-    if runtime_type not in {"mlx", "comfyui"}:
+    if runtime_type == "comfyui":
+        from app.services import comfyui_runtime as cr
+        return cr.uninstall()
+    if runtime_type != "mlx":
         raise HTTPException(400, f"Runtime '{runtime_type}' does not support auto-uninstall")
     installer = get_runtime_installer()
     return installer.uninstall(runtime_type)
+
+
+# ── ComfyUI (managed headless engine) ─────────────────────────────────────
+# Mirrors the /vision/status shape: the runtime object owns the process, so these read
+# live state rather than a probe that cannot tell "stopped" from "never installed".
+
+@router.get("/comfyui/status")
+async def get_comfyui_status(_: dict = Depends(require_permission("runtime.view"))):
+    """Installed / running / version / device / checkpoints in one call."""
+    from app.services.comfyui_runtime import comfyui_runtime
+    return await comfyui_runtime.describe()
+
+
+@router.get("/comfyui/install-status")
+async def get_comfyui_install_status(_: dict = Depends(require_permission("runtime.view"))):
+    """Progress of an in-flight install (step + log tail on failure)."""
+    from app.services.comfyui_runtime import install_state
+    return install_state()
+
+
+@router.post("/comfyui/start")
+async def start_comfyui(_: dict = Depends(require_permission("runtime.control"))):
+    """Start the managed ComfyUI server and wait for it to answer."""
+    from app.services.comfyui_runtime import comfyui_runtime
+    ok = await comfyui_runtime.start()
+    body = {"success": ok, "running": comfyui_runtime.running}
+    if not ok:
+        body["error"] = comfyui_runtime.last_error or "ComfyUI failed to start"
+    return body
+
+
+@router.post("/comfyui/stop")
+async def stop_comfyui(_: dict = Depends(require_permission("runtime.control"))):
+    """Stop the managed ComfyUI server."""
+    from app.services.comfyui_runtime import comfyui_runtime
+    comfyui_runtime.stop()
+    return {"success": True, "running": comfyui_runtime.running}
 
 
 @router.get("/mlx/status")

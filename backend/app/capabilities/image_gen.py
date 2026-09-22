@@ -19,6 +19,10 @@ _IMAGE_HANDLERS = {
     "gemini": "app.services.gemini_image.generate_image_gemini",
     "comfyui": "app.services.local_image.generate_image_local",
     "gguf": "app.services.local_image.generate_image_local",
+    # "local" is the Image Studio picker's label for the ComfyUI row. It is no longer what
+    # gets stored, but settings written before that fix still hold it — an unknown key here
+    # returns an empty result with no user-visible error.
+    "local": "app.services.local_image.generate_image_local",
 }
 
 
@@ -48,8 +52,8 @@ def _is_image_gen(provider: str, model: str) -> bool:
         return "image" in m or "imagen" in m
     if p == "openai":
         return "gpt-image" in m or "dall-e" in m
-    if p == "comfyui":
-        return True  # sdxl/flux/sd3/ltx are all t2i
+    if p in ("comfyui", "local"):
+        return True  # sdxl/sd15 are t2i
     return False
 
 

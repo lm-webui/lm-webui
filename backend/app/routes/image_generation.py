@@ -222,12 +222,15 @@ async def get_image_models(user_id: dict = Depends(get_current_user)):
     Queries user's actual API keys to find image-capable models.
     Falls back to known models if API query fails."""
     from app.services.model_registry import get_model_registry
+    from app.services.comfyui_runtime import MODEL_CATALOG
 
     registry = get_model_registry()
     known = {
         "openai": ["dall-e-3", "dall-e-2", "gpt-image-1"],
         "google": ["imagen-3", "gemini-2.5-flash-image"],
-        "comfyui": ["sdxl", "flux-dev", "flux-schnell", "sd3", "ltx"],
+        # Only models the catalog can resolve to a checkpoint, so the picker can never offer
+        # something with no graph or no download source behind it.
+        "comfyui": sorted(MODEL_CATALOG),
         "gguf": ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
     }
     api_keys = registry.get_user_api_keys(user_id["id"])

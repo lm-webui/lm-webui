@@ -35,9 +35,15 @@ export default function ImageWorkspace() {
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
 
   // Load saved default image model preferences on mount
+  // The picker labels this row "local", but settings and the backend use "comfyui" —
+  // and the chat image capability only knows "comfyui"/"gguf". Storing the UI label
+  // silently broke chat-triggered generation, so translate at the settings boundary.
+  const toSetting = (p: string) => (p === "local" ? "comfyui" : p);
+  const fromSetting = (p: string) => (p === "comfyui" ? "local" : p);
+
   useEffect(() => {
     fetchSettings().then((s: any) => {
-      if (s.defaultImageProvider) setProvider(s.defaultImageProvider);
+      if (s.defaultImageProvider) setProvider(fromSetting(s.defaultImageProvider));
       if (s.defaultImageModel) setModel(s.defaultImageModel);
     }).catch(() => {});
   }, []);
@@ -48,7 +54,7 @@ export default function ImageWorkspace() {
       fetchSettings().then((existing: any) => {
         updateSettings({
           ...existing,
-          defaultImageProvider: provider,
+          defaultImageProvider: toSetting(provider),
           defaultImageModel: model,
         }).catch(() => {});
       }).catch(() => {});
@@ -84,9 +90,11 @@ export default function ImageWorkspace() {
           },
           local: {
             label: "Local", icon: "server",
-            // "local" routes to the ComfyUI runtime pipeline (backend provider "comfyui")
+            // "local" routes to the ComfyUI runtime pipeline (backend provider "comfyui").
+            // The API keys its list by the backend name, so read `comfyui` — reading
+            // `local` always missed and fell back to a hardcoded list.
             connected: !!runtimes.comfyui?.installed,
-            models: apiModels.local || ["sdxl", "flux-dev", "flux-schnell", "sd3", "ltx"],
+            models: apiModels.comfyui || ["sdxl", "sd15"],
           },
           gguf: {
             label: "GGUF", icon: "server",

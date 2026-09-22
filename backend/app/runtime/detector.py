@@ -4,7 +4,7 @@ Detects managed runtimes: GGUF (in-container), MLX (external on Apple Silicon), 
 """
 import os
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 from enum import Enum
 
 try:
@@ -26,7 +26,8 @@ class RuntimeType(str, Enum):
 import os as _os
 HOST_INTERNAL = "host.docker.internal" if _os.path.exists("/.dockerenv") else "localhost"
 MLX_SERVER_PORT = 8090
-COMFYUI_PORT = 8188
+# ComfyUI's port is owned by services/comfyui_runtime.py (env + config driven) — the
+# hardcoded copy that used to live here disagreed with the client's COMFYUI_URL.
 
 
 class RuntimeDetector:
@@ -53,10 +54,11 @@ class RuntimeDetector:
             "managed": False,
         },
         RuntimeType.COMFYUI: {
-            "type": "external_server",
-            "host_port": COMFYUI_PORT,
-            "probe_path": "/",
-            "managed": False,
+            # Managed: this app installs and runs the engine (see services/comfyui_runtime.py).
+            # Not probed as an external server — a stopped-but-installed ComfyUI must not be
+            # indistinguishable from one that was never installed.
+            "type": "managed_process",
+            "managed": True,
         },
     }
 
@@ -189,11 +191,45 @@ class RuntimeDetector:
         if mlx:
             results["mlx"] = mlx
 
-        comfy = await self._probe_external("comfyui")
-        if comfy:
-            results["comfyui"] = comfy
+        # Always present, even when stopped — the registry merges only the keys it is given,
+        # so omitting this would leave a stale `installed: True` behind after a stop.
+        results["comfyui"] = await self._detect_comfyui()
 
         return results
+
+    async def _detect_comfyui(self) -> Dict:
+        """Detection for the managed ComfyUI engine.
+
+        `installed` means the engine is on disk; `running` means our subprocess is alive.
+        Deliberately not an HTTP probe: an externally-run ComfyUI on the same port is a
+        supported fallback, but it is not what "managed" reports.
+        """
+        result: Dict = {
+            "type": "comfyui",
+            "installed": False,
+            "status": "not_installed",
+            "port": None,
+            "endpoint": None,
+        }
+        try:
+            from app.services.comfyui_runtime import comfyui_runtime
+            desc = await comfyui_runtime.describe()
+        except Exception as e:
+            logger.debug(f"ComfyUI detection failed: {e}")
+            return result
+
+        result.update({
+            "installed": desc["installed"],
+            "port": desc["port"],
+            "endpoint": desc["endpoint"],
+            "version": desc.get("version"),
+            "checkpoints_count": len(desc.get("checkpoints") or []),
+        })
+        if desc["running"]:
+            result["status"] = "running"
+        elif desc["installed"]:
+            result["status"] = "stopped"
+        return result
 
     async def _probe_external(self, runtime_type: str) -> Optional[Dict]:
         """
@@ -252,10 +288,9 @@ class RuntimeDetector:
                 "  mlx_lm.server --port 8090 --model <model>"
             ),
             RuntimeType.COMFYUI: (
-                "Install on host:\n"
-                "  git clone https://github.com/comfyanonymous/ComfyUI\n"
-                "  cd ComfyUI && pip install -r requirements.txt\n"
-                "  python main.py --port 8188"
+                "Managed — installs and runs from Runtime Manager "
+                "(Image-Gen tab). Clones the engine into the app's data directory with its "
+                "own virtualenv; nothing to set up by hand."
             ),
         }
         return {

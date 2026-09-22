@@ -4,6 +4,7 @@
   "version": "0.8.30",
   "description": "Self-hosted AI workspace for local and cloud models. Multi-provider chat, image generation, model and runtime management.",
   "scripts": {
+    "preinstall": "node scripts/assert-not-root.mjs",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:web\"",
     "dev:web": "cd web && npm run dev",
     "dev:backend": "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 7070 --reload",
