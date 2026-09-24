@@ -5,7 +5,7 @@ out="${1:-dist/core}"
 rm -rf "$out"
 mkdir -p "$out"
 
-python3 -m nuitka \
+PYTHONPATH="${PYTHONPATH:-}:$(pwd)/backend" python3 -m nuitka \
   --standalone \
   --output-dir="$out" \
   --output-filename=lmwebui-core \
