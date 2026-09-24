@@ -73,7 +73,7 @@ export function SettingsSearch({ engine, setEngine }: {
       setApiKey("");
       setCx("");
       toast.success(`${currentEngine?.name} key saved`);
-    } catch (error: any) {
+    } catch {
       toast.error(`Failed to save ${currentEngine?.name} key`);
     }
   };
@@ -83,7 +83,7 @@ export function SettingsSearch({ engine, setEngine }: {
       await deleteApiKey(selectedProvider);
       setStoredApiKeys(prev => { const n = { ...prev }; delete n[selectedProvider]; return n; });
       toast.success(`${currentEngine?.name} key deleted`);
-    } catch (error) {
+    } catch {
       toast.error(`Failed to delete ${currentEngine?.name} key`);
     }
   };
@@ -106,7 +106,7 @@ export function SettingsSearch({ engine, setEngine }: {
       await updateSettings({ searxngUrl: searxngUrl.trim() });
       setSearxngStatus(null);  // the saved URL has not been probed
       toast.success("SearXNG URL saved");
-    } catch (error) {
+    } catch {
       toast.error("Failed to save SearXNG URL");
     }
   };
@@ -122,7 +122,7 @@ export function SettingsSearch({ engine, setEngine }: {
       setSearxngStatus(result.valid ? "connected" : "disconnected");
       if (result.valid) toast.success(result.message || "SearXNG reachable");
       else toast.error(result.message || "SearXNG not reachable");
-    } catch (error) {
+    } catch {
       setSearxngStatus("disconnected");
       toast.error("Failed to reach SearXNG");
     } finally {
@@ -155,7 +155,7 @@ export function SettingsSearch({ engine, setEngine }: {
           setStoredApiKeys(prev => { const n = { ...prev }; delete n[selectedProvider]; return n; });
         }
       }
-    } catch (error) {
+    } catch {
       toast.error(`Failed to connect to ${currentEngine?.name}`);
       if (!isConfigured && apiKey) {
         await deleteApiKey(selectedProvider).catch(() => {});
@@ -284,7 +284,7 @@ export function SettingsSearch({ engine, setEngine }: {
                 </div>
               ) : currentEngine && !currentEngine.needsKey ? (
                 <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                  DuckDuckGo works out of the box — no API key required.
+                  DuckDuckGo works out of the box, no API key required.
                 </div>
               ) : !isConfigured ? (
                 <div className="space-y-2">

@@ -9,7 +9,8 @@ from fastapi import APIRouter, HTTPException, Depends
 
 from app.services.gguf_downloader import gguf_downloader
 from app.services.comfyui_runtime import (
-    MODEL_CATALOG, catalog_entries, checkpoints_dir, comfyui_runtime,
+    MODEL_CATALOG, QWEN_ASSETS, catalog_entries, qwen_asset_entries, qwen_models_dir,
+    checkpoints_dir, comfyui_runtime,
 )
 from app.core.error_handlers import safe_path
 from app.security.auth.dependencies import require_permission
@@ -30,7 +31,7 @@ async def list_presets(_: dict = Depends(require_permission("models.install"))):
     Read from the same catalog the generation path resolves against, so a downloaded
     preset is always the file the workflow will ask for.
     """
-    return {"presets": catalog_entries()}
+    return {"presets": catalog_entries(), "qwen_assets": qwen_asset_entries()}
 
 
 @router.get("/checkpoints")
@@ -72,27 +73,36 @@ async def start_download(
     }
     """
     model_id = (req.get("model_id") or "").strip()
+    asset_id = (req.get("asset_id") or "").strip()
     url = (req.get("url") or "").strip()
     filename = (req.get("filename") or "").strip()
 
-    if model_id:
+    if asset_id:
+        asset = next((a for a in qwen_asset_entries() if a["id"] == asset_id), None)
+        if not asset:
+            raise HTTPException(status_code=400, detail=f"Unknown asset_id: {asset_id}")
+        url, filename = asset["url"], asset["filename"]
+        target_dir = qwen_models_dir(asset["kind"])
+    elif model_id:
         preset = MODEL_CATALOG.get(model_id)
         if not preset:
             raise HTTPException(status_code=400, detail=f"Unknown model_id: {model_id}")
         url, filename = preset["url"], preset["filename"]
+        target_dir = qwen_models_dir("diffusion") if preset.get("qwen") else checkpoints_dir()
     elif url and filename:
         if not filename.lower().endswith(ALLOWED_CHECKPOINT_EXTS):
             raise HTTPException(
                 status_code=400,
                 detail=f"filename must end with {' or '.join(ALLOWED_CHECKPOINT_EXTS)}",
             )
+        target_dir = checkpoints_dir()
     else:
         raise HTTPException(
             status_code=400, detail="Provide model_id or both url and filename"
         )
 
     try:
-        task_id = await gguf_downloader.start_download(url, filename, checkpoints_dir())
+        task_id = await gguf_downloader.start_download(url, filename, target_dir)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -104,5 +114,5 @@ async def start_download(
         "status": "starting",
         "websocket_url": f"/api/models/download-ws/{task_id}",
         "filename": filename,
-        "target_dir": str(checkpoints_dir()),
+        "target_dir": str(target_dir),
     }

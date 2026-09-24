@@ -9,6 +9,7 @@ import { ThemeProvider } from "./components/ui/theme-provider";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { MultimodalProvider } from "./components/multimodal";
 import { StartupGuard } from "./components/StartupGuard";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import IndexEnhanced from "./pages/Index";
 import Login from "./pages/Login";
@@ -28,11 +29,7 @@ const AppContent = () => {
         const { migrateToHybridStorage, needsStorageMigration } = await import('./utils/storageUtils');
         
         if (needsStorageMigration()) {
-          console.log('🔄 Migrating storage to hybrid approach...');
           migrateToHybridStorage();
-          console.log('✅ Storage migration completed');
-        } else {
-          console.log('✅ Storage already using hybrid approach');
         }
       } catch (error) {
         console.error('Storage migration failed:', error);
@@ -71,7 +68,11 @@ const App = () => (
       <AuthProvider>
         <MultimodalProvider>
           <StartupGuard>
-            <AppContent />
+            {/* Last line of defence: without this a render error blanks the whole app,
+                including the routes that would still work. */}
+            <ErrorBoundary>
+              <AppContent />
+            </ErrorBoundary>
           </StartupGuard>
         </MultimodalProvider>
       </AuthProvider>

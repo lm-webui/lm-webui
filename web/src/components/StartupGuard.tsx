@@ -26,7 +26,7 @@ export function StartupGuard({ children }: { children: React.ReactNode }) {
           setHealth(data);
           if (!data.ready) setTimeout(pollHealth, 2000);
         }
-      } catch (err) {
+      } catch {
         if (mounted) {
           retriesRef.current++;
           const delay = Math.min(1000 * retriesRef.current, 5000);

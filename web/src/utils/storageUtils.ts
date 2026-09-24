@@ -28,7 +28,6 @@ export const saveDraftMessage = (
       JSON.stringify(draft)
     );
     
-    console.log(`💾 Saved draft for conversation ${conversationId}`);
   } catch (error) {
     console.error('Failed to save draft message:', error);
   }
@@ -73,7 +72,6 @@ export const clearDraftMessage = (conversationId: string): void => {
     sessionStorage.removeItem(
       DRAFT_STORAGE_KEYS.UNSENT_MESSAGE(conversationId)
     );
-    console.log(`🗑️ Cleared draft for conversation ${conversationId}`);
   } catch (error) {
     console.error('Failed to clear draft message:', error);
   }
@@ -142,7 +140,6 @@ export const clearAllDrafts = (): void => {
     }
     
     keysToRemove.forEach(key => sessionStorage.removeItem(key));
-    console.log(`🗑️ Cleared ${keysToRemove.length} draft messages`);
   } catch (error) {
     console.error('Failed to clear all drafts:', error);
   }
@@ -229,7 +226,6 @@ export const addRecentModel = (modelId: string): void => {
 
 export const migrateToHybridStorage = (): void => {
   try {
-    console.log('🔄 Starting storage migration to hybrid approach...');
     
     // Clear old Zustand persisted stores
     const oldKeys = [
@@ -242,7 +238,6 @@ export const migrateToHybridStorage = (): void => {
     oldKeys.forEach(key => {
       if (localStorage.getItem(key)) {
         localStorage.removeItem(key);
-        console.log(`🗑️ Removed old storage key: ${key}`);
       }
     });
     
@@ -257,13 +252,11 @@ export const migrateToHybridStorage = (): void => {
     
     keysToRemove.forEach(key => {
       localStorage.removeItem(key);
-      console.log(`🗑️ Removed old temp message key: ${key}`);
     });
     
     // Clear sessionStorage (drafts will be recreated as needed)
     sessionStorage.clear();
     
-    console.log('✅ Storage migration completed');
   } catch (error) {
     console.error('Storage migration failed:', error);
   }

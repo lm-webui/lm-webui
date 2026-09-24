@@ -45,16 +45,16 @@ class ChatRequest(BaseModel):
     skill: Optional[str] = None  # skill id → appended system prompt
 
 
-def _resolve_session(agent: str, req: ChatRequest):
+def _resolve_session(agent: str, req: ChatRequest, owner_id: int):
     """Get-or-create the session.
 
     Returns (sid, s, transcript_prompt). The transcript prompt is only used by the non-interactive
     one-shot path (codex/opencode/hermes); interactive claude resumes via `--resume` instead, so its
     context comes from claude's own on-disk session, not this concatenation.
     """
-    sid = req.session_id or sessions.create(agent)
+    sid = req.session_id or sessions.create(agent, owner_id=owner_id)
     s = sessions.get(sid)
-    if not s or s.get("agent") != agent:
+    if not s or s.get("agent") != agent or s.get("owner_id") != owner_id:
         raise HTTPException(404, "Session not found")
     history = s["transcript"][-6:]
     context = "\n".join(f"{m['role']}: {m['content']}" for m in history)
@@ -82,7 +82,8 @@ async def get_profile(agent: str):
 
 
 @router.post("/{agent}/install", dependencies=[Depends(require_permission("agents.install"))])
-async def install_agent(agent: str, update: bool = False):
+async def install_agent(agent: str, update: bool = False,
+                        current_user: dict = Depends(require_permission("agents.install"))):
     """Run the trusted per-agent install command in an Agent Hub terminal tab.
 
     update=True relaunches the install command even when already installed (npm install -g always
@@ -98,7 +99,8 @@ async def install_agent(agent: str, update: bool = False):
         return {"launched": False, "installed": True, "agent": agent}
 
     command = install_cmd(agent)
-    sid = sessions.create(agent, install=True, terminal_cmd=["bash", "-lc", command])
+    sid = sessions.create(agent, owner_id=current_user["id"], install=True,
+                          terminal_cmd=["bash", "-lc", command])
     try:
         # `bash -lc` so the installers inherit a login PATH — they shell out to npm/curl.
         # get_or_create keeps the process alive across WebSocket disconnects, so closing the tab
@@ -122,22 +124,26 @@ async def install_agent(agent: str, update: bool = False):
 
 
 @router.get("/{agent}/sessions", dependencies=[Depends(require_permission("agents.use"))])
-async def list_sessions(agent: str):
+async def list_sessions(agent: str, current_user: dict = Depends(require_permission("agents.use"))):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    return {"sessions": sessions.list(agent)}
+    return {"sessions": sessions.list(agent, current_user["id"], current_user.get("role") == "admin")}
 
 
 @router.post("/{agent}/sessions", dependencies=[Depends(require_permission("agents.use"))])
-async def create_session(agent: str):
+async def create_session(agent: str, current_user: dict = Depends(require_permission("agents.use"))):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    return {"session_id": sessions.create(agent)}
+    return {"session_id": sessions.create(agent, owner_id=current_user["id"])}
 
 
 @router.delete("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.manage"))])
-async def delete_session(agent: str, sid: str):
+async def delete_session(agent: str, sid: str,
+                         current_user: dict = Depends(require_permission("agents.manage"))):
     # Deleting the session is what reaps its PTY now that a disconnect only detaches.
+    s = sessions.get(sid)
+    if not s or s.get("agent") != agent or (s.get("owner_id") != current_user["id"] and current_user.get("role") != "admin"):
+        raise HTTPException(404, "Session not found")
     await terminals.close(agent, sid)
     if not sessions.delete(sid):
         raise HTTPException(404, "Session not found")
@@ -145,23 +151,25 @@ async def delete_session(agent: str, sid: str):
 
 
 @router.get("/{agent}/sessions/{sid}", dependencies=[Depends(require_permission("agents.use"))])
-async def get_session(agent: str, sid: str):
+async def get_session(agent: str, sid: str,
+                      current_user: dict = Depends(require_permission("agents.use"))):
     """Return a session's transcript so the UI can restore a resumed chat."""
     s = sessions.get(sid)
-    if not s or s.get("agent") != agent:
+    if not s or s.get("agent") != agent or (s.get("owner_id") != current_user["id"] and current_user.get("role") != "admin"):
         raise HTTPException(404, "Session not found")
     return {"session_id": sid, "transcript": s.get("transcript", [])}
 
 
 @router.post("/{agent}/sessions/{sid}/compact", dependencies=[Depends(require_permission("agents.manage"))])
-async def compact_session(agent: str, sid: str):
+async def compact_session(agent: str, sid: str,
+                          current_user: dict = Depends(require_permission("agents.manage"))):
     """Reset a session's context: clear the transcript + claude session id (next run starts fresh).
 
     ponytail: the old claude session lingers on disk as an orphan — acceptable; claude has no CLI
     to delete a session by id.
     """
     s = sessions.get(sid)
-    if not s:
+    if not s or s.get("agent") != agent or (s.get("owner_id") != current_user["id"] and current_user.get("role") != "admin"):
         raise HTTPException(404, "Session not found")
     s["transcript"] = []
     sessions.set_claude_session(sid, None)
@@ -169,21 +177,23 @@ async def compact_session(agent: str, sid: str):
 
 
 @router.get("/{agent}/runs", dependencies=[Depends(require_permission("agents.use"))])
-async def list_runs(agent: str):
+async def list_runs(agent: str, current_user: dict = Depends(require_permission("agents.use"))):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    return {"runs": sessions.list_runs(agent)}
+    admin = current_user.get("role") == "admin"
+    return {"runs": sessions.list_runs(agent, current_user["id"], admin)}
 
 
 @router.get("/{agent}/usage", dependencies=[Depends(require_permission("agents.use"))])
-async def agent_usage(agent: str):
+async def agent_usage(agent: str, current_user: dict = Depends(require_permission("agents.use"))):
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
-    runs = sessions.list_runs(agent)
+    admin = current_user.get("role") == "admin"
+    runs = sessions.list_runs(agent, current_user["id"], admin)
     session_history = [
         {"sid": s["sid"], "created_at": s.get("created_at"),
          "run_count": len((sessions.get(s["sid"]) or {}).get("runs", []))}
-        for s in sessions.list(agent)
+        for s in sessions.list(agent, current_user["id"], admin)
     ]
     session_history.sort(key=lambda s: s.get("created_at") or "", reverse=True)
     return {
@@ -230,7 +240,8 @@ def _reject_unsupported(agent: str, req: ChatRequest) -> None:
 
 
 @router.post("/{agent}/chat/stream", dependencies=[Depends(require_permission("agents.use"))])
-async def chat_stream(agent: str, req: ChatRequest):
+async def chat_stream(agent: str, req: ChatRequest,
+                      current_user: dict = Depends(require_permission("agents.use"))):
     """SSE streaming chat. Yields status/output/run/complete frames as `data: {json}\\n\\n`."""
     if agent not in AGENTS:
         raise HTTPException(404, "Unknown agent")
@@ -238,7 +249,7 @@ async def chat_stream(agent: str, req: ChatRequest):
     if not msg:
         raise HTTPException(400, "Message is required")
     _reject_unsupported(agent, req)
-    sid, s, prompt = _resolve_session(agent, req)
+    sid, s, prompt = _resolve_session(agent, req, current_user["id"])
 
     async def _sse(payload: dict):
         return f"data: {json.dumps(payload)}\n\n"
@@ -399,6 +410,9 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
     s = sessions.get(sid)
     if not s or s.get("agent") != agent:
         await ws.close(code=4404)
+        return
+    if s.get("owner_id") != payload["id"] and payload.get("role") != "admin":
+        await ws.close(code=4403)
         return
     # An install session's terminal is running the install command precisely *because* the agent
     # is not installed yet, so the not-installed guard must not apply to it.

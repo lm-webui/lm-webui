@@ -84,7 +84,7 @@ export function InferenceTab({
           </div>
           <div className="space-y-2">
             <Label htmlFor="system-prompt" className="text-sm sm:text-base">System Prompt</Label>
-            <textarea id="system-prompt" className="flex min-h-[80px] sm:min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50" placeholder="You are a helpful AI assistant..." value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
+            <textarea id="system-prompt" className="flex min-h-[80px] sm:min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50" placeholder="You are a helpful AI assistant..." value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
           </div>
         </CardContent>
       </Card>
@@ -132,7 +132,7 @@ export function InferenceTab({
               <SelectTrigger><SelectValue placeholder={loadingModels ? "Loading..." : visionModels.length === 0 ? "No vision model installed" : "Select vision model"} /></SelectTrigger>
               <SelectContent>
                 {visionModels.length === 0 && !loadingModels ? (
-                  <div className="px-2 py-4 text-xs text-muted-foreground text-center">No vision model installed — download one from Runtime Manager → GGUF</div>
+                  <div className="px-2 py-4 text-xs text-muted-foreground text-center">No vision model installed. Download one from Runtime Manager → GGUF</div>
                 ) : (
                   visionModels.map((m) => (
                     <SelectItem key={m} value={m}>{m}</SelectItem>

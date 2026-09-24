@@ -220,7 +220,7 @@ export function Message({
 
   const copyToClipboard = async (text: string) => {
     try {
-      let plainText = text
+      const plainText = text
         .replace(/^#{1,6}\s+/gm, "")
         .replace(/\*\*(.*?)\*\*/g, "$1")
         .replace(/\*(.*?)\*/g, "$1")
@@ -236,7 +236,7 @@ export function Message({
       setCopied(true);
       toast.success("Copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch {
       toast.error("Failed to copy text");
     }
   };
@@ -371,7 +371,7 @@ export function Message({
                       </div>
                     );
                   },
-                  code({ node, inline, className, children, ...props }: any) {
+                  code({ inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || "");
                     const codeText = String(children).replace(/\n$/, "");
                     const detectedLang =
@@ -398,121 +398,16 @@ export function Message({
                     );
                   },
                   img({ src, alt, ...props }) {
-                    const currentSrc = src || "";
-                    const [hasError, setHasError] = useState(false);
-
-                    // Don't render anything if src is empty string (fixes React warning)
-                    if (!src) return null;
-
-                    // Use span instead of div to avoid nesting issues in <p> tags
+                    // Extracted into a component: a hook called inside this renderer
+                    // would be recorded as Message's own hook, so the image state moved
+                    // with it. See MessageImage at the bottom of this file.
                     return (
-                      <span className="relative group/image my-4 block">
-                        <img
-                          src={currentSrc}
-                          alt={alt}
-                          className={cn(
-                            "rounded-lg max-w-full h-auto border shadow-sm",
-                            hasError && "opacity-50",
-                          )}
-                          loading="lazy"
-                          onError={() => {
-                            setHasError(true);
-                            handleImageError(src || "");
-                          }}
-                          {...props}
-                        />
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity h-8 w-8 p-0 max-md:opacity-100"
-                          onClick={async (e) => {
-                            e.stopPropagation(); // Prevent image click
-
-                            const imageUrl = currentSrc || "";
-                            if (!imageUrl) {
-                              toast.error("No image available for download");
-                              return;
-                            }
-
-                            try {
-                              // For blob URLs and data URLs, use direct download
-                              if (
-                                imageUrl.startsWith("blob:") ||
-                                imageUrl.startsWith("data:")
-                              ) {
-                                const link = document.createElement("a");
-                                link.href = imageUrl;
-                                link.download = `generated-image-${Date.now()}.png`;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                toast.success("Image downloaded!");
-                                return;
-                              }
-
-                              // For regular HTTP URLs (including local paths), fetch and download as blob
-                              const response = await fetch(imageUrl, {
-                                method: "GET",
-                                headers: {
-                                  Accept: "image/*",
-                                },
-                              });
-
-                              if (!response.ok) {
-                                throw new Error(
-                                  `Failed to fetch image: ${response.status}`,
-                                );
-                              }
-
-                              const blob = await response.blob();
-                              const blobUrl = URL.createObjectURL(blob);
-
-                              const link = document.createElement("a");
-                              link.href = blobUrl;
-                              link.download = `generated-image-${Date.now()}.png`;
-                              document.body.appendChild(link);
-                              link.click();
-                              document.body.removeChild(link);
-
-                              // Clean up blob URL after a short delay
-                              setTimeout(
-                                () => URL.revokeObjectURL(blobUrl),
-                                1000,
-                              );
-
-                              toast.success("Image downloaded!");
-                            } catch (error) {
-                              console.error("Download failed:", error);
-
-                              // Fallback: try opening in new tab with download intent
-                              try {
-                                const link = document.createElement("a");
-                                link.href = imageUrl;
-                                link.download = `generated-image-${Date.now()}.png`;
-                                link.target = "_blank";
-                                link.rel = "noopener noreferrer";
-
-                                // Try to force download with download attribute
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-
-                                toast.info("Download started in new tab");
-                              } catch (fallbackError) {
-                                console.error(
-                                  "Fallback download failed:",
-                                  fallbackError,
-                                );
-                                toast.error(
-                                  "Download failed. Please try again.",
-                                );
-                              }
-                            }
-                          }}
-                        >
-                          <Download className="h-3 w-3" />
-                        </Button>
-                      </span>
+                      <MessageImage
+                        src={src}
+                        alt={alt}
+                        onImageError={handleImageError}
+                        {...props}
+                      />
                     );
                   },
                   a({ href, children, ...props }) {
@@ -809,7 +704,7 @@ export function Message({
             live here to keep working. */}
         <div
           className={cn(
-            "text-[10px] text-note-foreground mt-1 mb-4 ml-4 mr-8 flex items-center gap-2",
+            "text-[10px] mt-1 mb-4 ml-4 mr-8 flex items-center gap-2",
             "opacity-35 hover:opacity-55 transition-opacity",
             message.role === "user" ? "justify-end" : "",
             isMobile && "text-[11px]",
@@ -897,3 +792,126 @@ export function Message({
 }
 
 export default Message;
+
+// The markdown `img` renderer used to hold its own useState while being called as a
+// plain function by react-markdown. Hooks are only tracked for components, so that state
+// was being charged to whichever component happened to render the markdown — the wrong
+// hook slot, and a reordering bug waiting to happen. It is a component now.
+function MessageImage({ src, alt, onImageError, ...props }: any) {
+  const currentSrc = src || "";
+  const [hasError, setHasError] = useState(false);
+
+  // Don't render anything if src is empty string (fixes React warning)
+  if (!src) return null;
+
+  // Use span instead of div to avoid nesting issues in <p> tags
+  return (
+    <span className="relative group/image my-4 block">
+      <img
+        src={currentSrc}
+        alt={alt}
+        className={cn(
+          "rounded-lg max-w-full h-auto border shadow-sm",
+          hasError && "opacity-50",
+        )}
+        loading="lazy"
+        onError={() => {
+          setHasError(true);
+          onImageError(src || "");
+        }}
+        {...props}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity h-8 w-8 p-0 max-md:opacity-100"
+        onClick={async (e) => {
+          e.stopPropagation(); // Prevent image click
+
+          const imageUrl = currentSrc || "";
+          if (!imageUrl) {
+            toast.error("No image available for download");
+            return;
+          }
+
+          try {
+            // For blob URLs and data URLs, use direct download
+            if (
+              imageUrl.startsWith("blob:") ||
+              imageUrl.startsWith("data:")
+            ) {
+              const link = document.createElement("a");
+              link.href = imageUrl;
+              link.download = `generated-image-${Date.now()}.png`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              toast.success("Image downloaded!");
+              return;
+            }
+
+            // For regular HTTP URLs (including local paths), fetch and download as blob
+            const response = await fetch(imageUrl, {
+              method: "GET",
+              headers: {
+                Accept: "image/*",
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(
+                `Failed to fetch image: ${response.status}`,
+              );
+            }
+
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = blobUrl;
+            link.download = `generated-image-${Date.now()}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Clean up blob URL after a short delay
+            setTimeout(
+              () => URL.revokeObjectURL(blobUrl),
+              1000,
+            );
+
+            toast.success("Image downloaded!");
+          } catch (error) {
+            console.error("Download failed:", error);
+
+            // Fallback: try opening in new tab with download intent
+            try {
+              const link = document.createElement("a");
+              link.href = imageUrl;
+              link.download = `generated-image-${Date.now()}.png`;
+              link.target = "_blank";
+              link.rel = "noopener noreferrer";
+
+              // Try to force download with download attribute
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+
+              toast.info("Download started in new tab");
+            } catch (fallbackError) {
+              console.error(
+                "Fallback download failed:",
+                fallbackError,
+              );
+              toast.error(
+                "Download failed. Please try again.",
+              );
+            }
+          }
+        }}
+      >
+        <Download className="h-3 w-3" />
+      </Button>
+    </span>
+  );
+}

@@ -35,7 +35,6 @@ export class SessionService {
           keysMap[key.provider] = true;
         });
       }
-      console.log("Loaded stored API keys:", keysMap);
       return keysMap;
     } catch (error) {
       console.error("Failed to load stored API keys:", error);

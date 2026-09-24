@@ -22,6 +22,51 @@ The installer registers a launchd (macOS) or systemd (Linux) service on port **7
 Data lives in `~/.lmwebui` — `data/`, `models/`, `media/`, `config.yaml`. The desktop app
 owns none of it.
 
+You do not have to do this by hand. If the app starts and finds no working backend, it offers
+to run the installer for you (see **First run** below), so the curl command above is the
+equivalent by hand, not a prerequisite you must meet before the app is useful.
+
+## First run
+
+The app probes `http://127.0.0.1:7070/` and asks for the page it is about to load, not for a
+health endpoint. The distinction is the whole point: a server whose install tree has been
+deleted underneath it keeps answering `/api/health` from memory with `200 {"ready":true}`
+while `/` returns a JSON 404, so a readiness check that trusts a status code will navigate
+straight into `{"detail":"Not found"}`. Asking for `/` and requiring `text/html` cannot go
+stale that way, and needs nothing from the backend beyond serving its own UI.
+
+That probe sorts the machine into four states. Each gets one message and, where one can help,
+one button:
+
+| State | Detected by | What the app offers |
+|---|---|---|
+| `up` | `/` answers with HTML | Opens the app. No screen shown. |
+| `no_ui` | Something answers, but `/` is not HTML | **Repair installation**, runs `lmwebui update` |
+| `not_running` | Connection refused, `~/.lmwebui` exists | **Start the server**, runs `lmwebui start` |
+| `not_installed` | Connection refused, no `~/.lmwebui` | **Install LM-WebUI**, runs the installer |
+
+`no_ui` is the state that produced the incident above, and it is the one a status-code check
+cannot see.
+
+`install` is also the fallback for the other two. Both of them run a CLI that lives inside
+`~/.lmwebui`, which is exactly the tree that is missing in the `no_ui` case, so "repair" would
+otherwise have nothing to run.
+
+The installer runs **in the app**, streaming its output into the window. There is no progress
+bar because there is no honest percentage to show; the installer's own lines are the progress.
+When the server comes up the window swaps to the UI on its own, so there is no "now reopen the
+app" step. On a non-zero exit the log is deliberately kept on screen, since it is the only
+record of what went wrong.
+
+The log is capped at the last 500 lines (a pip install emits thousands), a second click while
+a repair is running is rejected, and there is no cancel button: interrupting mid-`pip install`
+leaves a half-built virtualenv, which is worse than waiting.
+
+JavaScript sends an **action name** (`install`, `start`, `repair`), never a command string.
+The three shell commands are constants in `lib.rs`, so nothing from the webview reaches a
+shell. The installer is invoked with `LMWEBUI_INSTALL_APP=0` so it cannot offer to replace the
+very app that is running it.
+
 ## Development
 
 ```sh
@@ -37,9 +82,13 @@ the app against it. You still need the backend running for anything beyond the U
 npm run build
 ```
 
-Produces the bundle under `src-tauri/target/release/bundle/`. On a machine without the
-backend installed the app opens a status page and swaps in the real UI as soon as
-`http://localhost:7070/api/health` answers.
+Produces the bundle under `src-tauri/target/release/bundle/`. On a machine whose backend is
+not serving the UI, the app opens the onboarding page described below instead of a blank
+window, and swaps in the real UI as soon as the backend serves it.
+
+The release binary can be run directly (`src-tauri/target/release/lm-webui-desktop`) without
+packaging a DMG. Use `npx tauri build --no-bundle` for that loop: a bare `cargo build
+--release` omits the `custom-protocol` feature and will not serve the embedded page.
 
 ## Releasing the macOS DMG
 
@@ -57,8 +106,9 @@ Needs only a macOS host, Rust, node, git and curl. `gh` is optional: with it the
 uploaded automatically, without it the script builds and verifies as usual and prints the
 release page to drag the DMG onto.
 
-The DMG is uploaded as a **release asset**, never committed. It is a multi-MB binary and git
-keeps every version forever, so each rebuild would permanently grow every clone.
+The DMG is uploaded as versioned and stable **release assets**, never committed. The versioned
+asset keeps the exact build visible in the release; the stable `LM-WebUI-macos-arm64.dmg` alias
+lets the website and installer use one URL across releases.
 
 Downloaders always get a Gatekeeper prompt, wherever the DMG is hosted — macOS quarantines
 anything downloaded and a locally built DMG only opens because it was never quarantined. See

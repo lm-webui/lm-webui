@@ -7,7 +7,7 @@
       :root { color-scheme: light dark; }
       body {
         margin: 0;
-        height: 100vh;
+        min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -17,9 +17,12 @@
       }
       @media (prefers-color-scheme: dark) {
         body { background: #1c1c1e; color: #f2f2f7; }
-        code { background: #2c2c2e; }
+        code, #log { background: #2c2c2e; }
+        button { background: #f2f2f7; color: #1c1c1e; }
+        button:hover:not(:disabled) { background: #fff; }
+        button:disabled { background: #3a3a3c; color: #8e8e93; }
       }
-      main { text-align: center; max-width: 30rem; padding: 2rem; }
+      main { text-align: center; max-width: 34rem; padding: 2rem; }
       .mark {
         width: 72px; height: 72px; margin: 0 auto 1.5rem;
         border-radius: 50%; background: #fe860a;
@@ -32,44 +35,231 @@
         border-radius: 50%; opacity: .45;
         animation: spin .7s linear infinite;
       }
+      .ring[hidden] { display: none; }
       @keyframes spin { to { transform: rotate(360deg); } }
-      #hint { opacity: .6; }
-      #install { display: none; margin-top: 1.75rem; text-align: left; }
-      #install.visible { display: block; }
-      code {
-        display: block; margin: .5rem 0 1rem; padding: .6rem .75rem;
-        background: #ececec; border-radius: 6px;
-        font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-        white-space: pre-wrap; word-break: break-all;
+      h1 { font-size: 1.05rem; font-weight: 600; margin: 0 0 .5rem; }
+      p { margin: 0 0 .75rem; }
+      .detail { opacity: .65; }
+      .detail[hidden] { display: none; }
+      button {
+        margin-top: .5rem; padding: .55rem 1.25rem;
+        border: 0; border-radius: 6px;
+        background: #1c1c1e; color: #faf9f7;
+        font: inherit; font-weight: 500;
+        cursor: pointer;
+        transition: background .15s ease, opacity .15s ease;
       }
-      a { color: #fe860a; }
+      button:hover:not(:disabled) { background: #000; }
+      button:active:not(:disabled) { opacity: .8; }
+      button:disabled { background: #d2d0cc; color: #6b6b70; cursor: default; }
+      button[hidden] { display: none; }
+      #actions { margin-top: 1.25rem; }
+      /* The installer's own output is the progress bar. No percentage, because there is no
+         honest one to show: pip and curl report in their own terms, and inventing a scale
+         over the top would be a guess dressed up as a measurement. */
+      #log {
+        display: none; margin-top: 1.5rem; padding: .75rem;
+        max-height: 15rem; overflow-y: auto; text-align: left;
+        background: #ececec; border-radius: 6px;
+        font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+        white-space: pre-wrap; word-break: break-word;
+      }
+      #log.visible { display: block; }
+      #exit { margin-top: .75rem; font-size: 12px; opacity: .65; }
+      #exit[hidden] { display: none; }
+      .note { margin-top: 1.75rem; font-size: 12px; opacity: .5; }
+      .note[hidden] { display: none; }
     </style>
   </head>
   <body>
     <main>
       <div class="mark">LM</div>
-      <div class="ring"></div>
-      <p id="hint">Starting the local server…</p>
+      <div class="ring" id="ring"></div>
 
-      <!-- Revealed by a local timer only. This page cannot reach the backend itself:
-           it is served from the webview's own origin, so a fetch to
-           http://localhost:7070 would be blocked by CORS. The Rust side does the polling
-           and replaces this page as soon as the server answers. -->
-      <section id="install">
-        <p>If this stays here, the LM-WebUI server is not installed or not running.</p>
-        <p>Install it, then reopen this app:</p>
-        <code>curl -fsSL https://lmwebui.com/install.sh | bash</code>
-        <p>Already installed? Start it with:</p>
-        <code>lm-web-ui start</code>
-        <p><a href="https://lmwebui.com">lmwebui.com</a></p>
-      </section>
+      <h1 id="title">Checking the local server…</h1>
+      <p class="detail" id="detail" hidden></p>
+
+      <div id="actions">
+        <button id="action" hidden></button>
+      </div>
+
+      <pre id="log"></pre>
+      <p id="exit" hidden></p>
+
+      <!-- Every check on the server lives in Rust, not here: this page is served from the
+           webview's own origin, so a fetch to 127.0.0.1:7070 would be blocked by CORS. The
+           window is swapped to the real UI by the Rust side as soon as the server can serve
+           it, including while an install is still running. -->
+      <p class="note" id="note" hidden></p>
     </main>
+
     <script>
-      setTimeout(function () {
-        document.getElementById("hint").textContent =
-          "Still waiting for the local server…";
-        document.getElementById("install").classList.add("visible");
-      }, 20000);
+      var TAURI = window.__TAURI__;
+      var title = document.getElementById("title");
+      var detail = document.getElementById("detail");
+      var ring = document.getElementById("ring");
+      var action = document.getElementById("action");
+      var log = document.getElementById("log");
+      var exit = document.getElementById("exit");
+      var note = document.getElementById("note");
+
+      // Opened outside the app (a browser, a preview): nothing here can work, so say so rather
+      // than sitting on "Checking…" forever.
+      if (!TAURI) {
+        title.textContent = "Open this from the LM WebUI app.";
+        ring.hidden = true;
+      } else {
+        start();
+      }
+
+      function start() {
+        var invoke = TAURI.core.invoke;
+
+        // What each state says and offers. `command` is an action NAME: the shell command
+        // itself lives in Rust and never comes from here.
+        var SCREENS = {
+          not_installed: {
+            title: "LM-WebUI isn't installed on this Mac yet",
+            detail:
+              "This app is only the window. The server that runs your models installs " +
+              "separately, and this fetches and sets it up for you.",
+            label: "Install LM-WebUI",
+            command: "install",
+            // Honest about the size of the thing: it downloads dependencies.
+            note: "This downloads and builds the backend. It usually takes a few minutes."
+          },
+          not_running: {
+            title: "The server isn't running",
+            detail: "LM-WebUI is installed on this Mac, but the background service is stopped.",
+            label: "Start the server",
+            command: "start",
+            note: ""
+          },
+          no_ui: {
+            title: "The server is running, but it can't serve the interface",
+            detail:
+              "Something is answering on port 7070, but its web files are missing or " +
+              "incomplete. Repairing reinstalls them from the latest release.",
+            label: "Repair installation",
+            command: "repair",
+            // Verifiable, not a reassurance: the installer stages the shipped config aside and
+            // only replaces app/ and web/, and smoke-tarball.sh asserts data/ and config.yaml
+            // survive. See __install_tree in scripts/lmwebui.
+            note: "Your models, chats and settings are left alone."
+          },
+          up: {
+            title: "Opening LM-WebUI…",
+            detail: "",
+            label: "",
+            command: "",
+            note: ""
+          }
+        };
+
+        var busy = false;
+        var lines = [];
+        var MAX_LINES = 500; // pip alone emits thousands; an unbounded node is a leak
+        var flushQueued = false;
+
+        function append(line) {
+          lines.push(line);
+          if (lines.length > MAX_LINES) lines.splice(0, lines.length - MAX_LINES);
+          if (flushQueued) return;
+          // Batched to a frame: pip prints in bursts, and rebuilding the text on every line
+          // is wasted work when several arrive between paints.
+          flushQueued = true;
+          requestAnimationFrame(function () {
+            flushQueued = false;
+            log.textContent = lines.join("\n");
+            log.scrollTop = log.scrollHeight;
+          });
+        }
+
+        function show(screen) {
+          title.textContent = screen.title;
+          detail.textContent = screen.detail;
+          detail.hidden = !screen.detail;
+          note.textContent = screen.note;
+          note.hidden = !screen.note;
+          action.textContent = screen.label;
+          action.hidden = !screen.label;
+          action.disabled = busy;
+          // The ring means "something is happening, you don't need to act". Once there is a
+          // button to press the app is idle and waiting on the user, and a spinner there would
+          // be claiming work that isn't being done.
+          ring.hidden = !!screen.label;
+        }
+
+        function run(screen) {
+          busy = true;
+          lines = [];
+          log.textContent = "";
+          log.classList.add("visible");
+          exit.hidden = true;
+          title.textContent =
+            screen.command === "start" ? "Starting the server…" : "Working…";
+          detail.textContent =
+            screen.command === "install"
+              ? "Installing LM-WebUI. The output below is the installer's own."
+              : screen.command === "repair"
+              ? "Repairing the installation. The output below is the installer's own."
+              : "";
+          detail.hidden = !detail.textContent;
+          note.hidden = true;
+          action.disabled = true;
+          ring.hidden = false;
+
+          invoke("fix_backend", { action: screen.command }).catch(function (e) {
+            busy = false;
+            action.disabled = false;
+            exit.textContent = String(e);
+            exit.hidden = false;
+          });
+        }
+
+        TAURI.event.listen("fix-log", function (event) {
+          append(event.payload);
+        });
+
+        TAURI.event.listen("fix-done", function (event) {
+          busy = false;
+          ring.hidden = true;
+          action.disabled = false;
+          // Keep the log on screen. When this runs the lines above are the only record of why,
+          // and clearing it to show "Try again" would delete the evidence.
+          exit.textContent =
+            event.payload === 0
+              ? "Finished. Waiting for the server…"
+              : "Exited with code " + event.payload + ". The output above says why.";
+          exit.hidden = false;
+          // The label is deliberately left alone. poll() calls show() again within the second
+          // and would overwrite a "Try again" back to the button's real name, so the swap would
+          // be a label that lies half the time. The button already does the same thing either
+          // way, and the exit line above says what happened.
+        });
+
+        function poll() {
+          if (busy) return;
+          invoke("backend_state")
+            .then(function (state) {
+              var screen = SCREENS[state];
+              if (!screen) return;
+              show(screen);
+              // `up` needs no button: Rust navigates the window as soon as it can serve.
+              if (state !== "up") lastScreen = screen;
+            })
+            .catch(function () {});
+        }
+
+        var lastScreen = null;
+        action.addEventListener("click", function () {
+          if (busy) return;
+          if (lastScreen) run(lastScreen);
+        });
+
+        poll();
+        setInterval(poll, 1000);
+      }
     </script>
   </body>
 </html>

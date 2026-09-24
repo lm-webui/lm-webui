@@ -108,7 +108,7 @@ export function ApiKeysTab() {
           return { isValid: false, error: "Please enter a valid server URL" };
         }
         return { isValid: true };
-      } catch (e) {
+      } catch {
         return { isValid: false, error: "Please enter a valid URL (e.g., http://localhost:1234)" };
       }
     }
@@ -230,7 +230,7 @@ export function ApiKeysTab() {
               delete newKeys[selectedProvider];
               return newKeys;
             });
-          } catch (e) {
+          } catch {
             // Ignore deletion errors
           }
         }
@@ -261,7 +261,7 @@ export function ApiKeysTab() {
             delete newKeys[selectedProvider];
             return newKeys;
           });
-        } catch (e) {
+        } catch {
           // Ignore deletion errors
         }
       }

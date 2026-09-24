@@ -36,8 +36,8 @@ export function MessageBubble({
         "inline-block relative group/message transition-all duration-200",
         getBorderRadius(),
         role === "user"
-          ? "bg-neutral-400/70 dark:bg-neutral-700/70 text-chat-user-foreground ml-0 md:ml-20 pr-1 md:pr-4 mt-2"
-          : "bg-neutral-200/20 dark:bg-neutral-900/20 text-chat-assistant-foreground border border-border/10",
+          ? "bg-neutral-400/70 dark:bg-neutral-700/70 ml-0 md:ml-20 pr-1 md:pr-4 mt-2"
+          : "bg-neutral-200/20 dark:bg-neutral-900/20 border border-border/10",
         isMobile
           ? "max-w-full p-3 pr-3 text-md"
           : "max-w-[698px] p-4 text-md",

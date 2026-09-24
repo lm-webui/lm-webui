@@ -12,6 +12,8 @@ export interface DownloadTask {
 interface DownloadsContextValue {
   downloads: Record<string, DownloadTask>;
   startDownload: (url: string, filename: string, subdir?: string) => Promise<string>;
+  /** True once several consecutive polls have failed: the list below is last-known state. */
+  unreachable: boolean;
 }
 
 const DownloadsContext = createContext<DownloadsContextValue | null>(null);
@@ -28,14 +30,23 @@ const isActive = (t?: DownloadTask) => !!t && !TERMINAL.has(t.status);
 export function DownloadsProvider({ children, onComplete }: { children: ReactNode; onComplete?: () => void }) {
   const [downloads, setDownloads] = useState<Record<string, DownloadTask>>({});
   const [active, setActive] = useState(false); // any active download → poll
+  const [unreachable, setUnreachable] = useState(false);
   const ref = useRef<Record<string, DownloadTask>>({});
+  const failuresRef = useRef(0);
   const onCompleteRef = useRef(onComplete);
   onCompleteRef.current = onComplete;
 
   const refresh = useCallback(async () => {
+    // A single dropped request is noise; a run of them means the progress on screen has
+    // stopped moving for a real reason. Failing polls keep the last known list rather than
+    // clearing it, so the only thing lost without this flag is the explanation.
+    const failed = () => {
+      failuresRef.current += 1;
+      if (failuresRef.current >= 3) setUnreachable(true);
+    };
     try {
       const res = await fetch(`${BASE}/api/models/downloads`, { credentials: "include" });
-      if (!res.ok) return;
+      if (!res.ok) { failed(); return; }
       const data = await res.json();
       const activeList = (data.downloads || []) as DownloadTask[];
       const map: Record<string, DownloadTask> = {};
@@ -47,6 +58,8 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
       ref.current = map;
       setDownloads(map);
       setActive(activeList.length > 0);
+      failuresRef.current = 0;
+      setUnreachable(false);
 
       const stillActive = new Set(activeList.map((d) => d.task_id));
       const completed = prevActive.filter((id) => !stillActive.has(id));
@@ -54,7 +67,7 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
         onCompleteRef.current?.();
         notifyModelsChanged();
       }
-    } catch { /* backend unreachable — ignore */ }
+    } catch { failed(); }
   }, []);
 
   // Resync on mount (survives modal close / runtime remount).
@@ -84,7 +97,7 @@ export function DownloadsProvider({ children, onComplete }: { children: ReactNod
   }, []);
 
   return (
-    <DownloadsContext.Provider value={{ downloads, startDownload }}>
+    <DownloadsContext.Provider value={{ downloads, startDownload, unreachable }}>
       {children}
     </DownloadsContext.Provider>
   );

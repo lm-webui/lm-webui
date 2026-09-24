@@ -62,7 +62,7 @@ class LoggingService {
         const categories = JSON.parse(savedCategories) as LogCategory[];
         this.enabledCategories = new Set(categories);
       }
-    } catch (error) {
+    } catch {
       // Silently fail if localStorage is not available
     }
   }
@@ -71,7 +71,7 @@ class LoggingService {
     try {
       localStorage.setItem('logLevel', this.currentLevel.toString());
       localStorage.setItem('logCategories', JSON.stringify(Array.from(this.enabledCategories)));
-    } catch (error) {
+    } catch {
       // Silently fail if localStorage is not available
     }
   }

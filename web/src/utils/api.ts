@@ -15,7 +15,6 @@ export function agentTerminalWsUrl(agent: string, sessionId: string): string {
 
 // Helper function to handle token refresh
 async function handleTokenRefresh(): Promise<void> {
-  console.log('🔐 401 detected, attempting token refresh...');
   
   try {
     const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
@@ -24,7 +23,6 @@ async function handleTokenRefresh(): Promise<void> {
     });
     
     if (refreshResponse.ok) {
-      console.log('✅ Token refreshed successfully');
       return;
     } else {
       console.warn('⚠️ Token refresh failed with status:', refreshResponse.status);
@@ -378,12 +376,6 @@ async function _chatWithModel(req: ChatRequest): Promise<string> {
     api_key: req.api_key,
   };
 
-  console.log('🔍 DEBUG _chatWithModel requestWithKey:', {
-    hasConversationId: 'conversation_id' in requestWithKey,
-    conversationId: requestWithKey.conversation_id,
-    keys: Object.keys(requestWithKey),
-    messagePreview: requestWithKey.message?.substring(0, 50)
-  });
 
   // Always use the non-streaming REST endpoint. For streaming, use WebSocket.
   const response = await authFetch(`${API_BASE_URL}/api/chat`, {
@@ -634,7 +626,6 @@ export async function fetchModels(
           const dynamicUrl = new URL(`${URL_BASE}/api/models/api/dynamic`);
           dynamicUrl.searchParams.set('provider', provider);
           
-          console.log(`🔄 Fetching dynamic models for ${provider} (backend: ${backendProvider})`);
           const response = await authFetch(dynamicUrl.toString());
           
           const modelsData = Array.isArray(response?.models) 
@@ -644,7 +635,6 @@ export async function fetchModels(
           const models = modelsData.map((model: any) => 
             typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
           );
-          console.log(`✅ Dynamic models fetched for ${provider}: (${models.length})`, models);
           return Array.isArray(models) ? models : [];
         } catch (error) {
           console.warn(`⚠️ Dynamic model fetch failed for ${provider}, falling back to static models:`, error);
@@ -661,10 +651,7 @@ export async function fetchModels(
       const models = modelsData.map((model: any) => 
         typeof model === 'string' ? model : model.name || model.id || 'Unknown Model'
       );
-      console.log(`📋 Static models fetched for ${provider}: (${models.length})`, models);
       return Array.isArray(models) ? models : [];
-      
-      return [];
     } finally {
       // Clean up active promise
       delete activeFetchPromises[cacheKey];
@@ -675,16 +662,12 @@ export async function fetchModels(
   activeFetchPromises[cacheKey] = fetchPromise;
   
   // Wait for result and update cache
-  try {
-    const result = await fetchPromise;
-    modelsCache[cacheKey] = {
-      timestamp: Date.now(),
-      data: result
-    };
-    return result;
-  } catch (error) {
-    throw error;
-  }
+  const result = await fetchPromise;
+  modelsCache[cacheKey] = {
+    timestamp: Date.now(),
+    data: result
+  };
+  return result;
 }
 
 // Backward compatibility alias (keep only the one that's actually used)

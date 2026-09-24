@@ -141,7 +141,7 @@ export function LlamaCppTab({
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {gpuInfo?.has_gpu
                     ? `🎮 ${gpuInfo.gpu?.device || "GPU"} (${gpuInfo.gpu?.backend?.toUpperCase()})`
-                    : "🖥️ No discrete GPU detected — using CPU"}
+                    : "🖥️ No discrete GPU detected. Using CPU."}
                 </p>
               </div>
               {gpuInfo?.has_gpu && !gpuInfo?.gpu_accelerated && (
@@ -206,8 +206,8 @@ export function LlamaCppTab({
                 }))}
                 className="w-full mt-1 h-8 rounded-md border bg-background px-2 text-xs"
               >
-                <option value="q8_0">Balanced (q8_0) — saves 50% memory</option>
-                <option value="f16">Maximum (f16) — full precision</option>
+                <option value="q8_0">Balanced (q8_0), saves 50% memory</option>
+                <option value="f16">Maximum (f16), full precision</option>
               </select>
             </div>
 

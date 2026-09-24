@@ -72,8 +72,7 @@ export function useImageGeneration() {
         }
 
         // Start image generation with enhanced error handling
-        let conversationId = currentConversationId;
-        startImageGeneration(conversationId);
+        startImageGeneration();
         const placeholderUrl = `placeholder_${Date.now()}`;
         addProcessingImage(placeholderUrl); // Add placeholder for tracking
 
@@ -95,7 +94,7 @@ export function useImageGeneration() {
             removeProcessingImage(result.imageUrl); // Remove placeholder
             addProcessingImage(result.imageUrl); // Add actual URL for background processing
 
-            completeImageGeneration(result.conversationId);
+            completeImageGeneration();
             toast.success("🎨 Image generated successfully!");
 
             // Refresh conversations list
@@ -117,7 +116,7 @@ export function useImageGeneration() {
           }
         } catch (error: any) {
           // Enhanced error handling with store integration
-          completeImageGeneration(conversationId);
+          completeImageGeneration();
           removeProcessingImage(placeholderUrl);
 
           setError(error);

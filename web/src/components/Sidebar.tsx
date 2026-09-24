@@ -544,7 +544,7 @@ export default function Sidebar({
               placeholder="Search for chats"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 h-9 text-xs rounded-full opacity-75 bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner focus-visible:outline-none focus-visible:ring-neutral-200/5 dark:focus-visible:ring-neutral-500/5 transition-all outline-none"
+              className="pl-9 h-9 text-xs rounded-full opacity-75 bg-stone-100/50 dark:bg-zinc-800/50 border-none shadow-inner transition-all outline-none"
             />
           </div>
           <Button
@@ -688,7 +688,7 @@ export default function Sidebar({
                 value={newProjectInstructions}
                 onChange={(event) => setNewProjectInstructions(event.target.value)}
                 rows={4}
-                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm "
               />
             </div>
             <DialogFooter>

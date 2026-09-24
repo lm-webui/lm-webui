@@ -371,7 +371,10 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     setComfyDownloadOpen(true);
     try {
       const res = await authFetch("/api/comfyui/presets");
-      setComfyPresets(res?.presets || []);
+      setComfyPresets([
+        ...(res?.presets || []),
+        ...(res?.qwen_assets || []).map((asset: any) => ({ ...asset, asset: true })),
+      ]);
     } catch {
       toast.error("Failed to load diffusion model presets");
     }
@@ -383,7 +386,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
     try {
       const res = await authFetch("/api/comfyui/download", {
         method: "POST",
-        body: JSON.stringify({ model_id: preset.id }),
+        body: JSON.stringify(preset.asset ? { asset_id: preset.id } : { model_id: preset.id }),
       });
       const { task_id } = res;
       const poll = setInterval(async () => {
@@ -648,7 +651,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
             <DialogHeader>
               <DialogTitle>Download Image-Gen model</DialogTitle>
               <DialogDescription>
-                Downloads a checkpoint into the local ComfyUI models/checkpoints directory.
+                Downloads image models and Qwen Image dependencies into the managed ComfyUI folders.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 max-h-72 overflow-y-auto">

@@ -32,6 +32,9 @@ export default function ImageWorkspace() {
   const [batch, setBatch] = useState(1);
   const [providers, setProviders] = useState<Record<string, ProviderStatus>>({});
   const [loading, setLoading] = useState(true);
+  // Set when the provider list can't be fetched. Without it the picker just renders empty,
+  // which reads as "no providers exist" rather than "the backend didn't answer".
+  const [loadError, setLoadError] = useState(false);
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
 
   // Load saved default image model preferences on mount
@@ -70,6 +73,7 @@ export default function ImageWorkspace() {
           fetch(`${BASE}/api/images/models`, { credentials: "include" }),
           fetch(`${BASE}/api/runtimes`, { credentials: "include" }),
         ]);
+        if (!statusRes.ok || !modelsRes.ok || !rtRes.ok) throw new Error("provider lookup failed");
         const status = await statusRes.json();
         const modelsData = await modelsRes.json();
         const rtData = await rtRes.json();
@@ -103,7 +107,8 @@ export default function ImageWorkspace() {
             models: apiModels.gguf || ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
           },
         });
-      } catch { /* ignore */ }
+        setLoadError(false);
+      } catch { setLoadError(true); }
       setLoading(false);
     };
     load();
@@ -183,7 +188,7 @@ export default function ImageWorkspace() {
         if (i < batch - 1) await new Promise(r => setTimeout(r, 300));
       }
       window.dispatchEvent(new Event("gallery-refresh"));
-      toast.success(`Generated ${batch} image${batch > 1 ? "s" : ""} — check Gallery`);
+      toast.success(`Generated ${batch} image${batch > 1 ? "s" : ""}, check Gallery`);
     } catch (e: any) {
       toast.error(e?.message || "Generation failed");
     } finally {
@@ -209,7 +214,7 @@ export default function ImageWorkspace() {
         <Label>Prompt</Label>
         <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)}
           placeholder="Describe the image..."
-          className="flex w-full resize-none rounded-2xl border border-input bg-background shadow-inner p-4 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex w-full resize-none rounded-2xl border border-input bg-background shadow-inner p-4 text-sm outline-none "
           rows={3} />
       </div>
 
@@ -319,13 +324,17 @@ export default function ImageWorkspace() {
         )}
       </div>
 
-      {providers[provider] && !providers[provider].connected && (
+      {loadError ? (
+        <Badge variant="outline" className="mb-4 self-start text-amber-600 dark:text-amber-400 border-amber-500/30">
+          Couldn't load providers. Check that the backend is running.
+        </Badge>
+      ) : providers[provider] && !providers[provider].connected ? (
         <Badge variant="outline" className="mb-4 self-start text-amber-600 dark:text-amber-400 border-amber-500/30">
           {provider === "local"
-            ? "ComfyUI isn't running — install/start it in Runtime Manager."
-            : `${providers[provider].label} isn't configured — add a key in Settings → Provider.`}
+            ? "ComfyUI isn't running. Install or start it in Runtime Manager."
+            : `${providers[provider].label} isn't configured. Add a key in Settings → Provider.`}
         </Badge>
-      )}
+      ) : null}
 
       <Button onClick={handleGenerate} disabled={generating || !prompt.trim()}
         className="mb-8 self-end rounded-full px-6">

@@ -43,8 +43,8 @@ show_url() {
 # Only printed when the service is not answering, so every line here is a reason it might not be.
 diagnose() {
   echo "   Diagnosing:"
-  if pgrep -f "uvicorn app.main:app" >/dev/null 2>&1; then
-    echo "   • an uvicorn process is running (still starting up, or stuck)"
+  if pgrep -f "$LMWEBUI_HOME/core/lmwebui-core" >/dev/null 2>&1; then
+    echo "   • the compiled LM-WebUI core is running (still starting up, or stuck)"
   else
     echo "   • no uvicorn process — the service is not running"
   fi
@@ -56,10 +56,10 @@ diagnose() {
   else
     echo "   • port $PORT is free"
   fi
-  if [ -x "$LMWEBUI_HOME/.venv/bin/uvicorn" ]; then
-    echo "   • $LMWEBUI_HOME/.venv/bin/uvicorn present"
+  if [ -x "$LMWEBUI_HOME/core/lmwebui-core" ]; then
+    echo "   • compiled core present"
   else
-    echo "   • $LMWEBUI_HOME/.venv/bin/uvicorn is missing — re-run the installer"
+    echo "   • compiled core is missing — re-run the installer"
   fi
   if [ ! -f "$LMWEBUI_HOME/config.yaml" ]; then
     echo "   • $LMWEBUI_HOME/config.yaml is missing"
@@ -205,7 +205,7 @@ WorkingDirectory=$LMWEBUI_HOME
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
 Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT
+ExecStart=$LMWEBUI_HOME/core/lmwebui-core
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -234,7 +234,7 @@ SERVICEEOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>com.lmwebui.server</string>
-<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>$PORT</string></array>
+<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/core/lmwebui-core</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
 <key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>LMWEBUI_BASE_DIR</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
@@ -257,7 +257,7 @@ PLISTEOF
 # the symlink, not this file.
 __install_tree() {
   local src="${1:?__install-tree needs a release tree}"
-  [ -f "$src/app/main.py" ] || { echo "❌ $src is not a release tree (no app/main.py)"; exit 1; }
+  [ -x "$src/core/lmwebui-core" ] || { echo "❌ $src is not a release tree (no compiled core)"; exit 1; }
 
   # 1. Stage the shipped config, then DELETE it from $src. This is the guard: once config.yaml is
   #    out of the source tree, the bulk copy below cannot overwrite a live one.
@@ -292,7 +292,7 @@ __install_tree() {
   # 3. Replace web/ wholesale, not just web/dist: a tarball ships no web/src, so a leftover
   #    web/src or web/vite.config.ts from a git-clone install would linger forever. The three
   #    clone-only top-level entries are the one-shot clone -> tarball migration.
-  rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
+  rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/core" "$LMWEBUI_HOME/web"
   for p in .git backend scripts; do rm -rf "$LMWEBUI_HOME/$p" 2>/dev/null || true; done
 
   cp -r "$src/." "$LMWEBUI_HOME/"
@@ -347,8 +347,8 @@ __fetch_release() {
   # Fail before touching the install, not half-way through replacing it. Clean up $dest too:
   # `update` passes a mktemp -d, and this exit skips its `rm -rf "$TMP"`, so removing only the
   # tarball would leave a whole extracted tree behind on a corrupt archive.
-  if [ ! -f "$dest/app/main.py" ] || [ ! -f "$dest/web/dist/index.html" ]; then
-    echo "❌ Release archive is missing app/main.py or web/dist/index.html"
+  if [ ! -x "$dest/core/lmwebui-core" ] || [ ! -f "$dest/web/dist/index.html" ]; then
+    echo "❌ Release archive is missing core/lmwebui-core or web/dist/index.html"
     rm -f "$tgz"; rm -rf "$dest"; exit 1
   fi
   rm -f "$tgz"
@@ -391,8 +391,10 @@ case "${1:-status}" in
 
     BUILD_TREE="$(mktemp -d)"
     trap 'rm -rf "$BUILD_TREE"' EXIT
-    mkdir -p "$BUILD_TREE/app" "$BUILD_TREE/web"
-    cp -r "$SRC/backend/app/." "$BUILD_TREE/app/"
+    mkdir -p "$BUILD_TREE/core" "$BUILD_TREE/web"
+    (cd "$SRC" && bash scripts/build-core.sh "$BUILD_TREE/core-build")
+    cp -r "$BUILD_TREE/core-build/$(cat "$BUILD_TREE/core-build/manifest.json" | sed -n 's/.*"platform":"\([^"]*\)".*/\1/p')/." "$BUILD_TREE/core/"
+    cp "$BUILD_TREE/core-build/manifest.json" "$BUILD_TREE/core-manifest.json"
     cp -r "$SRC/web/dist" "$BUILD_TREE/web/dist"
     cp "$SRC/backend/requirements.txt" "$SRC/backend/requirements.lock" "$BUILD_TREE/"
     cp "$SRC/backend/config.yaml" "$BUILD_TREE/config.yaml"
@@ -547,9 +549,10 @@ except Exception:
       local code=$?
       if [ -n "$BACKUP" ] && [ -d "$BACKUP" ]; then
         echo "⚠️ Update failed — restoring previous application tree."
-        rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/web"
-        mv "$BACKUP/app" "$LMWEBUI_HOME/app" 2>/dev/null || true
-        mv "$BACKUP/web" "$LMWEBUI_HOME/web" 2>/dev/null || true
+        rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/core" "$LMWEBUI_HOME/web"
+        for p in app core web; do
+          [ -e "$BACKUP/$p" ] && mv "$BACKUP/$p" "$LMWEBUI_HOME/$p"
+        done
       fi
       rm -rf "$TMP" "$BACKUP"
       echo "⚠️ Update failed — restarting previous service."
@@ -569,8 +572,9 @@ except Exception:
     __fetch_release "$TMP"
     echo "   Installing release tree (config.yaml preserved)..."
     BACKUP="$(mktemp -d)"
-    mv "$LMWEBUI_HOME/app" "$BACKUP/app"
-    mv "$LMWEBUI_HOME/web" "$BACKUP/web"
+    for p in app core web; do
+      [ -e "$LMWEBUI_HOME/$p" ] && mv "$LMWEBUI_HOME/$p" "$BACKUP/$p"
+    done
     __install_tree "$TMP"
     rm -rf "$TMP"
 

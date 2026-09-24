@@ -172,7 +172,7 @@ export function ImageGenTab({
             )}
             <div className="text-xs text-muted-foreground">
               {checkpoints.length === 0
-                ? "No image models installed yet — download one to start generating."
+                ? "No image models installed yet. Download one to start generating."
                 : `${checkpoints.length} model${checkpoints.length === 1 ? "" : "s"}: ${checkpoints.join(", ")}`}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -242,7 +242,7 @@ export function ImageGenTab({
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground pt-1">
-                  Bind 127.0.0.1, not 0.0.0.0 — ComfyUI has no authentication.
+                  Bind 127.0.0.1, not 0.0.0.0. ComfyUI has no authentication.
                 </p>
               </div>
               <Button size="sm" variant="outline" className="h-7 gap-1"

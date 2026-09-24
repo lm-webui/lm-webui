@@ -64,7 +64,7 @@ export function AgentFileEditorDialog({
                   <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                   <span>
                     This is the real config read by the {file.label.toLowerCase()} CLI. Saving
-                    replaces it — the previous version is backed up alongside as{" "}
+                    replaces it. The previous version is backed up alongside as{" "}
                     <span className="font-mono">.bak</span>.
                   </span>
                 </p>
@@ -81,7 +81,7 @@ export function AgentFileEditorDialog({
 
               {tooLarge ? (
                 <p className="shrink-0 text-xs font-medium text-red-600 dark:text-red-400">
-                  File is over the 256 KB limit — shorten it before saving.
+                  File is over the 256 KB limit. Shorten it before saving.
                 </p>
               ) : warning ? (
                 <p className="shrink-0 text-xs font-medium text-red-600 dark:text-red-400">

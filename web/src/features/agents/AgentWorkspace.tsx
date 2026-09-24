@@ -316,7 +316,7 @@ function ActivityTab({ agent, sessionId }: { agent: string; sessionId: string })
         <div className="flex gap-2">
           <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && runNow()}
             placeholder={`Run ${agent || "an agent"}…`}
-            className="flex-1 rounded-xl border border-input bg-background px-4 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" />
+            className="flex-1 rounded-xl border border-input bg-background px-4 py-2 text-sm outline-none " />
           <Button onClick={runNow} disabled={busy || !input.trim() || !agent}>
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Run"}
           </Button>
@@ -372,7 +372,7 @@ function ManageTab({ agent, active, onRefresh, onOpenSession }: {
       // survives a reload. session_id is null only on the host-terminal fallback.
       if (r.session_id) {
         onOpenSession(r.session_id);
-        toast.success(`${update ? "Updating" : "Installing"} ${agent} — output in the Terminal tab.`);
+        toast.success(`${update ? "Updating" : "Installing"} ${agent}. Output in the Terminal tab.`);
       } else {
         toast.success(`${update ? "Update" : "Install"} launched in a host terminal.`);
       }

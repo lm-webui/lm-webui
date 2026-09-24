@@ -26,8 +26,7 @@ class AgentDef:
     reach it — claude declares one only because the field is required."""
 
     install: str
-    """Shown to the user and run verbatim in the host terminal. `{prefix}` is substituted by
-    registry.install_cmd() — see the note there for why it must stay a string."""
+    """Shown to the user and run verbatim in the host terminal using the agent's native installer."""
 
     # ── optional ──────────────────────────────────────────────────────────
     version_flag: tuple[str, ...] = ("--version",)

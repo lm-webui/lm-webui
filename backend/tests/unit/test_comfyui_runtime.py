@@ -43,6 +43,37 @@ def test_env_overrides_the_engine_dir(engine):
     assert cr.engine_dir() == engine
 
 
+def test_install_route_uses_shared_gpu_detector(monkeypatch):
+    monkeypatch.setattr(cr, "_hardware_route", lambda: {
+        "backend": "cuda", "device": "RTX test"
+    })
+    assert cr._torch_args() == ""
+
+
+def test_install_route_uses_cpu_wheels_for_vulkan(monkeypatch):
+    monkeypatch.setattr(cr, "_hardware_route", lambda: {
+        "backend": "vulkan", "device": "Vulkan test"
+    })
+    monkeypatch.setattr(cr.sys, "platform", "linux")
+    assert "download.pytorch.org/whl/cpu" in cr._torch_args()
+
+
+def test_qwen_catalog_and_asset_layout(engine):
+    from app.services.local_image import _build_workflow_qwen
+
+    entry = cr.MODEL_CATALOG["qwen-image-2.1-q5"]
+    assert entry["qwen"] is True
+    assert cr.qwen_missing("qwen-image-2.1-q5")
+    graph = _build_workflow_qwen({
+        "model": "qwen-image-2.1-q5", "prompt": "test", "seed": 1,
+        "steps": 4, "cfg": 7, "width": 512, "height": 512,
+    })
+    assert graph["1"]["class_type"] == "UnetLoaderGGUF"
+    assert graph["2"]["class_type"] == "CLIPLoaderGGUF"
+    assert graph["3"]["class_type"] == "VAELoader"
+    assert "CheckpointLoaderSimple" not in {node["class_type"] for node in graph.values()}
+
+
 # ── State ─────────────────────────────────────────────────────────────────
 
 def test_not_installed_when_main_py_is_absent(engine):
@@ -169,6 +200,9 @@ def test_catalog_filenames_match_what_the_downloader_installs():
     assert route_catalog is cr.MODEL_CATALOG
 
     for key, entry in cr.MODEL_CATALOG.items():
+        if entry.get("qwen"):
+            assert entry["filename"].endswith(".gguf")
+            continue
         assert entry["filename"].endswith((".safetensors", ".ckpt"))
         assert entry["url"].endswith(entry["filename"])
         assert cr.checkpoint_for(key) == entry["filename"]

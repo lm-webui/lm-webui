@@ -140,8 +140,8 @@ setup_repository() {
 
   # Fail here rather than half-way through replacing an install. The release workflow asserts the
   # same two files before uploading, so this only fires on a corrupt or truncated download.
-  if [ ! -f "$tmp/app/main.py" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
-    log_error "Release archive is missing app/main.py or web/dist/index.html"
+  if [ ! -x "$tmp/core/lmwebui-core" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
+    log_error "Release archive is missing core/lmwebui-core or web/dist/index.html"
     rm -rf "$tmp"; exit 1
   fi
 
@@ -274,7 +274,7 @@ Environment=LMWEBUI_HOME=$LMWEBUI_HOME
 # LMWEBUI_HOME can't leave the agent bin dir and the installer pointing at different places.
 Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$LMWEBUI_HOME/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 7070
+ExecStart=$LMWEBUI_HOME/core/lmwebui-core
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -300,7 +300,7 @@ SERVICEEOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>com.lmwebui.server</string>
-<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
+<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/core/lmwebui-core</string></array>
 <key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
 <key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>LMWEBUI_BASE_DIR</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>

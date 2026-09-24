@@ -60,6 +60,14 @@ def checkpoints_dir() -> Path:
     return engine_dir() / "models" / "checkpoints"
 
 
+def qwen_models_dir(kind: str) -> Path:
+    return engine_dir() / "models" / {
+        "diffusion": "diffusion_models",
+        "text_encoder": "text_encoders",
+        "vae": "vae",
+    }[kind]
+
+
 def venv_python() -> Path:
     """The engine venv's interpreter (torch lives here, not in the app venv)."""
     venv = engine_dir() / ".venv"
@@ -288,6 +296,9 @@ class ComfyUIRuntime:
             "engine_dir": str(engine_dir()),
             "checkpoints": self.checkpoints(),
             "last_error": self.last_error,
+            "install_status": _install_state["status"],
+            "hardware_backend": _install_state["hardware_backend"],
+            "hardware_device": _install_state["hardware_device"],
             "version": None,
             "device": None,
             "vram_gb": None,
@@ -343,7 +354,53 @@ MODEL_CATALOG: Dict[str, Dict] = {
         "default_height": 512,
         "default_steps": 25,
     },
+    "qwen-image-2.1-q4": {
+        "name": "Qwen Image 2.1 (Q4_K_M)", "qwen": True,
+        "filename": "qwen-image-2.1-Q4_K_M.gguf", "size": "~4.60 GB",
+        "url": "https://huggingface.co/abenzerps/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q4_K_M.gguf",
+        "default_width": 1024, "default_height": 1024, "default_steps": 25,
+    },
+    "qwen-image-2.1-q5": {
+        "name": "Qwen Image 2.1 (Q5_K_M)", "qwen": True,
+        "filename": "qwen-image-2.1-Q5_K_M.gguf", "size": "~5.22 GB",
+        "url": "https://huggingface.co/abenzerps/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q5_K_M.gguf",
+        "default_width": 1024, "default_height": 1024, "default_steps": 25,
+    },
+    "qwen-image-2.1-q6": {
+        "name": "Qwen Image 2.1 (Q6_K)", "qwen": True,
+        "filename": "qwen-image-2.1-Q6_K.gguf", "size": "~5.88 GB",
+        "url": "https://huggingface.co/abenzerps/Qwen-Image-2.1-GGUF/resolve/main/qwen-image-2.1-Q6_K.gguf",
+        "default_width": 1024, "default_height": 1024, "default_steps": 25,
+    },
 }
+
+QWEN_ASSETS: Dict[str, Dict] = {
+    "qwen-image-text-encoder": {
+        "name": "Qwen Image 2.1 text encoder", "filename": "qwen3vl_8b_int8_convrot.safetensors",
+        "url": "https://huggingface.co/abenzerps/Qwen-Image-2.1-GGUF/resolve/main/text_encoders/qwen3vl_8b_int8_convrot.safetensors",
+        "kind": "text_encoder", "size": "~9.35 GB",
+    },
+    "qwen-image-vae": {
+        "name": "Qwen Image 2.1 VAE", "filename": "qwen_image_2.1_vae_bf16.safetensors",
+        "url": "https://huggingface.co/abenzerps/Qwen-Image-2.1-GGUF/resolve/main/vae/qwen_image_2.1_vae_bf16.safetensors",
+        "kind": "vae", "size": "~676 MB",
+    },
+}
+
+
+def qwen_asset_entries() -> List[Dict]:
+    assets = list(QWEN_ASSETS.items())
+    assets += [(key, {**value, "kind": "diffusion"}) for key, value in MODEL_CATALOG.items() if value.get("qwen")]
+    return [{"id": key, **value} for key, value in assets]
+
+
+def qwen_missing(model: str) -> List[str]:
+    entry = MODEL_CATALOG.get((model or "").strip().lower())
+    if not entry or not entry.get("qwen"):
+        return []
+    paths = [qwen_models_dir("diffusion") / entry["filename"]]
+    paths += [qwen_models_dir(item["kind"]) / item["filename"] for item in QWEN_ASSETS.values()]
+    return [str(path.relative_to(engine_dir())) for path in paths if not path.is_file()]
 
 
 def catalog_entries() -> List[Dict]:
@@ -360,6 +417,7 @@ def checkpoint_for(model: str) -> Optional[str]:
 # ── Install ───────────────────────────────────────────────────────────────
 
 REPO = "https://github.com/comfyanonymous/ComfyUI"
+GGUF_REPO = "https://github.com/city96/ComfyUI-GGUF"
 
 # One install at a time, and the UI polls this for progress. Mirrors the shape of
 # gguf_downloader's task dict so the frontend can treat them alike.
@@ -368,6 +426,8 @@ _install_state: Dict = {
     "step": "",
     "error": None,
     "log_tail": "",
+    "hardware_backend": None,
+    "hardware_device": None,
 }
 
 
@@ -376,7 +436,30 @@ def install_state() -> Dict:
         **_install_state,
         "installed": comfyui_runtime.installed,
         "engine_dir": str(engine_dir()),
+        "qwen_gguf_node": (engine_dir() / "custom_nodes" / "ComfyUI-GGUF" / "nodes.py").is_file(),
     }
+
+
+def _hardware_route() -> Dict[str, str]:
+    """Return the shared detector's install route without importing Torch."""
+    try:
+        from app.hardware.detection import detect_gpu_cli
+        gpu = detect_gpu_cli()
+    except Exception:
+        gpu = None
+    if gpu:
+        return {"backend": gpu["backend"], "device": gpu["device"]}
+    try:
+        from app.hardware.detection import detect_hardware
+        hardware = detect_hardware()
+        if hardware.get("backend") != "cpu":
+            return {
+                "backend": hardware["backend"],
+                "device": hardware.get("device", hardware["backend"]),
+            }
+    except Exception:
+        pass
+    return {"backend": "cpu", "device": "CPU"}
 
 
 def _tail(text: str, n: int = 6) -> str:
@@ -426,12 +509,8 @@ def _torch_args() -> str:
     never be used — point at the CPU index instead. macOS arm64 wheels already carry MPS,
     and a detected NVIDIA/ROCm GPU wants the default index.
     """
-    try:
-        from app.hardware.detection import detect_gpu_cli
-        gpu = detect_gpu_cli()
-    except Exception:
-        gpu = None
-    if not gpu and sys.platform.startswith("linux"):
+    route = _hardware_route()
+    if route["backend"] in {"cpu", "vulkan"} and sys.platform.startswith("linux"):
         return "--index-url https://download.pytorch.org/whl/cpu"
     return ""
 
@@ -447,7 +526,11 @@ async def install() -> None:
     import shlex
     from app.runtime.installer import _venv_pip  # reuse the uv-vs-pip choice
 
-    _install_state.update(status="running", step="starting", error=None, log_tail="")
+    route = _hardware_route()
+    _install_state.update(
+        status="running", step="starting", error=None, log_tail="",
+        hardware_backend=route["backend"], hardware_device=route["device"],
+    )
     target = engine_dir()
     venv = target / ".venv"
     py = venv_python()
@@ -479,6 +562,17 @@ async def install() -> None:
             "installing torch",
             f"{_venv_pip('install torch torchvision torchaudio', str(py))} {_torch_args()}".strip(),
             timeout=3600,
+        ):
+            return
+
+        node_dir = target / "custom_nodes" / "ComfyUI-GGUF"
+        if not (node_dir / "nodes.py").is_file():
+            if not await _run_step("installing ComfyUI-GGUF", f"git clone --depth 1 {shlex.quote(GGUF_REPO)} {shlex.quote(str(node_dir))}", 900):
+                return
+        requirements = node_dir / "requirements.txt"
+        if requirements.is_file() and not await _run_step(
+            "installing ComfyUI-GGUF requirements",
+            _venv_pip(f"install -r {shlex.quote(str(requirements))}", str(py)), 900,
         ):
             return
 

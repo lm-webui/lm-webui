@@ -118,11 +118,6 @@ export function useChatCreation(options?: UseChatCreationOptions) {
       created_at: new Date().toISOString()
     };
 
-    console.log("📝 Adding user message to state:", {
-      id: userMessageId,
-      content: message.substring(0, 50) + "...",
-      currentMessagesCount: messages.length
-    });
 
     // Add user message to Zustand store
     let targetConversationId = currentConversationId;

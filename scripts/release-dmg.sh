@@ -59,8 +59,11 @@ echo "building $tag"
 dmg="$(ls -t desktop/src-tauri/target/release/bundle/dmg/*.dmg 2>/dev/null | head -1)"
 [ -n "$dmg" ] || fail "the build produced no DMG"
 
-out="$repo_dir/LM-WebUI-macos-arm64.dmg"
+version="${tag#v}"
+out="$repo_dir/LM-WebUI-${version}-macos-arm64.dmg"
+stable_out="$repo_dir/LM-WebUI-macos-arm64.dmg"
 cp "$dmg" "$out"
+cp "$out" "$stable_out"
 echo "  built $(du -h "$out" | cut -f1) $(basename "$out")"
 
 # ── Verify the artifact, not the config ──────────────────────────────────
@@ -102,16 +105,18 @@ trap - EXIT
 # ── Attach it ────────────────────────────────────────────────────────────
 if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
   echo "uploading to $tag"
-  gh release upload "$tag" "$out" --clobber
-  echo "✅ $tag now serves $(basename "$out")"
+  gh release upload "$tag" "$out" "$stable_out" --clobber
+  echo "✅ $tag now serves $(basename "$out") and $(basename "$stable_out")"
 else
   cat <<EOF
-✅ built and verified: $out
+✅ built and verified:
+  $out
+  $stable_out
 
 Not uploaded — gh is absent or not authenticated. Attach it by hand:
 
   1. open  https://github.com/$slug/releases/edit/$tag
-  2. drag  $(basename "$out")  into the assets box on that page
+  2. drag  $(basename "$out") and $(basename "$stable_out") into the assets box on that page
 
 To have this step automated instead:  brew install gh && gh auth login
 EOF

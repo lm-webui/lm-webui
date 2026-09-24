@@ -371,7 +371,7 @@ export const FileProcessingManager: React.FC<FileProcessingManagerProps> = ({
           value={urlInput}
           onChange={(e) => setUrlInput(e.target.value)}
           placeholder="Enter URL to process..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md "
         />
         <button
           onClick={handleUrlProcess}
@@ -409,7 +409,7 @@ export const FileProcessingManager: React.FC<FileProcessingManagerProps> = ({
           value={ragQuery}
           onChange={(e) => setRagQuery(e.target.value)}
           placeholder="Enter query for RAG search..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md "
         />
         <button
           onClick={handleRAGSearch}
@@ -479,7 +479,7 @@ export const FileProcessingManager: React.FC<FileProcessingManagerProps> = ({
           value={webSearchQuery}
           onChange={(e) => setWebSearchQuery(e.target.value)}
           placeholder="Enter query for web search..."
-          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md "
         />
         <button
           onClick={handleWebSearch}

@@ -35,11 +35,13 @@ tar -xzf "$tarball" -C "$tree" --strip-components=1
 
 # Every one of these is read by an install step. A missing requirements.txt, for instance, only
 # surfaces several steps later as a confusing pip error.
-for f in app/main.py web/dist/index.html web/package.json config.yaml \
+for f in core/lmwebui-core web/dist/index.html web/package.json config.yaml \
          requirements.txt requirements.lock install.sh lmwebui package.json; do
   [ -f "$tree/$f" ] || fail "missing $f"
 done
 pass "all install-time files present"
+[ ! -e "$tree/app" ] || fail "raw backend source shipped"
+pass "raw backend source excluded"
 
 # index.html with no hashed bundles is a dist that built to nothing.
 [ -n "$(ls -A "$tree/web/dist/assets" 2>/dev/null)" ] || fail "web/dist/assets is empty"
@@ -84,7 +86,7 @@ grep -qx 'sentinel: keep-me' "$home/config.yaml" || fail "live config.yaml was r
 pass "config.yaml preserved"
 grep -qx keep "$home/data/marker" || fail "data/ was destroyed"
 pass "data/ preserved"
-[ -f "$home/app/main.py" ] && [ -f "$home/web/dist/index.html" ] || fail "tree was not installed"
+[ -x "$home/core/lmwebui-core" ] && [ -f "$home/web/dist/index.html" ] || fail "tree was not installed"
 pass "application tree installed"
 [ ! -e "$home/config.yaml.template" ] || fail "config.yaml.template left behind"
 pass "template consumed"

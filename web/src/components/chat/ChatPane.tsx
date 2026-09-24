@@ -302,7 +302,7 @@ export default function ChatPane({
             <FolderKanban className="h-3 w-3 shrink-0" />
             <span className="min-w-0 truncate">Project: <span className="font-medium">{projectName}</span></span>
             <span className="text-zinc-400 hidden sm:inline">· System prompt active</span>
-            <button type="button" onClick={handleRemoveFromProject} className="ml-auto rounded px-2 py-1 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Remove</button>
+            <button type="button" onClick={handleRemoveFromProject} className="ml-auto rounded px-2 py-1 text-xs hover:bg-zinc-200 dark:hover:bg-zinc-700 ">Remove</button>
           </div>
         </div>
       )}

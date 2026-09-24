@@ -92,9 +92,6 @@ function showModeChangeNotification(change: ModeChangeNotification): void {
   // Use toast notification system if available
   if (typeof window !== 'undefined' && (window as any).toast) {
     (window as any).toast(message, { type: 'info', duration: 3000 });
-  } else {
-    // Fallback to console log
-    console.log(`💬 ${message}`);
   }
 }
 

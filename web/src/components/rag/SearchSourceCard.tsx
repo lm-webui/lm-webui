@@ -28,7 +28,7 @@ export default function SearchSourceCard({
       target={source ? "_blank" : undefined}
       rel={source ? "noreferrer" : undefined}
       aria-label={source ? `Open source: ${title}` : title}
-      className="group block rounded-xl border border-border/70 bg-muted/20 p-3 transition-colors hover:border-border hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className="group block rounded-xl border border-border/70 bg-muted/20 p-3 transition-colors hover:border-border hover:bg-muted/50 "
     >
       <div className="flex items-start gap-2">
         <Globe2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-500" />

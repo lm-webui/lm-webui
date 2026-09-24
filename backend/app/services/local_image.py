@@ -121,11 +121,16 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
     is_gguf = provider == "gguf"
     model = req.model or ("sdxl" if not is_gguf else "flux1-dev")
 
-    from app.services.comfyui_runtime import comfyui_runtime, MODEL_CATALOG
+    from app.services.comfyui_runtime import comfyui_runtime, MODEL_CATALOG, install_state, qwen_missing
 
     # Managed engine: bring it up on demand, the way the vision capability starts
     # llama-server. An externally-pointed COMFYUI_URL is the user's to keep running.
     if not _is_external() and not comfyui_runtime.running:
+        if install_state()["status"] == "running":
+            return JSONResponse(status_code=503, content={
+                "error": "ComfyUI is installing; try again when the runtime is ready",
+                "install_status": install_state(),
+            })
         if not await comfyui_runtime.start():
             return JSONResponse(status_code=502, content={"error": (
                 "ComfyUI isn't running and couldn't be started"
@@ -135,13 +140,21 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
     base = _base_url()
     try:
         async with aiohttp.ClientSession() as session:
-            checkpoint, err = await _resolve_checkpoint(session, model)
+            entry = MODEL_CATALOG.get(model.strip().lower(), {})
+            checkpoint, err = (None, None) if entry.get("qwen") else await _resolve_checkpoint(session, model)
             if err:
                 # 400 with the specifics: this is a configuration problem, not a server fault,
                 # and it must not reach /prompt to fail there as an opaque validation error.
                 return JSONResponse(status_code=400, content={"error": err})
 
-            entry = MODEL_CATALOG.get(model.strip().lower(), {})
+            if entry.get("qwen"):
+                missing = qwen_missing(model)
+                if missing:
+                    return JSONResponse(status_code=400, content={
+                        "error": "Qwen Image assets are missing",
+                        "missing": missing,
+                        "download": "/api/comfyui/presets",
+                    })
             steps = int(getattr(req, "steps", None) or entry.get("default_steps") or 20)
             # ComfyUI's KSampler requires seed >= 0; the old default of -1 meant every
             # generation was rejected with "Value -1 smaller than min of 0".
@@ -167,9 +180,10 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
                 # Base checkpoint supplying CLIP + VAE to a GGUF UNet. Resolved the same way so
                 # a missing file is reported up front rather than as a ComfyUI node error.
                 "base_checkpoint": checkpoint,
+                "model": model,
             }
 
-            build = _build_workflow_gguf if is_gguf else _build_workflow
+            build = _build_workflow_qwen if entry.get("qwen") else (_build_workflow_gguf if is_gguf else _build_workflow)
             async with session.post(f"{base}/prompt", json={"prompt": build(prompt_data)}) as resp:
                 body = await resp.json(content_type=None)
                 if resp.status != 200:
@@ -270,6 +284,22 @@ def _build_workflow_gguf(params: dict) -> dict:
             "model": ["1", 0], "positive": ["3", 0], "negative": ["4", 0], "latent_image": ["5", 0]}},
         "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["2", 2]}},
         "8": {"class_type": "SaveImage", "inputs": {"filename_prefix": "lmwebui", "images": ["7", 0]}},
+    }
+
+
+def _build_workflow_qwen(params: dict) -> dict:
+    """Qwen Image 2.1 GGUF graph using the native ComfyUI model folders."""
+    from app.services.comfyui_runtime import MODEL_CATALOG, QWEN_ASSETS
+    model = MODEL_CATALOG[params["model"]]
+    return {
+        "1": {"class_type": "UnetLoaderGGUF", "inputs": {"unet_name": model["filename"]}},
+        "2": {"class_type": "CLIPLoaderGGUF", "inputs": {"clip_name": QWEN_ASSETS["qwen-image-text-encoder"]["filename"], "type": "qwen_image"}},
+        "3": {"class_type": "VAELoader", "inputs": {"vae_name": QWEN_ASSETS["qwen-image-vae"]["filename"]}},
+        "4": {"class_type": "CLIPTextEncode", "inputs": {"text": params["prompt"], "clip": ["2", 0]}},
+        "5": {"class_type": "EmptySD3LatentImage", "inputs": {"width": params["width"], "height": params["height"], "batch_size": 1}},
+        "6": {"class_type": "KSampler", "inputs": {"seed": params["seed"], "steps": params["steps"], "cfg": params["cfg"], "sampler_name": "euler", "scheduler": "normal", "denoise": 1, "model": ["1", 0], "positive": ["4", 0], "negative": ["4", 0], "latent_image": ["5", 0]}},
+        "7": {"class_type": "VAEDecode", "inputs": {"samples": ["6", 0], "vae": ["3", 0]}},
+        "8": {"class_type": "SaveImage", "inputs": {"filename_prefix": "lmwebui-qwen", "images": ["7", 0]}},
     }
 
 

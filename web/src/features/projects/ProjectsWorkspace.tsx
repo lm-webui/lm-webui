@@ -98,7 +98,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
       setFormPrompt("");
       setShowForm(false);
       await fetchProjects();
-    } catch (error) {
+    } catch {
       toast.error("Failed to create project");
     }
   };
@@ -124,7 +124,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
       if (selectedProject) {
         setSelectedProject({ ...selectedProject, name: formName, system_prompt: formPrompt });
       }
-    } catch (error) {
+    } catch {
       toast.error("Failed to update project");
     }
   };
@@ -140,7 +140,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
         setView("list");
       }
       await fetchProjects();
-    } catch (error) {
+    } catch {
       toast.error("Failed to delete project");
     }
   };
@@ -235,7 +235,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
                   <p className="text-xs mt-1">Create a project to set custom instructions for your conversations.</p>
                 </div>
               ) : projects.map((project) => (
-                <Card key={project.id} role="button" tabIndex={0} className="cursor-pointer hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => openProject(project)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openProject(project); } }}>
+                <Card key={project.id} role="button" tabIndex={0} className="cursor-pointer hover:bg-accent/50 transition-colors " onClick={() => openProject(project)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); openProject(project); } }}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between">
                       <div className="min-w-0 flex-1">
@@ -276,7 +276,7 @@ export default function ProjectsWorkspace({ onOpenConversation, onNewConversatio
               {conversations.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">No conversations yet in this project.</p>
               ) : conversations.map((conv) => (
-                <button type="button" key={conv.id} onClick={() => onOpenConversation(conv.id)} className="flex w-full items-center justify-between p-3 rounded-lg border text-left hover:bg-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                <button type="button" key={conv.id} onClick={() => onOpenConversation(conv.id)} className="flex w-full items-center justify-between p-3 rounded-lg border text-left hover:bg-accent/50 transition-colors ">
                   <div className="min-w-0">
                     <div className="text-sm font-medium truncate">{conv.title}</div>
                     <div className="text-xs text-muted-foreground">{conv.message_count} messages</div>

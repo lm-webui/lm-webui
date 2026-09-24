@@ -52,12 +52,14 @@
 @layer base {
   * {
     @apply border-border;
-    outline: none !important;
   }
-  *:focus {
-    outline: none !important;
-    box-shadow: none !important;
-  }
+
+  /* No focus ring is a deliberate choice for this UI, not an oversight.
+     `!important` is load-bearing: a `focus-visible:ring-*` utility is a class selector and
+     out-specifies a bare `*:focus-visible`, so dropping the flag would make every ring in the
+     app reappear. The matching focus utilities have been removed from the components, so
+     nothing in the tree declares a focus style that cannot render. */
+  *:focus,
   *:focus-visible {
     outline: none !important;
     box-shadow: none !important;

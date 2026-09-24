@@ -57,8 +57,8 @@ interface ChatStore {
   ensureConversation: () => Promise<string>;
 
   // Loading state actions
-  startImageGeneration: (conversationId: string) => void;
-  completeImageGeneration: (conversationId: string) => void;
+  startImageGeneration: () => void;
+  completeImageGeneration: () => void;
   startConversationCreation: () => void;
   completeConversationCreation: () => void;
 
@@ -270,8 +270,6 @@ export const useChatStore = create<ChatStore>()(
               const response = await createConversation('New Chat', chatId, conversation.metadata);
               backendConversationId = response.conversation_id;
               
-              console.log(`✅ Created conversation in backend: ${chatId} -> ${backendConversationId}`, 
-                         response.exists ? '(already existed)' : '(new)');
               
               // Update frontend with backend ID if different
               if (backendConversationId !== chatId) {
@@ -362,7 +360,6 @@ export const useChatStore = create<ChatStore>()(
             });
             
             if (isDuplicate) {
-              console.log(`🔄 Skipping duplicate message: ${processedMessage.content.substring(0, 50)}...`);
               return state;
             }
             
@@ -518,7 +515,6 @@ export const useChatStore = create<ChatStore>()(
             };
           });
           
-          console.log(`✅ Conversation title updated in backend: ${chatId} -> "${title}"`);
           
           // Force sidebar re-render after title update
           get().incrementSidebarVersion();
@@ -556,7 +552,6 @@ export const useChatStore = create<ChatStore>()(
             // First, try to delete from backend
             const { deleteConversationFromBackend } = await import('@/utils/api');
             await deleteConversationFromBackend(chatId);
-            console.log(`✅ Conversation ${chatId} deleted from backend`);
           } catch (error: any) {
             // If not found (404), treat as success/already deleted and proceed to local cleanup
             const isNotFound = error?.status === 404 || error?.message?.includes('404') || error?.response?.detail === 'Conversation not found';
@@ -619,7 +614,7 @@ export const useChatStore = create<ChatStore>()(
       // Ensure active conversation exists
       ensureConversation: async () => {
         const state = get();
-        let chatId = state.activeChatId;
+        const chatId = state.activeChatId;
         
         if (!chatId) {
           // Create new conversation if none exists
@@ -654,13 +649,11 @@ export const useChatStore = create<ChatStore>()(
       },
       
       // Loading state actions
-      startImageGeneration: (conversationId: string) => {
-        console.debug('image generation started for conversation', conversationId);
+      startImageGeneration: () => {
         set({ imageGenerationLoading: true });
       },
 
-      completeImageGeneration: (conversationId: string) => {
-        console.debug('image generation completed for conversation', conversationId);
+      completeImageGeneration: () => {
         set({ imageGenerationLoading: false });
       },
 

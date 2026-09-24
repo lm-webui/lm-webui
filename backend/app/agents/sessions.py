@@ -66,7 +66,8 @@ class AgentSessions:
             except OSError:
                 pass
 
-    def create(self, agent: str, install: bool = False, terminal_cmd: list[str] | None = None) -> str:
+    def create(self, agent: str, owner_id: int | None = None, install: bool = False,
+               terminal_cmd: list[str] | None = None) -> str:
         """New session workspace. install=True marks a session whose terminal runs the agent's
         install command instead of the agent — the terminal WebSocket refuses to open for a
         not-installed agent, and during an install that is exactly the case."""
@@ -74,7 +75,7 @@ class AgentSessions:
         cwd = os.path.join(self._workspace(agent), sid)
         os.makedirs(cwd, exist_ok=True)
         self._sessions[sid] = {
-            "agent": agent, "cwd": cwd,
+            "agent": agent, "owner_id": owner_id, "cwd": cwd,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "transcript": [],
             "runs": [],
@@ -102,11 +103,13 @@ class AgentSessions:
             s["claude_session_id"] = claude_session_id
             self._persist()
 
-    def list(self, agent: str | None = None) -> list[dict]:
+    def list(self, agent: str | None = None, owner_id: int | None = None,
+             admin: bool = False) -> list[dict]:
         return [
             {"sid": sid, **{k: v for k, v in s.items() if k not in ("transcript", "runs", "active_run", "terminal_cmd")}}
             for sid, s in self._sessions.items()
             if not s.get("install") and (agent is None or s["agent"] == agent)
+            and (admin or s.get("owner_id") == owner_id)
         ]
 
     def delete(self, sid: str) -> bool:
@@ -175,11 +178,12 @@ class AgentSessions:
         if s and s["active_run"]:
             self.end_run(sid, 1)
 
-    def list_runs(self, agent: str | None = None) -> list[dict]:
+    def list_runs(self, agent: str | None = None, owner_id: int | None = None,
+                  admin: bool = False) -> list[dict]:
         """All completed runs across the agent's sessions, newest first."""
         runs: list[dict] = []
         for s in self._sessions.values():
-            if agent is None or s["agent"] == agent:
+            if (agent is None or s["agent"] == agent) and (admin or s.get("owner_id") == owner_id):
                 runs.extend(s["runs"])
         runs.sort(key=lambda r: r.get("started_at") or "", reverse=True)
         return runs

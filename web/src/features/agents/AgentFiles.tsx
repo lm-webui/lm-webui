@@ -147,7 +147,7 @@ export default function AgentFiles({ agent }: { agent: string }) {
         <DialogContent>
           <DialogTitle>Edit {confirming?.label}?</DialogTitle>
           <DialogDescription className="leading-relaxed">
-            This overwrites <span className="font-mono text-xs">{confirming?.path}</span> — the real
+            This overwrites <span className="font-mono text-xs">{confirming?.path}</span>, the real
             config read by the CLI. The previous version is backed up as{" "}
             <span className="font-mono text-xs">.bak</span>.
           </DialogDescription>

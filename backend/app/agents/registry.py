@@ -176,13 +176,12 @@ def resolve(name: str) -> str | None:
 
 
 def install_cmd(name: str) -> str:
-    """The exact command shown to the user and run in the host terminal, prefix resolved.
+    """The exact command shown to the user and run in the host terminal.
 
-    Kept as a string (not argv) because three consumers need it that way: the Copy button, the
-    409 body when there is no GUI terminal, and the terminal's `;`-chained invocation.
+    Installers deliberately use their native user-level defaults. Detection adds the user's login
+    PATH, so existing global installs are found without relocating them into ~/.lmwebui.
     """
-    from app.core.config_manager import get_config
-    return AGENTS[name].install.format(prefix=str(Path(get_config().paths.base_dir).expanduser()))
+    return AGENTS[name].install
 
 
 def detect(name: str, refresh: bool = False) -> dict:

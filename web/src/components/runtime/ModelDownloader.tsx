@@ -26,7 +26,7 @@ export default function ModelDownloader({ open, onOpenChange, modelType, variant
   const [selectedFiles, setSelectedFiles] = useState<Record<string, boolean>>({});
   const [mlxDownloading, setMlxDownloading] = useState(false);
   const [mlxProgress, setMlxProgress] = useState(0);
-  const { downloads, startDownload } = useDownloads();
+  const { downloads, startDownload, unreachable } = useDownloads();
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
   const isGGUF = modelType === "gguf";
   const isVision = isGGUF && variant === "vision";
@@ -178,7 +178,7 @@ export default function ModelDownloader({ open, onOpenChange, modelType, variant
           <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs text-amber-800 dark:text-amber-200">
             <div className="font-semibold">Vision model</div>
             <p className="mt-1">
-              Download the <b>main model</b> and its <b>mmproj</b> (multimodal projector) — both are required.
+              Download the <b>main model</b> and its <b>mmproj</b> (multimodal projector). Both are required.
               They are saved together under <code className="font-mono">models/vision/&lt;model&gt;/</code>.
             </p>
           </div>
@@ -257,7 +257,7 @@ export default function ModelDownloader({ open, onOpenChange, modelType, variant
                 <span className="w-36 truncate shrink-0">{d.filename}</span>
                 {d.status === "queued" ? (
                   <span className="flex items-center gap-1 text-amber-600">
-                    <Clock className="h-3 w-3" /> In queue — another model is downloading
+                    <Clock className="h-3 w-3" /> In queue: another model is downloading
                   </span>
                 ) : (
                   <>
@@ -270,6 +270,12 @@ export default function ModelDownloader({ open, onOpenChange, modelType, variant
               </div>
             ))}
           </div>
+        )}
+
+        {unreachable && (
+          <p className="text-xs text-amber-600">
+            Backend unreachable. Download progress may be stale.
+          </p>
         )}
       </DialogContent>
     </Dialog>

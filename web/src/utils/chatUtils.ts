@@ -88,7 +88,7 @@ export const CODE_LANGUAGE_PATTERNS = {
   typescript: /(?:interface|type |: string|: number)/,
   sql: /(?:SELECT|FROM|WHERE|INSERT|UPDATE|DELETE)/i,
   bash: /(?:#!\/bin\/bash|sudo|cd |ls |grep)/,
-  json: /^\s*[{\[].*[}\]]\s*$/s,
+  json: /^\s*[{[]/s,
   css: /(?:\.[\w-]+\s*{|@media|display:|color:)/,
   html: /(?:<\/?[a-z][\s\S]*>)/i,
   jsx: /(?:return\s*\(|<[A-Z][\w]*|className=)/,

@@ -216,14 +216,11 @@ def test_missing_verdict_has_a_short_ttl(monkeypatch):
 
 
 def test_install_cmd_carries_the_resolved_prefix(monkeypatch, tmp_path):
-    """The command the user sees must target the canonical bin dir, not npm's own global prefix —
-    and must have no unresolved placeholder left in it."""
-    monkeypatch.setattr(registry, "bin_dir", lambda: tmp_path / "bin")
-    monkeypatch.setattr("app.core.config_manager.get_config",
-                        lambda: type("C", (), {"paths": type("P", (), {"base_dir": str(tmp_path)})()})())
+    """Install commands use each tool's native user-level installation directory."""
     for name in ("claude", "codex", "opencode"):
         cmd = install_cmd(name)
-        assert f'--prefix "{tmp_path}"' in cmd
+        assert "--prefix" not in cmd
+        assert "npm install -g" in cmd
     for name in ("claude", "codex", "opencode", "hermes"):
         assert "{" not in install_cmd(name)
 

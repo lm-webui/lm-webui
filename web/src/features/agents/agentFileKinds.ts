@@ -56,12 +56,12 @@ export const AGENT_FILE_KINDS: AgentFileKind[] = [
   {
     name: "skill.md",
     label: "Skill",
-    description: "App-managed instructions for this agent. Stored by lm-webui, not by the CLI — other agents are given this path to read.",
+    description: "App-managed instructions for this agent. Stored by lm-webui, not by the CLI. Other agents are given this path to read.",
   },
   {
     name: "memory.md",
     label: "Memory",
-    description: "App-managed notes for this agent. Stored by lm-webui, not by the CLI — other agents are given this path to read.",
+    description: "App-managed notes for this agent. Stored by lm-webui, not by the CLI. Other agents are given this path to read.",
   },
 ];
 

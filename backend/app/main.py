@@ -389,6 +389,13 @@ async def initialize_app():
                 print(f"❌ Media directory not writable: {d}")
                 raise
 
+        # Install the managed image runtime in the background, like llama.cpp. This does
+        # not delay API readiness; the runtime manager exposes progress while Torch downloads.
+        from app.services import comfyui_runtime as comfyui
+        if not comfyui.comfyui_runtime.installed and comfyui.install_state()["status"] == "idle":
+            asyncio.create_task(comfyui.install())
+            logger.info("ComfyUI is not installed; background installation started")
+
         print(f"✅ Media directory: {MEDIA_DIR.resolve()}")
 
         # Finalize

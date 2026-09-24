@@ -7,7 +7,7 @@ AGENT = AgentDef(
     name="codex",
     cmd="codex",
     run=("codex", "exec", "--json"),
-    install='npm install -g --prefix "{prefix}" @openai/codex',
+    install="npm install -g @openai/codex",
     config_dir="~/.codex",
     config_name="config.toml",
 )

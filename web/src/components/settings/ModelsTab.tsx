@@ -250,10 +250,9 @@ export function ModelsTab() {
 
                             <button
                               onClick={() => {
-                                console.log(`Toggling ${modelId} from ${isVisible}`);
                                 toggleModelVisibility(modelId);
                               }}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                                 isVisible ? 'bg-blue-500' : 'bg-zinc-300 dark:bg-zinc-600'
                               }`}
                             >

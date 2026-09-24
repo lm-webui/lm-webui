@@ -12,6 +12,8 @@ import asyncio
 import fcntl
 import os
 import pty
+import signal
+import sys
 import struct
 import termios
 import time
@@ -155,12 +157,18 @@ class TerminalSession:
     async def start(self) -> None:
         master, slave = pty.openpty()
         _set_win_size(slave, self._cols, self._rows)
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                *self.cmd, cwd=self.cwd, start_new_session=True,
+                stdin=slave, stdout=slave, stderr=slave,
+                env=_pty_env(), preexec_fn=_set_controlling_tty,
+            )
+        except BaseException:
+            os.close(master)
+            os.close(slave)
+            raise
         self._master = master
-        self._proc = await asyncio.create_subprocess_exec(
-            *self.cmd, cwd=self.cwd, start_new_session=True,
-            stdin=slave, stdout=slave, stderr=slave,
-            env=_pty_env(), preexec_fn=_set_controlling_tty,
-        )
+        self._proc = proc
         os.close(slave)
         loop = asyncio.get_running_loop()
         loop.add_reader(master, self._pump)
@@ -229,19 +237,28 @@ class TerminalSession:
         return False
 
     def resize(self, cols: int, rows: int) -> None:
-        if self._master is not None:
+        if self._master is not None and 1 <= cols <= 500 and 1 <= rows <= 200:
             _set_win_size(self._master, cols, rows)
 
     async def close(self) -> None:
         if self._proc is not None and self._proc.returncode is None:
+            def terminate(force: bool = False) -> None:
+                if sys.platform == "win32":
+                    self._proc.kill()
+                    return
+                os.killpg(self._proc.pid, signal.SIGKILL if force else signal.SIGTERM)
             try:
-                self._proc.kill()
+                terminate()
             except ProcessLookupError:
                 pass
             try:
                 await asyncio.wait_for(self._proc.wait(), timeout=5)
             except asyncio.TimeoutError:
-                pass
+                try:
+                    terminate(True)
+                except ProcessLookupError:
+                    pass
+                await self._proc.wait()
         self._teardown()
 
 

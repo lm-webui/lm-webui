@@ -61,7 +61,6 @@ export class ModelService {
       console.warn(`Invalid models response for ${provider}:`, rawModels);
       rawModels = [];
     }
-    console.log(`Fetched models for ${provider}: (${rawModels.length})`, rawModels);
 
     const modelMapping: Record<string, string> = {};
     const modelNames: string[] = [];
@@ -116,7 +115,7 @@ export class ModelService {
           ...result,
           connectionStatus: "connected"
         };
-      } catch (error) {
+      } catch {
         return {
           models: [],
           modelMapping: {},
@@ -132,7 +131,6 @@ export class ModelService {
     if (needsApiKey && isAuthenticated) {
       const backendProvider = this.getBackendProvider(provider);
       const hasStoredApiKey = storedApiKeys[backendProvider];
-      console.log(`Checking stored API keys for ${provider} (backend: ${backendProvider}):`, storedApiKeys, hasStoredApiKey);
 
       if (!hasStoredApiKey) {
         return {

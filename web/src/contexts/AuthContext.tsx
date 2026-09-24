@@ -87,7 +87,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Clear sessionStorage for draft messages (temporary storage)
       sessionStorage.clear();
       
-      console.log('Cleared all temporary storage data (preserved UI preferences)');
     } catch (e) {
       console.error('Failed to clear temp storage:', e);
     }
@@ -143,7 +142,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (!hasValidAuth) {
         // User is not authenticated - clear all temporary and persisted storage
-        console.log('User not authenticated, clearing all storage data');
         clearTempStorage();
         
         // Also clear any auth-related storage
@@ -152,14 +150,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.removeItem('user');
       } else {
         // User is authenticated
-        console.log('User authenticated, performing storage cleanup');
         
         clearTempStorage();
         
-        console.log('Cleared all storage for authenticated user (backend is source of truth)');
       }
       
-      console.log('Storage cleanup completed on app initialization');
     } catch (error) {
       console.error('Storage cleanup failed:', error);
     }
@@ -206,14 +201,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   const login = async (email: string, password: string, rememberMe?: boolean) => {
-    try {
-      const response = await authAxios.post('/api/auth/login', { email, password, remember_me: rememberMe ?? true });
-      setUser(response.data.user);
-      startRefreshTimer();
-      clearTempStorage();
-    } catch (error: any) {
-      throw error;
-    }
+    const response = await authAxios.post('/api/auth/login', { email, password, remember_me: rememberMe ?? true });
+    setUser(response.data.user);
+    startRefreshTimer();
+    clearTempStorage();
   };
 
   const logout = async () => {
@@ -233,14 +224,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const register = async (email: string, password: string) => {
-    try {
-      const response = await authAxios.post('/api/auth/register', { email, password });
-      setUser(response.data.user);
-      startRefreshTimer();
-      clearTempStorage(); // Clear temp storage on successful registration
-    } catch (error: any) {
-      throw error;
-    }
+    const response = await authAxios.post('/api/auth/register', { email, password });
+    setUser(response.data.user);
+    startRefreshTimer();
+    clearTempStorage(); // Clear temp storage on successful registration
   };
 
   const value: AuthContextType = {

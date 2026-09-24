@@ -38,7 +38,6 @@ authAxios.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
-      console.log('🔐 401 detected in auth request, attempting token refresh...');
       
       try {
         // Attempt to refresh the access token
@@ -52,7 +51,6 @@ authAxios.interceptors.response.use(
         );
         
         if (refreshResponse.status === 200) {
-          console.log('✅ Token refreshed successfully');
           
           // Retry the original request with fresh token
           return authAxios(originalRequest);
@@ -122,7 +120,7 @@ export const useAuth = create<AuthState>((set, get) => ({
         set({ user: data, isAuthenticated: true });
         startRefreshTimer();
         return true;
-      } catch (refreshError) {
+      } catch {
         // Refresh failed, check if we can still get user info
         try {
           const { data } = await authAxios.get('/api/auth/me');

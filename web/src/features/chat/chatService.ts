@@ -138,7 +138,7 @@ export class ChatService {
       let isoTime;
       try {
         isoTime = new Date(timeValue).toISOString();
-      } catch (e) {
+      } catch {
         isoTime = new Date().toISOString();
       }
 
@@ -155,7 +155,6 @@ export class ChatService {
     const providerPrefixedKey = request.provider ? `${request.provider}:${selectedModel}` : selectedModel;
     const modelIdForAPI = modelMapping[providerPrefixedKey] || modelMapping[selectedModel] || selectedModel;
     
-    console.log(`🤖 Model resolution: '${selectedModel}' -> '${modelIdForAPI}' (using mapping: ${!!(modelMapping[providerPrefixedKey] || modelMapping[selectedModel])})`);
 
     // Create a signal for the request - either use the provided one or create a new one
     const signal = request.signal || new AbortController().signal;
@@ -179,7 +178,6 @@ export class ChatService {
     let sourcesPayload: { context_used?: any; sources?: any[]; retrieved_images?: string[] } = {};
 
     if (isImageGenerationRequest) {
-      console.log("🎨 Image generation intent detected in ChatService");
       try {
         // Use the generateImage API instead of chat
         const imageUrl = await generateImage({
@@ -232,10 +230,6 @@ export class ChatService {
     // Note: Assistant message is already persisted by the chat API (/api/chat)
     // when it returns the response, so we don't need to save it separately here.
 
-    // Debug logging for title generation
-    console.log(`🎯 Frontend Title Check: sessionId=${sessionId}, messages.length=${messages.length}, autoTitleGeneration=${autoTitleGeneration}, isAuthenticated=${isAuthenticated}`);
-    console.log(`   Message preview: '${request.message.substring(0,100)}${request.message.length > 100 ? '...' : ''}'`);
-
     // Auto-generate title after first user message
     // Check if this is the first user message in the conversation
     const userMessagesCount = messages.filter(m => m.role === "user").length;
@@ -243,13 +237,10 @@ export class ChatService {
     
     // Auto-trigger background title generation in backend for first user message
     if (autoTitleGeneration && isFirstUserMessage && isAuthenticated) {
-      console.log(`✅ Frontend: Triggering backend title generation for first user message (total messages: ${messages.length}, user messages: ${userMessagesCount})`);
       // Trigger backend title generation asynchronously (non-blocking)
       generateConversationTitle(sessionId).catch(error => {
         console.error("Failed to trigger backend title generation:", error);
       });
-    } else {
-      console.log(`❌ Frontend: Skipping title generation (not first user message or not authenticated: total=${messages.length}, user=${userMessagesCount}, authenticated=${isAuthenticated})`);
     }
 
     const userMessage: Message = {

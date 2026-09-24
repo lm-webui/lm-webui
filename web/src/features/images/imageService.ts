@@ -51,7 +51,6 @@ export class ImageService {
         // For authenticated users, use backend-generated conversation ID with generic title
         const newConversation = await createConversation("New Chat");
         conversationId = newConversation.conversation_id;
-        console.log("📝 Created backend conversation_id for image generation:", conversationId);
 
         // Update state so future messages use the same conversation
         setCurrentSessionId(conversationId);
@@ -69,7 +68,6 @@ export class ImageService {
       } else {
         // Create temporary session for unauthenticated users
         conversationId = `temp_${Date.now()}`;
-        console.log("📝 Created temp conversation_id for image generation:", conversationId);
 
         // Update state so future messages use the same conversation
         setCurrentSessionId(conversationId);
@@ -87,7 +85,6 @@ export class ImageService {
       }
     }
 
-    console.log("🖼️ Generating image with conversation_id:", conversationId);
     const imageUrl = await apiGenerateImage(request, conversationId);
 
     // Only update conversation title if this is a new conversation (no existing messages)
@@ -100,7 +97,6 @@ export class ImageService {
         : request.message;
       const conversationTitle = `Image: ${truncatedPrompt}`;
 
-      console.log(`🎯 Updating new image conversation title: "${conversationTitle}"`);
       await updateConversationTitle(conversationId, conversationTitle);
 
       // Update local conversations array immediately to reflect title change in UI
@@ -108,7 +104,6 @@ export class ImageService {
         c.id === conversationId ? { ...c, title: conversationTitle } : c
       ));
 
-      console.log(`✅ Image conversation title updated locally: "${conversationTitle}"`);
     }
 
     return {

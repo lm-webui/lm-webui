@@ -29,13 +29,15 @@ const detectLanguage = (code: string): string => {
   return 'javascript'
 }
 
-// Prism.js highlighting function
+// Prism.js highlighting function. Prism escapes the code it emits, so the result is
+// always safe for the dangerouslySetInnerHTML call sites below — callers must never
+// fall back to the raw input string.
 const highlightSyntax = (code: string, language?: string): string => {
   const lang = language?.toLowerCase() || detectLanguage(code)
-  const grammar = Prism.languages[lang] || Prism.languages.javascript
-  if (!grammar) {
-    return code
-  }
+  // `!`: Prism's core bundle always registers the javascript grammar, so the fallback is
+  // never absent. It matters that this cannot be undefined — there is deliberately no
+  // path that returns `code` unescaped.
+  const grammar = (Prism.languages[lang] || Prism.languages.javascript)!
   return Prism.highlight(code, grammar, lang)
 }
 
@@ -82,7 +84,6 @@ const CodeBlock = React.forwardRef<HTMLDivElement, CodeBlockProps>(
 
     const handleRun = () => {
       // TODO: Implement code execution logic
-      console.log('Run code:', children)
     }
 
     const highlightedContent = highlightSyntax(children, language)
@@ -103,7 +104,7 @@ const CodeBlock = React.forwardRef<HTMLDivElement, CodeBlockProps>(
                     {index + 1}
                   </span>
                   <span dangerouslySetInnerHTML={{
-                    __html: highlightSyntax(line, language) || line
+                    __html: highlightSyntax(line, language)
                   }} />
                 </div>
               ))}

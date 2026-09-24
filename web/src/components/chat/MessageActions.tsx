@@ -53,7 +53,7 @@ export function MessageActions({
           size="sm"
           variant="ghost"
           className={cn(
-            "h-6 w-6 p-0 transition-colors text-note-foreground",
+            "h-6 w-6 p-0 transition-colors",
             copied ? "text-green-400" : "hover:text-blue-400",
             isMobile ? "h-7 w-7" : "h-6 w-6"
           )}
@@ -67,7 +67,7 @@ export function MessageActions({
             size="sm"
             variant="ghost"
             className={cn(
-              "h-6 w-6 p-0 transition-colors text-note-foreground hover:text-blue-400",
+              "h-6 w-6 p-0 transition-colors hover:text-blue-400",
               isMobile ? "h-7 w-7" : "h-6 w-6"
             )}
             onClick={onEdit}
@@ -128,7 +128,7 @@ export function MessageActions({
           size="sm"
           variant="ghost"
           className={cn(
-            "h-6 w-6 p-0 transition-colors text-note-foreground",
+            "h-6 w-6 p-0 transition-colors",
             action.className,
             isMobile ? "h-7 w-7" : "h-6 w-6"
           )}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Trash2, Download, RefreshCw, Image, LayoutGrid } from "lucide-react";
+import { Loader2, Trash2, Download, RefreshCw, Image, LayoutGrid, WifiOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -14,16 +14,21 @@ interface GalleryImage {
 export default function ImageGallery() {
   const [images, setImages] = useState<GalleryImage[]>([]);
   const [loading, setLoading] = useState(true);
+  // Distinct from "loaded and empty": without it a dead backend looks exactly like an
+  // empty gallery and the user is told to go generate something instead of checking it.
+  const [error, setError] = useState(false);
   const BASE = import.meta.env.VITE_BACKEND_URL || "";
 
   const fetchImages = async () => {
     try {
       const res = await fetch(`/api/images/history`);
-      if (res.ok) {
-        const data = await res.json();
-        setImages(data.images || []);
-      }
-    } catch { /* ignore */ } finally {
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setImages(data.images || []);
+      setError(false);
+    } catch {
+      setError(true);
+    } finally {
       setLoading(false);
     }
   };
@@ -52,7 +57,7 @@ export default function ImageGallery() {
   const handleUseInStudio = (img: GalleryImage) => {
     let params = {};
     if (img.params) {
-      try { params = JSON.parse(img.params); } catch {}
+      try { params = JSON.parse(img.params); } catch { /* malformed params — keep the defaults */ }
     }
     window.dispatchEvent(new CustomEvent("studio-load", {
       detail: { imageUrl: `${BASE}${img.url}`, ...params },
@@ -79,7 +84,17 @@ export default function ImageGallery() {
         </Button>
       </div>
 
-      {images.length === 0 ? (
+      {error ? (
+        <div className="flex flex-1 flex-col items-center justify-center text-center text-muted-foreground">
+          <WifiOff className="h-12 w-12 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">Couldn't load images</p>
+          <p className="text-xs mt-1">The backend isn't responding.</p>
+          <Button size="sm" variant="outline" className="rounded-xl gap-1 mt-4"
+            onClick={() => { setLoading(true); fetchImages(); }}>
+            <RefreshCw className="h-4 w-4" /> Retry
+          </Button>
+        </div>
+      ) : images.length === 0 ? (
         <div className="flex flex-1 flex-col items-center justify-center text-center text-muted-foreground">
           <Image className="h-12 w-12 mx-auto mb-3 opacity-30" />
           <p className="text-sm">No images saved yet</p>

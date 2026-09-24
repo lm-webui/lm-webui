@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Core permissions for the bundled onboarding page. The app's own commands (backend_state, fix_backend) are allowed by default and deliberately not listed here — this exists only so the page can use window.__TAURI__.event.listen, which is a core permission. Without it, invoke still works and the log pane silently never receives anything.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

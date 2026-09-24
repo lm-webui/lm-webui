@@ -189,7 +189,7 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     loadXterm().then((ok) => {
       if (cancelled) return;
       if (ok) setReady(true);
-      else setLoadError("Terminal engine failed to load — /vendor/xterm assets are missing.");
+      else setLoadError("Terminal engine failed to load: /vendor/xterm assets are missing.");
     });
     return () => { cancelled = true; };
   }, []);
@@ -304,7 +304,6 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       ws.close();
       sockRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agent, sessionId, ready, nonce]);
 
   const connect = () => setNonce((n) => n + 1);

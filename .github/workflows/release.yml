@@ -11,11 +11,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: web/package-lock.json
+
+      - name: Install core builder
+        run: |
+          python3 -m pip install --upgrade nuitka
+          python3 -m pip install -r backend/requirements.lock
+          python3 -m pip install -r backend/requirements-test.txt
+
+      - name: Run backend unit tests
+        working-directory: backend
+        run: python3 -m pytest tests/unit -q
 
       - name: Build frontend
         run: |
@@ -23,10 +37,13 @@ jobs:
           npm ci
           npm run build
 
+      - name: Build compiled backend
+        run: bash scripts/build-core.sh dist/core
+
       - name: Assemble release tarball
         run: |
           mkdir -p lm-webui/web
-          cp -r backend/app lm-webui/app
+          cp -r dist/core/. lm-webui/core
           cp -r web/dist lm-webui/web/dist
           cp web/package.json lm-webui/web/package.json
           cp backend/requirements.txt backend/requirements.lock lm-webui/
@@ -34,6 +51,7 @@ jobs:
           cp package.json lm-webui/
           cp install.sh lm-webui/
           cp scripts/lmwebui lm-webui/lmwebui
+          cp dist/core/manifest.json lm-webui/core-manifest.json
           tar -czf lm-webui.tar.gz lm-webui
 
       # Before anything is published: does the archive actually contain what an install reads,
@@ -59,6 +77,8 @@ jobs:
           gh release upload "$GITHUB_REF_NAME" lm-webui.tar.gz --clobber
 
   desktop-macos:
+    # macOS DMGs are built and tested locally by scripts/release-dmg.sh.
+    if: ${{ false }}
     # The `build` job creates the release this one uploads to.
     needs: build
     # `macos-14` is the free arm64 (Apple Silicon) runner and matches the

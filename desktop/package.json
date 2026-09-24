@@ -1,7 +1,7 @@
 {
   "name": "lm-webui-desktop",
   "private": true,
-  "version": "0.8.21",
+  "version": "0.8.31",
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
