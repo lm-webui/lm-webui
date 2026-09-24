@@ -38,7 +38,9 @@ jobs:
           npm run build
 
       - name: Build compiled backend
-        run: bash scripts/build-core.sh dist/core
+        run: |
+          test -f packaging/core_entry.py
+          bash scripts/build-core.sh dist/core
 
       - name: Assemble release tarball
         run: |

@@ -54,7 +54,7 @@ def save_summary(conversation_id: str, user_id: int, summary: str) -> bool:
             db.execute(
                 "INSERT OR REPLACE INTO conversation_summaries "
                 "(conversation_id, summary, updated_at) VALUES (?, ?, ?)",
-                (conversation_id, summary, datetime.datetime.now()),
+                (conversation_id, summary, datetime.datetime.now().isoformat()),
             )
             db.commit()
         logger.info("Saved summary for conversation %s (%d chars)", conversation_id, len(summary))

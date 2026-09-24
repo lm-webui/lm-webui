@@ -158,7 +158,11 @@ async def test_start_argv_binds_loopback_only(engine, monkeypatch):
     async def _healthy():
         return True
 
+    async def _not_already_running():
+        return False
+
     monkeypatch.setattr(runtime, "_healthy", _healthy)
+    monkeypatch.setattr(runtime, "adopt_existing", _not_already_running)
 
     assert await runtime.start() is True
     argv = captured["argv"]

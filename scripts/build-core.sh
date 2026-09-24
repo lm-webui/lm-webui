@@ -11,7 +11,7 @@ python3 -m nuitka \
   --output-filename=lmwebui-core \
   --include-package=app \
   --assume-yes-for-downloads \
-  backend/core_entry.py
+  packaging/core_entry.py
 
 platform="$(python3 - <<'PY'
 import platform

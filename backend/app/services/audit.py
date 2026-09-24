@@ -33,7 +33,7 @@ def log_action(
                 resource_id,
                 json.dumps(details) if details else None,
                 ip_address,
-                datetime.now(),
+                datetime.now().isoformat(),
             ),
         )
         db.commit()
