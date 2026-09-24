@@ -41,6 +41,7 @@ for f in core/lmwebui-core web/dist/index.html web/package.json config.yaml \
 done
 pass "all install-time files present"
 [ ! -e "$tree/app" ] || fail "raw backend source shipped"
+[ -z "$(find "$tree" -type f -name '*.py' -print -quit)" ] || fail "Python source shipped"
 pass "raw backend source excluded"
 
 # index.html with no hashed bundles is a dist that built to nothing.
