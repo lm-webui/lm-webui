@@ -7,7 +7,7 @@
 // Refuses to run as root, and names artifacts that are already root-owned so the
 // one-time fix is printed instead of guessed at.
 //
-// Containers legitimately build as root: set LM_WEBUI_ALLOW_ROOT=1 (see Dockerfile).
+// Container builds should use the image's non-root build user as well.
 import { readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 

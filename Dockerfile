@@ -1,13 +1,13 @@
 # --- Stage 1: Build Frontend ---
 FROM node:24-alpine AS frontend-builder
-# This stage builds as root by design, and the container is disposable, so tell
-# scripts/assert-not-root.mjs (run via web/package.json's pre* hooks) to stand down.
-ENV LM_WEBUI_ALLOW_ROOT=1
 WORKDIR /frontend
-COPY package.json /package.json
-COPY web/package*.json ./
+RUN chown node:node /frontend
+COPY --chown=node:node package.json /package.json
+COPY --chown=node:node scripts /scripts
+COPY --chown=node:node web/package*.json ./
+USER node
 RUN npm ci
-COPY web/ ./
+COPY --chown=node:node web/ ./
 RUN npm run build
 
 # --- Stage 2: Runtime ---

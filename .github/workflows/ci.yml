@@ -176,7 +176,7 @@ jobs:
   build:
     name: Build & Security Scan
     runs-on: ubuntu-latest
-    needs: [validate, test]
+    needs: [validate, test, package]
 
     steps:
       - uses: actions/checkout@v4
