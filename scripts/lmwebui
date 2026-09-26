@@ -534,7 +534,7 @@ except Exception:
     # Stop the app first so files aren't locked during replace/build
     "$0" stop
     sleep 1
-    if linux_service is-active --quiet; then
+    if [ "$(uname)" = "Linux" ] && linux_service is-active --quiet lmwebui; then
       echo "❌ LM-WebUI service is still active after stop; refusing to update" >&2
       exit 1
     fi
