@@ -91,13 +91,17 @@ async def _resolve_checkpoint(session, model: str) -> tuple:
     from app.services.comfyui_runtime import MODEL_CATALOG
 
     key = (model or "").strip().lower()
+    installed = await _installed_checkpoints(session)
     entry = MODEL_CATALOG.get(key)
     if not entry:
-        known = ", ".join(sorted(MODEL_CATALOG))
+        # ComfyUI discovers checkpoint files by filename. Accepting an exact installed
+        # filename lets local uploads and user-managed downloads work without source changes.
+        if model and model == os.path.basename(model) and model in installed:
+            return model, None
+        known = ", ".join(sorted(set(MODEL_CATALOG) | set(installed)))
         return None, f"Unknown image model '{model}'. Available: {known}."
 
     wanted = entry["filename"]
-    installed = await _installed_checkpoints(session)
     if wanted in installed:
         return wanted, None
 
@@ -158,7 +162,7 @@ async def generate_image_local(req: ChatRequest, background_tasks=None):
             steps = int(getattr(req, "steps", None) or entry.get("default_steps") or 20)
             # ComfyUI's KSampler requires seed >= 0; the old default of -1 meant every
             # generation was rejected with "Value -1 smaller than min of 0".
-            seed = int(getattr(req, "seed", -1) or -1)
+            seed = int(getattr(req, "seed", -1) if getattr(req, "seed", None) is not None else -1)
             if seed < 0:
                 seed = random.randint(0, 2 ** 32 - 1)
             width = int(entry.get("default_width") or 1024)

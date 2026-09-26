@@ -5,7 +5,7 @@ Reuses the shared gguf_downloader + progress/status infra (by task_id), so the
 frontend DownloadsProvider and /api/models/download/status/{task_id} work for free.
 """
 import logging
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 
 from app.services.gguf_downloader import gguf_downloader
 from app.services.comfyui_runtime import (
@@ -22,6 +22,7 @@ router = APIRouter(prefix="/api/comfyui")
 # Only these may land in a checkpoint dir. The preset branch is trusted; the
 # caller-supplied branch had no extension check at all, so any file type was writable.
 ALLOWED_CHECKPOINT_EXTS = (".safetensors", ".ckpt")
+MAX_CHECKPOINT_BYTES = 10 * 1024 * 1024 * 1024
 
 
 @router.get("/presets")
@@ -38,6 +39,31 @@ async def list_presets(_: dict = Depends(require_permission("models.install"))):
 async def list_checkpoints(_: dict = Depends(require_permission("models.read"))):
     """Checkpoints actually installed in the managed engine."""
     return {"checkpoints": comfyui_runtime.checkpoints(), "dir": str(checkpoints_dir())}
+
+
+@router.post("/checkpoints/upload")
+async def upload_checkpoint(
+    file: UploadFile = File(...),
+    _: dict = Depends(require_permission("models.install")),
+):
+    """Upload a safetensors/ckpt checkpoint where ComfyUI discovers it."""
+    filename = (file.filename or "").strip()
+    if not filename or not filename.lower().endswith(ALLOWED_CHECKPOINT_EXTS):
+        raise HTTPException(400, "file must end with .safetensors or .ckpt")
+    try:
+        target = safe_path(checkpoints_dir(), filename)
+    except Exception:
+        raise HTTPException(400, "Invalid filename")
+    if target.exists():
+        raise HTTPException(409, "Checkpoint already exists")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    from app.routes.upload import save_upload
+    try:
+        size = await save_upload(file, target, MAX_CHECKPOINT_BYTES)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
+    return {"success": True, "filename": target.name, "size": size}
 
 
 @router.delete("/checkpoints/{filename}")

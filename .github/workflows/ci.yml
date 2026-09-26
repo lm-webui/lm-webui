@@ -126,7 +126,7 @@ jobs:
           flags: frontend
 
   package:
-    name: Validate compiled core and release tarball
+    name: Validate Python backend and release tarball
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -135,21 +135,8 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install compiler cache
-        run: sudo apt-get update && sudo apt-get install -y ccache
-
-      - name: Cache Nuitka compilation
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/ccache
-            ~/.cache/Nuitka
-          key: ${{ runner.os }}-nuitka-${{ hashFiles('backend/requirements.lock', 'backend/app/**/*.py', 'packaging/core_entry.py', 'scripts/build-core.sh') }}
-          restore-keys: ${{ runner.os }}-nuitka-
-
-      - name: Install backend and packaging dependencies
+      - name: Install backend dependencies
         run: |
-          python3 -m pip install --upgrade nuitka
           python3 -m pip install -r backend/requirements.lock
 
       - uses: actions/setup-node@v4
@@ -164,23 +151,16 @@ jobs:
           npm ci
           npm run build
 
-      - name: Build compiled backend
-        run: |
-          test -f packaging/core_entry.py
-          bash scripts/build-core.sh dist/core
-
       - name: Assemble and smoke-test release tarball
         run: |
           mkdir -p lm-webui/web
-          cp -r dist/core/. lm-webui/core
+          cp -r backend lm-webui/backend
           cp -r web/dist lm-webui/web/dist
           cp web/package.json lm-webui/web/package.json
           cp backend/requirements.txt backend/requirements.lock lm-webui/
           cp backend/config.yaml lm-webui/config.yaml
           cp package.json install.sh scripts/lmwebui lm-webui/
-          cp dist/core/manifest.json lm-webui/core-manifest.json
           tar -czf lm-webui.tar.gz lm-webui
-          bash scripts/smoke-core.sh lm-webui
           bash scripts/smoke-tarball.sh lm-webui.tar.gz
 
   # ----------------------------------------

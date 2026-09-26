@@ -403,6 +403,14 @@ def qwen_missing(model: str) -> List[str]:
     return [str(path.relative_to(engine_dir())) for path in paths if not path.is_file()]
 
 
+def available_models() -> List[str]:
+    """Model values the image generator can resolve right now."""
+    models = set(comfyui_runtime.checkpoints())
+    models.update(key for key, entry in MODEL_CATALOG.items()
+                 if entry.get("qwen") and not qwen_missing(key))
+    return sorted(models)
+
+
 def catalog_entries() -> List[Dict]:
     """Catalog in the shape the presets route/UI expect."""
     return [{"id": key, **meta} for key, meta in MODEL_CATALOG.items()]

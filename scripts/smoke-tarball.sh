@@ -35,14 +35,13 @@ tar -xzf "$tarball" -C "$tree" --strip-components=1
 
 # Every one of these is read by an install step. A missing requirements.txt, for instance, only
 # surfaces several steps later as a confusing pip error.
-for f in core/lmwebui-core web/dist/index.html web/package.json config.yaml \
+for f in backend/app/main.py web/dist/index.html web/package.json config.yaml \
          requirements.txt requirements.lock install.sh lmwebui package.json; do
   [ -f "$tree/$f" ] || fail "missing $f"
 done
 pass "all install-time files present"
-[ ! -e "$tree/app" ] || fail "raw backend source shipped"
-[ -z "$(find "$tree" -type f -name '*.py' -print -quit)" ] || fail "Python source shipped"
-pass "raw backend source excluded"
+[ -f "$tree/backend/app/main.py" ] || fail "backend source missing"
+pass "backend Python source shipped"
 
 # index.html with no hashed bundles is a dist that built to nothing.
 [ -n "$(ls -A "$tree/web/dist/assets" 2>/dev/null)" ] || fail "web/dist/assets is empty"
@@ -79,7 +78,7 @@ pass "shipped scripts parse"
 mkdir -p "$home/data" "$home/models"
 printf 'sentinel: keep-me\n' > "$home/config.yaml"
 echo keep > "$home/data/marker"
-mkdir -p "$home/backend" && echo stale > "$home/backend/junk"   # a leftover git-clone dir
+mkdir -p "$home/app" && echo stale > "$home/app/junk"   # a leftover compiled layout
 
 LMWEBUI_HOME="$home" bash "$tree/lmwebui" __install-tree "$tree" >/dev/null
 
@@ -87,12 +86,12 @@ grep -qx 'sentinel: keep-me' "$home/config.yaml" || fail "live config.yaml was r
 pass "config.yaml preserved"
 grep -qx keep "$home/data/marker" || fail "data/ was destroyed"
 pass "data/ preserved"
-[ -x "$home/core/lmwebui-core" ] && [ -f "$home/web/dist/index.html" ] || fail "tree was not installed"
+[ -f "$home/backend/app/main.py" ] && [ -f "$home/web/dist/index.html" ] || fail "tree was not installed"
 pass "application tree installed"
 [ ! -e "$home/config.yaml.template" ] || fail "config.yaml.template left behind"
 pass "template consumed"
-[ ! -e "$home/backend" ] || fail "stale git-clone layout survived"
-pass "stale clone layout cleared"
+[ ! -e "$home/app" ] && [ ! -e "$home/core" ] || fail "stale compiled layout survived"
+pass "stale compiled layout cleared"
 
 # The config the install ships must never leak the template's un-substituted home.
 grep -qF '~/.lmwebui' "$home/config.yaml" && fail "config.yaml has an un-substituted ~/.lmwebui" || true

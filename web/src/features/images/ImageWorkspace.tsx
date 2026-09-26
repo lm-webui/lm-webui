@@ -42,7 +42,7 @@ export default function ImageWorkspace() {
   // and the chat image capability only knows "comfyui"/"gguf". Storing the UI label
   // silently broke chat-triggered generation, so translate at the settings boundary.
   const toSetting = (p: string) => (p === "local" ? "comfyui" : p);
-  const fromSetting = (p: string) => (p === "comfyui" ? "local" : p);
+  const fromSetting = (p: string) => (p === "comfyui" || p === "gguf" ? "local" : p);
 
   useEffect(() => {
     fetchSettings().then((s: any) => {
@@ -97,16 +97,11 @@ export default function ImageWorkspace() {
             // "local" routes to the ComfyUI runtime pipeline (backend provider "comfyui").
             // The API keys its list by the backend name, so read `comfyui` — reading
             // `local` always missed and fell back to a hardcoded list.
-            connected: !!runtimes.comfyui?.installed,
-            models: apiModels.comfyui || ["sdxl", "sd15"],
-          },
-          gguf: {
-            label: "GGUF", icon: "server",
-            // GGUF-quantized diffusion also runs through ComfyUI (its GGUF node pack)
-            connected: !!runtimes.comfyui?.installed,
-            models: apiModels.gguf || ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
+            connected: !!(runtimes.comfyui?.installed || runtimes.comfyui?.running || runtimes.comfyui?.endpoint),
+            models: apiModels.comfyui || [],
           },
         });
+        setProvider((current) => current || "local");
         setLoadError(false);
       } catch { setLoadError(true); }
       setLoading(false);
@@ -128,11 +123,6 @@ export default function ImageWorkspace() {
       { value: "9:16", label: "Portrait Tall (9:16)" },
     ],
     local: [
-      { value: "1024x1024", label: "Square (1024×1024)" },
-      { value: "1536x1024", label: "Landscape (1536×1024)" },
-      { value: "1024x1536", label: "Portrait (1024×1536)" },
-    ],
-    gguf: [
       { value: "1024x1024", label: "Square (1024×1024)" },
       { value: "1536x1024", label: "Landscape (1536×1024)" },
       { value: "1024x1536", label: "Portrait (1024×1536)" },
@@ -181,7 +171,7 @@ export default function ImageWorkspace() {
           params: {
             size, quality, steps, seed: seed >= 0 ? seed + i : undefined,
             // negative prompt applies only to the local ComfyUI paths
-            ...(provider === "local" || provider === "gguf" ? { negative } : {}),
+            ...(provider === "local" ? { negative } : {}),
           },
         } as any);
         if (imageUrl) setResults((prev) => [imageUrl, ...prev]);

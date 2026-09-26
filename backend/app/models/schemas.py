@@ -1,5 +1,5 @@
 # === backend/app/models/schemas.py ===
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional
 
 class ChatRequest(BaseModel):
@@ -18,6 +18,8 @@ class ChatRequest(BaseModel):
     quality: Optional[str] = "standard"
     style: Optional[str] = "vivid"
     negative: Optional[str] = None  # ComfyUI negative prompt (local image path only)
+    steps: Optional[int] = Field(default=None, ge=1, le=100)
+    seed: Optional[int] = Field(default=None, ge=-1)
     metadata: Optional[dict] = None
     # img2img — base64 data-URI of a source image for image-input-capable models
     image_data_uri: Optional[str] = None

@@ -212,10 +212,40 @@ def test_catalog_filenames_match_what_the_downloader_installs():
         assert cr.checkpoint_for(key) == entry["filename"]
 
 
+def test_available_models_only_includes_installed_checkpoints_or_complete_qwen(engine):
+    (cr.checkpoints_dir()).mkdir(parents=True, exist_ok=True)
+    (cr.checkpoints_dir() / "majicmixRealistic_v7.safetensors").write_text("x")
+    assert cr.available_models() == ["majicmixRealistic_v7.safetensors"]
+
+
 def test_checkpoint_for_is_case_insensitive_and_rejects_unknown():
     assert cr.checkpoint_for("SDXL") == "sd_xl_base_1.0.safetensors"
     assert cr.checkpoint_for("flux-dev") is None
     assert cr.checkpoint_for("") is None
+
+
+def test_image_request_parameters_reach_all_local_workflows():
+    from app.models.schemas import ChatRequest
+    from app.services.local_image import _build_workflow, _build_workflow_qwen
+
+    request = ChatRequest(
+        message="test", provider="comfyui", model="sdxl",
+        steps=13, seed=123, size="512x768",
+    )
+    params = {
+        "model": request.model, "prompt": request.message, "steps": request.steps,
+        "seed": request.seed, "cfg": 7, "width": 512, "height": 768,
+        "ckpt_name": cr.MODEL_CATALOG["sdxl"]["filename"],
+    }
+    assert _build_workflow(params)["3"]["inputs"]["steps"] == 13
+    assert _build_workflow(params)["3"]["inputs"]["seed"] == 123
+
+    for model in ("sd15", "qwen-image-2.1-q5"):
+        params["model"] = model
+        graph = (_build_workflow_qwen if model.startswith("qwen") else _build_workflow)(params)
+        sampler = graph["6" if model.startswith("qwen") else "3"]["inputs"]
+        assert sampler["steps"] == 13
+        assert sampler["seed"] == 123
 
 
 # ── Generation-path helpers ───────────────────────────────────────────────
@@ -286,6 +316,17 @@ async def test_resolve_checkpoint_matches_the_installed_file(engine):
     session = _FakeSession(["sd_xl_base_1.0.safetensors"])
     name, err = await _resolve_checkpoint(session, "sdxl")
     assert name == "sd_xl_base_1.0.safetensors" and err is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_checkpoint_accepts_an_installed_custom_filename(engine):
+    from app.services.local_image import _resolve_checkpoint
+
+    name, err = await _resolve_checkpoint(
+        _FakeSession(["majicmixRealistic_v7.safetensors"]),
+        "majicmixRealistic_v7.safetensors",
+    )
+    assert name == "majicmixRealistic_v7.safetensors" and err is None
 
 
 @pytest.mark.asyncio

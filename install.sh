@@ -140,8 +140,8 @@ setup_repository() {
 
   # Fail here rather than half-way through replacing an install. The release workflow asserts the
   # same two files before uploading, so this only fires on a corrupt or truncated download.
-  if [ ! -x "$tmp/core/lmwebui-core" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
-    log_error "Release archive is missing core/lmwebui-core or web/dist/index.html"
+  if [ ! -f "$tmp/backend/app/main.py" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
+    log_error "Release archive is missing backend/app/main.py or web/dist/index.html"
     rm -rf "$tmp"; exit 1
   fi
 
@@ -268,13 +268,13 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$LMWEBUI_HOME
+WorkingDirectory=$LMWEBUI_HOME/backend
 Environment=LMWEBUI_HOME=$LMWEBUI_HOME
 # config.yaml hardcodes base_dir: ~/.lmwebui; pin it to the real home so an overridden
 # LMWEBUI_HOME can't leave the agent bin dir and the installer pointing at different places.
 Environment=LMWEBUI_BASE_DIR=$LMWEBUI_HOME
 Environment=PATH=$LMWEBUI_HOME/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-ExecStart=$LMWEBUI_HOME/core/lmwebui-core
+ExecStart=$LMWEBUI_HOME/.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 7070
 Restart=on-failure
 [Install]
 WantedBy=multi-user.target
@@ -300,8 +300,8 @@ SERVICEEOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>com.lmwebui.server</string>
-<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/core/lmwebui-core</string></array>
-<key>WorkingDirectory</key><string>$LMWEBUI_HOME</string>
+<key>ProgramArguments</key><array><string>$LMWEBUI_HOME/.venv/bin/python</string><string>-m</string><string>uvicorn</string><string>app.main:app</string><string>--host</string><string>0.0.0.0</string><string>--port</string><string>7070</string></array>
+<key>WorkingDirectory</key><string>$LMWEBUI_HOME/backend</string>
 <key>EnvironmentVariables</key><dict><key>LMWEBUI_HOME</key><string>$LMWEBUI_HOME</string><key>LMWEBUI_BASE_DIR</key><string>$LMWEBUI_HOME</string><key>PATH</key><string>$LMWEBUI_HOME/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>RunAtLoad</key><true/><key>KeepAlive</key><true/>
 <key>StandardOutPath</key><string>$LMWEBUI_HOME/logs/stdout.log</string>
@@ -445,7 +445,7 @@ wait_for_ready() {
   log_info "Waiting for application to start..."
   local spin='-\|/'
   local i=0
-  for attempt in $(seq 1 30); do
+  for attempt in $(seq 1 90); do
     if curl -fsS "http://localhost:7070/api/health" 2>/dev/null | grep -q '"ready":true'; then
       printf "\r\033[K"; log_success "LM-WebUI is running and healthy!"; return
     fi
@@ -454,7 +454,18 @@ wait_for_ready() {
     sleep 2
   done
   printf "\r\033[K"
-  log_error "Not ready. Check logs at $LMWEBUI_HOME/logs/"; exit 1
+  log_error "Not ready. Health response:"
+  curl -sS --max-time 5 "http://localhost:7070/api/health" 2>/dev/null || true
+  echo ""
+  if command -v journalctl >/dev/null 2>&1; then
+    log_error "Recent service logs:"
+    journalctl -u lmwebui -n 80 --no-pager 2>/dev/null || true
+  fi
+  if [ -s "$LMWEBUI_HOME/logs/stderr.log" ]; then
+    log_error "Recent stderr.log:"
+    tail -n 80 "$LMWEBUI_HOME/logs/stderr.log"
+  fi
+  exit 1
 }
 
 show_instructions() {

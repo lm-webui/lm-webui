@@ -101,6 +101,8 @@ async def generate_image(
         quality=params.get("quality", "standard"),
         style=params.get("style", "vivid"),
         negative=params.get("negative") or None,  # ComfyUI local path only
+        steps=params.get("steps"),
+        seed=params.get("seed"),
         user_id=user_id["id"],
         conversation_id=request.get("conversation_id"),
         image_data_uri=source_uri if supports_image_input(provider, model) else None,
@@ -222,15 +224,15 @@ async def get_image_models(user_id: dict = Depends(get_current_user)):
     Queries user's actual API keys to find image-capable models.
     Falls back to known models if API query fails."""
     from app.services.model_registry import get_model_registry
-    from app.services.comfyui_runtime import MODEL_CATALOG
+    from app.services.comfyui_runtime import MODEL_CATALOG, available_models
 
     registry = get_model_registry()
     known = {
         "openai": ["dall-e-3", "dall-e-2", "gpt-image-1"],
         "google": ["imagen-3", "gemini-2.5-flash-image"],
-        # Only models the catalog can resolve to a checkpoint, so the picker can never offer
-        # something with no graph or no download source behind it.
-        "comfyui": sorted(MODEL_CATALOG),
+        # Only files/bundles that the local runtime can resolve now. Presets remain available
+        # through Runtime Manager until their files are actually installed.
+        "comfyui": available_models(),
         "gguf": ["flux1-dev", "flux1-schnell", "sdxl-base", "sd3-medium"],
     }
     api_keys = registry.get_user_api_keys(user_id["id"])
