@@ -20,7 +20,6 @@ machine = {"amd64": "x86_64", "aarch64": "arm64"}.get(machine, machine)
 print(f"{platform.system().lower()}-{machine}")
 PY
 )"
-mkdir -p "$out/$platform"
-cp -R "$out/core_entry.dist/." "$out/$platform/"
+cp -R "$out/core_entry.dist/." "$out/"
 rm -rf "$out/core_entry.dist" "$out/core_entry.build"
 printf '{"platform":"%s","executable":"lmwebui-core"}\n' "$platform" > "$out/manifest.json"
