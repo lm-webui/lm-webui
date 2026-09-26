@@ -547,7 +547,7 @@ except Exception:
       local code=$?
       if [ -n "$BACKUP" ] && [ -d "$BACKUP" ]; then
         echo "⚠️ Update failed — restoring previous application tree."
-        rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/core" "$LMWEBUI_HOME/web"
+        rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/core" "$LMWEBUI_HOME/backend" "$LMWEBUI_HOME/web"
         for p in app core backend web; do
           [ -e "$BACKUP/$p" ] && mv "$BACKUP/$p" "$LMWEBUI_HOME/$p"
         done
