@@ -418,7 +418,7 @@ case "${1:-status}" in
   start)
     case "$(uname)" in
       Linux)
-        linux_service start
+        linux_service start lmwebui
         ;;
       Darwin)
         launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || true
@@ -450,7 +450,7 @@ case "${1:-status}" in
   stop)
     case "$(uname)" in
       Linux)
-        linux_service stop
+        linux_service stop lmwebui
         ;;
       Darwin)
         launchctl unload "$HOME/Library/LaunchAgents/com.lmwebui.server.plist" 2>/dev/null || echo "Service not running"
