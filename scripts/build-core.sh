@@ -7,9 +7,11 @@ mkdir -p "$out"
 
 PYTHONPATH="${PYTHONPATH:-}:$(pwd)/backend" python3 -m nuitka \
   --standalone \
+  --jobs=2 \
   --output-dir="$out" \
   --output-filename=lmwebui-core \
   --include-package=app \
+  --include-data-files=backend/app/database/schema.sql=app/database/schema.sql \
   --assume-yes-for-downloads \
   packaging/core_entry.py
 

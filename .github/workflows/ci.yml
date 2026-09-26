@@ -135,6 +135,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install compiler cache
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Cache Nuitka compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/.cache/Nuitka
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('backend/requirements.lock', 'backend/app/**/*.py', 'packaging/core_entry.py', 'scripts/build-core.sh') }}
+          restore-keys: ${{ runner.os }}-nuitka-
+
       - name: Install backend and packaging dependencies
         run: |
           python3 -m pip install --upgrade nuitka
@@ -168,6 +180,7 @@ jobs:
           cp package.json install.sh scripts/lmwebui lm-webui/
           cp dist/core/manifest.json lm-webui/core-manifest.json
           tar -czf lm-webui.tar.gz lm-webui
+          bash scripts/smoke-core.sh lm-webui
           bash scripts/smoke-tarball.sh lm-webui.tar.gz
 
   # ----------------------------------------

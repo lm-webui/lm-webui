@@ -15,6 +15,18 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Install compiler cache
+        run: sudo apt-get update && sudo apt-get install -y ccache
+
+      - name: Cache Nuitka compilation
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/ccache
+            ~/.cache/Nuitka
+          key: ${{ runner.os }}-nuitka-${{ hashFiles('backend/requirements.lock', 'backend/app/**/*.py', 'packaging/core_entry.py', 'scripts/build-core.sh') }}
+          restore-keys: ${{ runner.os }}-nuitka-
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -61,7 +73,9 @@ jobs:
       # assembled by the hand-written cp list above, so a newly added runtime file can silently
       # fail to ship without this.
       - name: Smoke test tarball
-        run: bash ./scripts/smoke-tarball.sh lm-webui.tar.gz
+        run: |
+          bash ./scripts/smoke-core.sh lm-webui
+          bash ./scripts/smoke-tarball.sh lm-webui.tar.gz
 
       - name: Create release + upload
         env:
