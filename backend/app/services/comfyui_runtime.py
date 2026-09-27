@@ -425,7 +425,10 @@ def checkpoint_for(model: str) -> Optional[str]:
 # ── Install ───────────────────────────────────────────────────────────────
 
 REPO = "https://github.com/comfyanonymous/ComfyUI"
+REPO_REF = "v0.37.0"
 GGUF_REPO = "https://github.com/city96/ComfyUI-GGUF"
+GGUF_REF = "6ea2651e7df66d7585f6ffee804b20e92fb38b8a"
+TORCH_PACKAGES = "torch==2.10.0 torchvision==0.25.0 torchaudio==2.10.0"
 
 # One install at a time, and the UI polls this for progress. Mirrors the shape of
 # gguf_downloader's task dict so the frontend can treat them alike.
@@ -548,7 +551,7 @@ async def install() -> None:
         if not (target / "main.py").is_file():
             ok = await _run_step(
                 "cloning ComfyUI",
-                f"git clone --depth 1 {shlex.quote(REPO)} {shlex.quote(str(target))}",
+                f"git clone --depth 1 --branch {shlex.quote(REPO_REF)} {shlex.quote(REPO)} {shlex.quote(str(target))}",
                 timeout=900,
             )
             if not ok:
@@ -556,6 +559,14 @@ async def install() -> None:
         else:
             # Already cloned (reinstall after a failed venv step) — leave the checkout alone.
             logger.info("ComfyUI already cloned at %s", target)
+
+        if not await _run_step(
+            "pinning ComfyUI",
+            f"git -C {shlex.quote(str(target))} fetch --depth 1 origin tag {shlex.quote(REPO_REF)} && "
+            f"git -C {shlex.quote(str(target))} checkout --detach {shlex.quote(REPO_REF)}",
+            timeout=900,
+        ):
+            return
 
         if not py.is_file():
             maker = (
@@ -568,15 +579,22 @@ async def install() -> None:
 
         if not await _run_step(
             "installing torch",
-            f"{_venv_pip('install torch torchvision torchaudio', str(py))} {_torch_args()}".strip(),
+            f"{_venv_pip(f'install {TORCH_PACKAGES}', str(py))} {_torch_args()}".strip(),
             timeout=3600,
         ):
             return
 
         node_dir = target / "custom_nodes" / "ComfyUI-GGUF"
         if not (node_dir / "nodes.py").is_file():
-            if not await _run_step("installing ComfyUI-GGUF", f"git clone --depth 1 {shlex.quote(GGUF_REPO)} {shlex.quote(str(node_dir))}", 900):
+            if not await _run_step("installing ComfyUI-GGUF", f"git clone --depth 1 {shlex.quote(GGUF_REPO)} {shlex.quote(str(node_dir))} && git -C {shlex.quote(str(node_dir))} checkout --detach {shlex.quote(GGUF_REF)}", 900):
                 return
+        elif not await _run_step(
+            "pinning ComfyUI-GGUF",
+            f"git -C {shlex.quote(str(node_dir))} fetch --depth 1 origin {shlex.quote(GGUF_REF)} && "
+            f"git -C {shlex.quote(str(node_dir))} checkout --detach {shlex.quote(GGUF_REF)}",
+            900,
+        ):
+            return
         requirements = node_dir / "requirements.txt"
         if requirements.is_file() and not await _run_step(
             "installing ComfyUI-GGUF requirements",
@@ -584,9 +602,11 @@ async def install() -> None:
         ):
             return
 
+        constraints = target / ".lmwebui-constraints.txt"
+        constraints.write_text(TORCH_PACKAGES.replace(" ", "\n") + "\n")
         if not await _run_step(
             "installing ComfyUI requirements",
-            _venv_pip(f"install -r {shlex.quote(str(target / 'requirements.txt'))}", str(py)),
+            _venv_pip(f"install -r {shlex.quote(str(target / 'requirements.txt'))} -c {shlex.quote(str(constraints))}", str(py)),
             timeout=1800,
         ):
             return

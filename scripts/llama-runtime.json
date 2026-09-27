@@ -1,0 +1,29 @@
+{
+  "release": "b10964",
+  "assets": {
+    "macos-arm64": {
+      "name": "llama-b10964-bin-macos-arm64.tar.gz",
+      "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5"
+    },
+    "macos-x64": {
+      "name": "llama-b10964-bin-macos-x64.tar.gz",
+      "sha256": "03430a394d0a169a5e6d8f01c09f48cf58eb026af6fc95940a4a528e2e50cf38"
+    },
+    "ubuntu-arm64": {
+      "name": "llama-b10964-bin-ubuntu-arm64.tar.gz",
+      "sha256": "5f0e9c95d970892e43380f82ebcab960edfd20a1cd0f7abffa13b29fdb924949"
+    },
+    "ubuntu-vulkan-arm64": {
+      "name": "llama-b10964-bin-ubuntu-vulkan-arm64.tar.gz",
+      "sha256": "f7864baa0edf5a059fb42c5efb5aceb96075aa1f41e6c3142b71ca69286cb0bb"
+    },
+    "ubuntu-vulkan-x64": {
+      "name": "llama-b10964-bin-ubuntu-vulkan-x64.tar.gz",
+      "sha256": "55d1e58e14c11eedea090bf088fdeefbfe7b4b09ee03bf6dba9834651769afcf"
+    },
+    "ubuntu-x64": {
+      "name": "llama-b10964-bin-ubuntu-x64.tar.gz",
+      "sha256": "9abf88aea48a55d0f80edb1ee20220b186848cca0b4e919d71518cfd7ca67443"
+    }
+  }
+}

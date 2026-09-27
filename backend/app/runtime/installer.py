@@ -64,9 +64,9 @@ class RuntimeInstaller:
         import os
         venv_python = os.path.expanduser("~/.lmwebui/.venv/bin/python")
         if os.path.exists(venv_python):
-            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 {venv_python} -m pip install llama-cpp-python --upgrade --force-reinstall"
+            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 {venv_python} -m pip install llama-cpp-python==0.3.35 --force-reinstall"
         else:
-            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 pip install llama-cpp-python --upgrade --force-reinstall"
+            cmd = f"CMAKE_ARGS='{gpu['flags']}' FORCE_CMAKE=1 pip install llama-cpp-python==0.3.35 --force-reinstall"
         result = self._run(cmd, timeout=900)
         if result["success"]:
             result["message"] = f"llama-cpp-python rebuilt with {gpu['backend']} ({gpu['device']})"

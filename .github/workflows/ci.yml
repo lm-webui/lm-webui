@@ -160,6 +160,8 @@ jobs:
           cp backend/requirements.txt backend/requirements.lock lm-webui/
           cp backend/config.yaml lm-webui/config.yaml
           cp package.json install.sh scripts/lmwebui lm-webui/
+          mkdir -p lm-webui/scripts
+          cp scripts/llama-runtime.json lm-webui/scripts/
           tar -czf lm-webui.tar.gz lm-webui
           bash scripts/smoke-tarball.sh lm-webui.tar.gz
 

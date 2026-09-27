@@ -182,24 +182,51 @@ install_dependencies() {
   log_success "Dependencies installed"
 }
 
+llama_runtime_asset() {
+  local key="$1"
+  python3 - "$LMWEBUI_HOME/scripts/llama-runtime.json" "$key" <<'PY'
+import json, sys
+manifest, key = sys.argv[1:]
+data = json.load(open(manifest))
+asset = data["assets"].get(key)
+if not asset:
+    raise SystemExit(f"no pinned llama.cpp asset for {key}")
+print(data["release"], asset["name"], asset["sha256"])
+PY
+}
+
+verify_sha256() {
+  local expected="$1" file="$2"
+  python3 - "$expected" "$file" <<'PY'
+import hashlib, sys
+expected, path = sys.argv[1:]
+h = hashlib.sha256()
+with open(path, "rb") as f:
+    for chunk in iter(lambda: f.read(1024 * 1024), b""):
+        h.update(chunk)
+raise SystemExit(0 if h.hexdigest() == expected else 1)
+PY
+}
+
 install_llamacpp() {
   log_info "Installing llama-cpp-python (CPU)..."
   # CPU build — fast, works everywhere
   if command -v uv &>/dev/null; then
-    uv pip install --python "$LMWEBUI_HOME/.venv/bin/python" llama-cpp-python --quiet 2>/dev/null || \
-    uv pip install llama-cpp-python --quiet 2>/dev/null || \
+    uv pip install --python "$LMWEBUI_HOME/.venv/bin/python" 'llama-cpp-python==0.3.35' --quiet 2>/dev/null || \
+    uv pip install 'llama-cpp-python==0.3.35' --quiet 2>/dev/null || \
     log_warning "llama-cpp-python install failed — GGUF inference unavailable"
   else
     source "$LMWEBUI_HOME/.venv/bin/activate"
-    pip install llama-cpp-python --quiet 2>&1 || log_warning "llama-cpp-python install failed — GGUF inference unavailable"
+    pip install 'llama-cpp-python==0.3.35' --quiet 2>&1 || log_warning "llama-cpp-python install failed — GGUF inference unavailable"
   fi
 }
 
 ensure_llama_server() {
   # llama-server is the multimodal engine (Vision); install it as part of the
   # GGUF runtime so Vision isn't left depending on an unmanaged binary.
-  if command -v llama-server &>/dev/null; then
-    log_success "  llama-server already available"
+  if [ -x "$LMWEBUI_HOME/bin/llama-server" ]; then
+    export PATH="$LMWEBUI_HOME/bin:$PATH"
+    log_success "  pinned llama-server already available"
     return
   fi
   log_info "Installing llama-server..."
@@ -207,16 +234,22 @@ ensure_llama_server() {
   # hardcoding the default home downloads the binary somewhere the service cannot see it.
   local bin_dir="$LMWEBUI_HOME/bin"
   mkdir -p "$bin_dir"
-  # macOS: brew formula if present
-  if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
-    brew install llama.cpp 2>/dev/null && { log_success "  llama-server installed via brew"; export PATH="$bin_dir:$PATH"; return; }
-  fi
-  # Fallback: llama.cpp release binary for this platform (non-Windows assets are .tar.gz)
   local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
   local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
-  local tag="$(curl -fsSL https://api.github.com/repos/ggml-org/llama.cpp/releases/latest 2>/dev/null | grep -m1 '"tag_name"' | sed 's/.*"\([^"]*\)".*/\1/')"
-  local url="https://github.com/ggml-org/llama.cpp/releases/latest/download/llama-$tag-bin-$os-$arch.tar.gz"
-  if [ -n "$tag" ] && curl -fsSL -o /tmp/llama-bin.tar.gz "$url" 2>/dev/null && tar -xzf /tmp/llama-bin.tar.gz -C "$bin_dir" 2>/dev/null; then
+  local backend="cpu"
+  if [ "$os" = "macos" ]; then
+    backend="macos"
+  elif command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+    backend="ubuntu-vulkan"
+  elif command -v nvidia-smi >/dev/null 2>&1; then
+    log_warning "  NVIDIA detected, but the pinned b10964 manifest has no Linux CUDA asset; using verified CPU runtime."
+  fi
+  local release name sha key
+  key="$backend-$arch"
+  read -r release name sha <<<"$(llama_runtime_asset "$key")"
+  local url="https://github.com/ggml-org/llama.cpp/releases/download/$release/$name"
+  local archive="$(mktemp /tmp/lmwebui-llama.XXXXXX.tar.gz)"
+  if curl -fsSL -o "$archive" "$url" 2>/dev/null && verify_sha256 "$sha" "$archive" && tar -xzf "$archive" -C "$bin_dir" 2>/dev/null; then
     # llama.cpp tarballs unpack to a versioned top-level folder; find the real binary.
     local src="$(find "$bin_dir" -type f -name llama-server | head -1)"
     if [ -n "$src" ]; then
@@ -228,16 +261,22 @@ ensure_llama_server() {
       chmod +x "$bin_dir/llama-server"
       export PATH="$bin_dir:$PATH"
       export_bin_path   # persist for future shells (idempotent)
-      command -v llama-server &>/dev/null && log_success "  llama-server installed to $bin_dir" && return
+      if command -v llama-server &>/dev/null; then
+        rm -f "$archive"
+        log_success "  llama-server installed to $bin_dir"
+        return
+      fi
     fi
   fi
-  log_warning "  Could not install llama-server automatically — Vision needs it."
+  rm -f "$archive"
+  log_warning "  Could not install or verify pinned llama.cpp $release/$name."
   log_warning "  Install llama.cpp manually: https://github.com/ggml-org/llama.cpp/releases"
+  return 1
 }
 
 check_gguf_runtime() {
   log_info "Checking llama.cpp runtime..."
-  missing=0
+  local missing=0
   for bin in llama-server llama-cli llama-bench llama-quantize; do
     if command -v "$bin" &>/dev/null; then
       log_success "  $bin: found"
@@ -248,10 +287,17 @@ check_gguf_runtime() {
   done
   if command -v llama-server &>/dev/null; then
     log_info "  llama-server version: $(llama-server --version 2>&1 | head -1)"
+    if ! llama-server --help 2>&1 | grep -q -- '--model' || ! llama-server --help 2>&1 | grep -q -- '--mmproj' || \
+       ! llama-server --help 2>&1 | grep -q -- '--host' || ! llama-server --help 2>&1 | grep -q -- '--port' || \
+       ! llama-server --help 2>&1 | grep -q -- '--gpu-layers'; then
+      log_warning "  llama-server is missing required model options"
+      missing=1
+    fi
   fi
   if [ "$missing" -eq 1 ]; then
     log_warning "llama.cpp CLI binaries missing — GGUF inference still works via llama-cpp-python,"
     log_warning "but Vision (VL) models require the llama-server binary. Install it from llama.cpp releases."
+    return 1
   else
     log_success "llama.cpp runtime OK — vision ready."
   fi
@@ -499,8 +545,8 @@ main() {
   setup_repository
   install_dependencies
   install_llamacpp
-  ensure_llama_server
-  check_gguf_runtime
+  ensure_llama_server || { log_error "Required llama.cpp runtime could not be installed."; exit 1; }
+  check_gguf_runtime || { log_error "llama.cpp runtime verification failed."; exit 1; }
   install_service
   install_cli
   install_macos_app

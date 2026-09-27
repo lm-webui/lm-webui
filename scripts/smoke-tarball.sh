@@ -36,7 +36,8 @@ tar -xzf "$tarball" -C "$tree" --strip-components=1
 # Every one of these is read by an install step. A missing requirements.txt, for instance, only
 # surfaces several steps later as a confusing pip error.
 for f in backend/app/main.py web/dist/index.html web/package.json config.yaml \
-         requirements.txt requirements.lock install.sh lmwebui package.json; do
+         requirements.txt requirements.lock install.sh lmwebui package.json \
+         scripts/llama-runtime.json; do
   [ -f "$tree/$f" ] || fail "missing $f"
 done
 pass "all install-time files present"

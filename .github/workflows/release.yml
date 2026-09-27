@@ -47,6 +47,8 @@ jobs:
           cp package.json lm-webui/
           cp install.sh lm-webui/
           cp scripts/lmwebui lm-webui/lmwebui
+          mkdir -p lm-webui/scripts
+          cp scripts/llama-runtime.json lm-webui/scripts/
           tar -czf lm-webui.tar.gz lm-webui
 
       # Before anything is published: does the archive actually contain what an install reads,
