@@ -41,6 +41,19 @@ for f in backend/app/main.py web/dist/index.html web/package.json config.yaml \
   [ -f "$tree/$f" ] || fail "missing $f"
 done
 pass "all install-time files present"
+
+python3 - "$tree/scripts/llama-runtime.json" <<'PY' || fail "invalid llama runtime manifest"
+import json, re, sys
+data = json.load(open(sys.argv[1]))
+if not data.get("release") or not data.get("assets"):
+    raise SystemExit(1)
+for asset in data["assets"].values():
+    if not asset.get("name", "").startswith(f"llama-{data['release']}-"):
+        raise SystemExit(1)
+    if not re.fullmatch(r"[0-9a-f]{64}", asset.get("sha256", "")):
+        raise SystemExit(1)
+PY
+pass "runtime manifest is valid"
 [ -f "$tree/backend/app/main.py" ] || fail "backend source missing"
 pass "backend Python source shipped"
 

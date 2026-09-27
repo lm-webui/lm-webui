@@ -1,29 +1,54 @@
 {
-  "release": "b10964",
+  "release": "b10976",
   "assets": {
-    "macos-arm64": {
-      "name": "llama-b10964-bin-macos-arm64.tar.gz",
-      "sha256": "033c845c1df9bf945ff37bb193238b40910b2244be3e1e637b2ceb5878f1a6f5"
-    },
+    "macos-arm64": {"name": "llama-b10976-bin-macos-arm64.tar.gz", "sha256": "a85c95ca6f5aa38c32f8ad470dba2b660e861f05a30d681b77e2bbe3bb2f5dab"},
     "macos-x64": {
-      "name": "llama-b10964-bin-macos-x64.tar.gz",
-      "sha256": "03430a394d0a169a5e6d8f01c09f48cf58eb026af6fc95940a4a528e2e50cf38"
+      "name": "llama-b10976-bin-macos-x64.tar.gz",
+      "sha256": "a99f6f1f1f1ecd9e33e31d100520568e1cc5ecce53f25b8a376057b88a61ced9"
     },
-    "ubuntu-arm64": {
-      "name": "llama-b10964-bin-ubuntu-arm64.tar.gz",
-      "sha256": "5f0e9c95d970892e43380f82ebcab960edfd20a1cd0f7abffa13b29fdb924949"
+    "linux-arm64-cpu": {
+      "name": "llama-b10976-bin-ubuntu-arm64.tar.gz",
+      "sha256": "ed41c5fd09ae86dbe13e525a57549f1d27d51e7efdc9a9aa4583d42016be7786"
     },
-    "ubuntu-vulkan-arm64": {
-      "name": "llama-b10964-bin-ubuntu-vulkan-arm64.tar.gz",
-      "sha256": "f7864baa0edf5a059fb42c5efb5aceb96075aa1f41e6c3142b71ca69286cb0bb"
+    "linux-arm64-vulkan": {
+      "name": "llama-b10976-bin-ubuntu-vulkan-arm64.tar.gz",
+      "sha256": "bbb89e4c3bda1fbdf47e277544e89ddfeff4a07711f16c3697fb7317272867cb"
     },
-    "ubuntu-vulkan-x64": {
-      "name": "llama-b10964-bin-ubuntu-vulkan-x64.tar.gz",
-      "sha256": "55d1e58e14c11eedea090bf088fdeefbfe7b4b09ee03bf6dba9834651769afcf"
+    "linux-x64-vulkan": {
+      "name": "llama-b10976-bin-ubuntu-vulkan-x64.tar.gz",
+      "sha256": "bf5c969d34ce1dad3a00088aeb3279714fd538b5b1149c01edac0bec7bfb8f49"
     },
-    "ubuntu-x64": {
-      "name": "llama-b10964-bin-ubuntu-x64.tar.gz",
-      "sha256": "9abf88aea48a55d0f80edb1ee20220b186848cca0b4e919d71518cfd7ca67443"
+    "linux-x64-cpu": {
+      "name": "llama-b10976-bin-ubuntu-x64.tar.gz",
+      "sha256": "bd70d0256c6f22356fc500327b81052c16cc684268581a8eb3848395980d9792"
+    },
+    "linux-x64-cuda12": {
+      "name": "llama-b10976-bin-ubuntu-cuda-12.8-x64.tar.gz",
+      "sha256": "575d8e9a5550689905e18072344623031fb70cf403ee1d024843e684702ccac0"
+    },
+    "linux-x64-cuda13": {
+      "name": "llama-b10976-bin-ubuntu-cuda-13.3-x64.tar.gz",
+      "sha256": "8a367e4438eca9251f4fd6c5f7cfd87aed40612295857b831651f6f5ba628430"
+    },
+    "windows-x64-cpu": {
+      "name": "llama-b10976-bin-win-cpu-x64.zip",
+      "sha256": "29b68d5abf165d77f928d6c0d46d9181ec07c46231baf7c112d182b7ecfdb456"
+    },
+    "windows-arm64-cpu": {
+      "name": "llama-b10976-bin-win-cpu-arm64.zip",
+      "sha256": "b59e7a11a666d5fc9400649a0a286645e0062d08e0b6ce63c57904e2d607b80d"
+    },
+    "windows-x64-vulkan": {
+      "name": "llama-b10976-bin-win-vulkan-x64.zip",
+      "sha256": "7357b0a14f2e8a1002b6c3edfa054e5f9cad2357a4af2e009f098c6d60a466b8"
+    },
+    "windows-x64-cuda12": {
+      "name": "llama-b10976-bin-win-cuda-12.4-x64.zip",
+      "sha256": "047242d39959e6bf97b2961bd8c04b356809c7e794e3de3b0d55f5940c70a1da"
+    },
+    "windows-x64-cuda13": {
+      "name": "llama-b10976-bin-win-cuda-13.3-x64.zip",
+      "sha256": "998eab9c601d8da218dedf244201ad71cc222ba2e18e7704e6adb5e7c167cd66"
     }
   }
 }

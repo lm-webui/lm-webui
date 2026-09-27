@@ -118,6 +118,34 @@ raise SystemExit(0 if h.hexdigest() == expected else 1)
 PY
 }
 
+validate_runtime_manifest() {
+  python3 - "$1" <<'PY'
+import json, re, sys
+data = json.load(open(sys.argv[1]))
+if not data.get("release") or not data.get("assets"):
+    raise SystemExit("invalid runtime manifest")
+for key, asset in data["assets"].items():
+    if not asset.get("name", "").startswith(f"llama-{data['release']}-"):
+        raise SystemExit(f"{key}: release mismatch")
+    if not re.fullmatch(r"[0-9a-f]{64}", asset.get("sha256", "")):
+        raise SystemExit(f"{key}: invalid sha256")
+PY
+}
+
+ensure_llama_python() {
+  local py="$LMWEBUI_HOME/.venv/bin/python" want="0.3.35" have=""
+  [ -x "$py" ] || return 1
+  have="$($py -c 'from importlib.metadata import version; print(version("llama-cpp-python"))' 2>/dev/null || true)"
+  [ "$have" = "$want" ] && { echo "   llama-cpp-python $have: available"; return 0; }
+  echo "   Installing llama-cpp-python==$want..."
+  if command -v uv >/dev/null 2>&1; then
+    uv pip install "llama-cpp-python==$want" --python "$py" --quiet
+  else
+    "$py" -m pip install "llama-cpp-python==$want" --quiet
+  fi
+  [ "$($py -c 'from importlib.metadata import version; print(version("llama-cpp-python"))' 2>/dev/null || true)" = "$want" ]
+}
+
 ensure_llama_server() {
   # llama-server is the multimodal (Vision) engine; ensure it's available.
   if [ -x "$LMWEBUI_HOME/bin/llama-server" ]; then
@@ -128,18 +156,27 @@ ensure_llama_server() {
   echo "   Installing llama-server..."
   local bin_dir="$LMWEBUI_HOME/bin"
   mkdir -p "$bin_dir"
-  local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
+  local os="$(uname -s)" platform arch backend="cpu"
   local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
-  local backend="cpu"
-  if [ "$os" = "macos" ]; then
-    backend="macos"
-  elif command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
-    backend="ubuntu-vulkan"
-  elif command -v nvidia-smi >/dev/null 2>&1; then
-    echo "   NVIDIA detected, but pinned b10964 has no Linux CUDA asset; using verified CPU runtime."
+  case "$os" in
+    Darwin) platform="macos"; backend="" ;;
+    Linux)
+      if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+        echo "   musl-based Linux is not supported by the pinned glibc llama.cpp assets"
+        return 1
+      fi
+      platform="linux" ;;
+    *) echo "   Unsupported operating system: $os"; return 1 ;;
+  esac
+  if [ "$platform" = "linux" ] && command -v nvidia-smi >/dev/null 2>&1; then
+    local cuda_major="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9][0-9]*\)\..*/\1/p' | head -1)"
+    case "$cuda_major" in 12|13) backend="cuda$cuda_major" ;; esac
+  fi
+  if [ "$platform" = "linux" ] && [ -z "$backend" ] && command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+    backend="vulkan"
   fi
   local release name sha key
-  key="$backend-$arch"
+  key="$platform-$arch${backend:+-$backend}"
   read -r release name sha <<<"$(llama_runtime_asset "$key")"
   local url="https://github.com/ggml-org/llama.cpp/releases/download/$release/$name"
   local archive="$(mktemp /tmp/lmwebui-llama.XXXXXX.tar.gz)"
@@ -398,10 +435,14 @@ __fetch_release() {
   # Fail before touching the install, not half-way through replacing it. Clean up $dest too:
   # `update` passes a mktemp -d, and this exit skips its `rm -rf "$TMP"`, so removing only the
   # tarball would leave a whole extracted tree behind on a corrupt archive.
-  if [ ! -f "$dest/backend/app/main.py" ] || [ ! -f "$dest/web/dist/index.html" ]; then
-    echo "❌ Release archive is missing backend/app/main.py or web/dist/index.html"
+  if [ ! -f "$dest/backend/app/main.py" ] || [ ! -f "$dest/web/dist/index.html" ] ||
+     [ ! -f "$dest/lmwebui" ] || [ ! -f "$dest/scripts/llama-runtime.json" ]; then
+    echo "❌ Release archive is missing required application or runtime files"
     rm -f "$tgz"; rm -rf "$dest"; exit 1
   fi
+  validate_runtime_manifest "$dest/scripts/llama-runtime.json" || {
+    echo "❌ Release archive contains an invalid runtime manifest"; rm -f "$tgz"; rm -rf "$dest"; exit 1;
+  }
   rm -f "$tgz"
 }
 
@@ -597,7 +638,7 @@ except Exception:
     TMP=""
     BACKUP=""
     _restart_on_fail() {
-      local code=$?
+      local code="${1:-$?}"
       if [ -n "$BACKUP" ] && [ -d "$BACKUP" ]; then
         echo "⚠️ Update failed — restoring previous application tree."
         rm -rf "$LMWEBUI_HOME/app" "$LMWEBUI_HOME/core" "$LMWEBUI_HOME/backend" "$LMWEBUI_HOME/web"
@@ -647,8 +688,18 @@ except Exception:
 
     # Runtime ensure — Vision (llama-server), GGUF binaries, MLX (Apple), service unit.
     echo "   Ensuring GGUF runtime (llama-server)..."
-    ensure_llama_server || { echo "❌ Required llama.cpp runtime could not be installed."; exit 1; }
-    check_gguf_runtime || { echo "❌ llama.cpp runtime verification failed."; exit 1; }
+    if ! ensure_llama_python; then
+      echo "❌ llama-cpp-python runtime repair failed."
+      _restart_on_fail 1
+    fi
+    if ! ensure_llama_server; then
+      echo "❌ Required llama.cpp runtime could not be installed."
+      _restart_on_fail 1
+    fi
+    if ! check_gguf_runtime; then
+      echo "❌ llama.cpp runtime verification failed."
+      _restart_on_fail 1
+    fi
     ensure_mlx || true
     echo "   Refreshing service unit..."
     reinstall_service

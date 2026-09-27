@@ -140,10 +140,14 @@ setup_repository() {
 
   # Fail here rather than half-way through replacing an install. The release workflow asserts the
   # same two files before uploading, so this only fires on a corrupt or truncated download.
-  if [ ! -f "$tmp/backend/app/main.py" ] || [ ! -f "$tmp/web/dist/index.html" ]; then
-    log_error "Release archive is missing backend/app/main.py or web/dist/index.html"
+  if [ ! -f "$tmp/backend/app/main.py" ] || [ ! -f "$tmp/web/dist/index.html" ] ||
+     [ ! -f "$tmp/lmwebui" ] || [ ! -f "$tmp/scripts/llama-runtime.json" ]; then
+    log_error "Release archive is missing required application or runtime files"
     rm -rf "$tmp"; exit 1
   fi
+  validate_runtime_manifest "$tmp/scripts/llama-runtime.json" || {
+    log_error "Release archive contains an invalid runtime manifest"; rm -rf "$tmp"; exit 1;
+  }
 
   # Publish the CLI, then let it do the replacement — so the CLI that mutates the install is
   # byte-identical to the one that will later run `lm-webui update`.
@@ -208,6 +212,20 @@ raise SystemExit(0 if h.hexdigest() == expected else 1)
 PY
 }
 
+validate_runtime_manifest() {
+  python3 - "$1" <<'PY'
+import json, re, sys
+data = json.load(open(sys.argv[1]))
+if not data.get("release") or not data.get("assets"):
+    raise SystemExit("invalid runtime manifest")
+for key, asset in data["assets"].items():
+    if not asset.get("name", "").startswith(f"llama-{data['release']}-"):
+        raise SystemExit(f"{key}: release mismatch")
+    if not re.fullmatch(r"[0-9a-f]{64}", asset.get("sha256", "")):
+        raise SystemExit(f"{key}: invalid sha256")
+PY
+}
+
 install_llamacpp() {
   log_info "Installing llama-cpp-python (CPU)..."
   # CPU build — fast, works everywhere
@@ -234,18 +252,27 @@ ensure_llama_server() {
   # hardcoding the default home downloads the binary somewhere the service cannot see it.
   local bin_dir="$LMWEBUI_HOME/bin"
   mkdir -p "$bin_dir"
-  local os="$([ "$(uname)" = "Darwin" ] && echo macos || echo ubuntu)"
+  local os="$(uname -s)" platform arch backend="cpu"
   local arch="$([ "$(uname -m)" = "arm64" ] || [ "$(uname -m)" = "aarch64" ] && echo arm64 || echo x64)"
-  local backend="cpu"
-  if [ "$os" = "macos" ]; then
-    backend="macos"
-  elif command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
-    backend="ubuntu-vulkan"
-  elif command -v nvidia-smi >/dev/null 2>&1; then
-    log_warning "  NVIDIA detected, but the pinned b10964 manifest has no Linux CUDA asset; using verified CPU runtime."
+  case "$os" in
+    Darwin) platform="macos"; backend="" ;;
+    Linux)
+      if command -v ldd >/dev/null 2>&1 && ldd --version 2>&1 | grep -qi musl; then
+        log_error "musl-based Linux is not supported by the pinned glibc llama.cpp assets"
+        return 1
+      fi
+      platform="linux" ;;
+    *) log_error "Unsupported operating system: $os"; return 1 ;;
+  esac
+  if [ "$platform" = "linux" ] && command -v nvidia-smi >/dev/null 2>&1; then
+    local cuda_major="$(nvidia-smi 2>/dev/null | sed -n 's/.*CUDA Version: \([0-9][0-9]*\)\..*/\1/p' | head -1)"
+    case "$cuda_major" in 12|13) backend="cuda$cuda_major" ;; esac
+  fi
+  if [ "$platform" = "linux" ] && [ -z "$backend" ] && command -v vulkaninfo >/dev/null 2>&1 && vulkaninfo --summary >/dev/null 2>&1; then
+    backend="vulkan"
   fi
   local release name sha key
-  key="$backend-$arch"
+  key="$platform-$arch${backend:+-$backend}"
   read -r release name sha <<<"$(llama_runtime_asset "$key")"
   local url="https://github.com/ggml-org/llama.cpp/releases/download/$release/$name"
   local archive="$(mktemp /tmp/lmwebui-llama.XXXXXX.tar.gz)"
