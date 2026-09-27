@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import axios from 'axios';
-import { backendUrl } from '../utils/backendUrl';
 
 interface User {
   id: number;
@@ -17,7 +16,7 @@ interface AuthState {
   checkAuthStatus: () => Promise<boolean>;
 }
 
-const API_BASE_URL = backendUrl();
+const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
 
 // Create Axios instance specifically for authentication endpoints
 const authAxios = axios.create({

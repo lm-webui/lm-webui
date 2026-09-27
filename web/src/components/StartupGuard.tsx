@@ -1,6 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
 import { Loader2, ServerCrash } from 'lucide-react';
-import { backendApiUrl } from '@/utils/backendUrl';
 
 interface HealthStatus {
   status: string;
@@ -13,44 +12,31 @@ interface HealthStatus {
 export function StartupGuard({ children }: { children: React.ReactNode }) {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const retriesRef = useRef(0);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let mounted = true;
     const pollHealth = async () => {
       try {
-        const url = backendApiUrl('/api/health');
-        const res = await fetch(url);
-        if (!res.ok) {
-          let detail = `${res.status} ${res.statusText}`;
-          try {
-            const body = await res.json();
-            if (body.detail) detail = `${detail}: ${body.detail}`;
-          } catch { /* keep the HTTP status */ }
-          throw new Error(`Health check failed at ${url}: ${detail}`);
-        }
+        const res = await fetch('/api/health');
+        if (!res.ok) throw new Error("Backend unreachable");
         
         const data = await res.json();
         if (mounted) {
           retriesRef.current = 0;
           setHealth(data);
-          if (!data.ready) timerRef.current = setTimeout(pollHealth, 2000);
+          if (!data.ready) setTimeout(pollHealth, 2000);
         }
-      } catch (error) {
+      } catch {
         if (mounted) {
           retriesRef.current++;
           const delay = Math.min(1000 * retriesRef.current, 5000);
-          const message = error instanceof Error ? error.message : "Connecting to server...";
-          setHealth(prev => prev ? { ...prev, message } : { status: "error", message, progress: 0, ready: false, error: message });
-          timerRef.current = setTimeout(pollHealth, delay);
+          setHealth(prev => prev ? { ...prev, message: "Connecting to server..." } : null);
+          setTimeout(pollHealth, delay);
         }
       }
     };
     pollHealth();
-    return () => {
-      mounted = false;
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    return () => { mounted = false; };
   }, []);
 
   // If Ready, Render App
