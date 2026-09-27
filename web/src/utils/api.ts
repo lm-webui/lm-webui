@@ -1,7 +1,8 @@
 import { PROVIDER_MAPPING } from './modelProviders';
 import { useAuth } from '../hooks/useAuth';
+import { backendUrl } from './backendUrl';
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || '';
+const API_BASE_URL = backendUrl();
 // new URL() requires an absolute base — use origin when API_BASE_URL is empty (native install)
 const URL_BASE = API_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
