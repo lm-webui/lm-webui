@@ -24,11 +24,11 @@
     },
     "linux-x64-cuda12": {
       "name": "llama-b10976-bin-ubuntu-cuda-12.8-x64.tar.gz",
-      "sha256": "575d8e9a5550689905e18072344623031fb70cf403ee1d024843e684702ccac0"
+      "sha256": "4eeeb19a38624cdf339b61588c86c07a0d4ee320f58f48649f658717dfa075cb"
     },
     "linux-x64-cuda13": {
       "name": "llama-b10976-bin-ubuntu-cuda-13.3-x64.tar.gz",
-      "sha256": "8a367e4438eca9251f4fd6c5f7cfd87aed40612295857b831651f6f5ba628430"
+      "sha256": "575d8e9a5550689905e18072344623031fb70cf403ee1d024843e684702ccac0"
     },
     "windows-x64-cpu": {
       "name": "llama-b10976-bin-win-cpu-x64.zip",
