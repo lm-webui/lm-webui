@@ -87,3 +87,5 @@ def test_terminal_turn_lease():
     assert ts.release_turn(first)
     assert ts.request_turn(second, 2)
     assert ts.can_write(second)
+    assert ts.heartbeat(second)
+    assert not ts.heartbeat(first)

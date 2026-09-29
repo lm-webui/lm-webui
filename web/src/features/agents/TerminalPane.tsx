@@ -280,6 +280,9 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
           if (control.type === "attached") setMode(control.mode);
           else if (control.type === "turn_granted") setMode("controller");
           else if (control.type === "turn_released") setMode("viewer");
+          else if (control.type === "heartbeat" && !control.ok) setMode("viewer");
+          else if (control.type === "input_rejected") setMode("viewer");
+          else if (control.type === "turn_denied") setMode("viewer");
           else if (control.type === "terminal_error") {
             setClosed({ code: 1011, reason: control.message || "terminal failed to start" });
             setState("error");
@@ -305,6 +308,16 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
       sockRef.current = null;
     };
   }, [agent, sessionId, ready, nonce]);
+
+  // Controller leases expire after 60 seconds. Renew well before expiry so an idle terminal
+  // remains writable without weakening the backend's stale-attachment safety boundary.
+  useEffect(() => {
+    if (state !== "open" || mode !== "controller") return;
+    const heartbeat = window.setInterval(() => {
+      send(JSON.stringify({ type: "heartbeat" }));
+    }, 20_000);
+    return () => window.clearInterval(heartbeat);
+  }, [state, mode]);
 
   const connect = () => setNonce((n) => n + 1);
 
