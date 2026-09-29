@@ -133,12 +133,11 @@ copy instead). To reuse host credentials from the container, uncomment the four 
 `~/.codex`, `~/.config/opencode` and `~/.hermes` mounts in `docker-compose.yml` — they expose your
 real credentials to the container, so they are opt-in on purpose.
 
-Install host runtimes for hardware-accelerated local inference. The app connects to them via `localhost` (native) or `host.docker.internal` (Docker):
+Install host dependencies for hardware-accelerated local inference. MLX is loaded in-process by the backend; ComfyUI remains an external service.
 
 **MLX** (Apple Silicon macOS only):
 ```bash
 pip install mlx mlx-lm mlx-optiq
-mlx_lm.server --port 8090 --model <model-name>
 ```
 
 **ComfyUI** (any platform):

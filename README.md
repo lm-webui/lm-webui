@@ -86,7 +86,7 @@ Your models, data, and configuration are stored locally under ~/.lmwebui/. You c
 
 | Feature | Capabilities |
 |---|---|
-| **Smart-Modality™** | Automatically chooses the right path for each request, direct chat, RAG, web search, vision, or image generation. So, simple tasks stay fast without unnecessary processing, retrieval runs only when you need past data, and web search combines with RAG/vision (or is skipped for direct image questions). |
+| **Smart-Modality™** | Automatically chooses the right path for each request: direct chat, RAG, web search, vision, or image generation. Simple tasks stay fast, retrieval runs only when needed, and live web search is handled as a text retrieval path. |
 | **Runtime Manager** | Manages the inference engines and model formats below — llama.cpp (GGUF), MLX, and ComfyUI (image workflows). Ollama and vLLM are configured as API providers in Settings. |
 | **Files & RAG** | Upload documents, images, and audio for conversation context. Extract/OCR content, upload status, file references, and citation display. Retrieval via **LatentFusion RAG** that makes a single query finds relevant text chunks and visually-matching images and shared latent vector space, fused with Reciprocal Rank Fusion. |
 | **Multimodal Retrieval** | Cross-modal search across docs, images, and audio in one latent index (SigLIP2 text + vision, CLAP-ready). A text query returns matching paragraphs and diagrams/charts in a single pass. |

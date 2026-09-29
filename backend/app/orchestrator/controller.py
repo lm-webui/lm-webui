@@ -136,6 +136,7 @@ class OrchestratorController:
         """
         logger.info(f"Orchestrator processing request: {chat_request.sessionId}")
         usage_started = time.monotonic()
+        first_token_at = None
 
         # 1. Session & Conversation Management
         if not self.session_manager.start_streaming(chat_request.sessionId, chat_request.job_id):
@@ -338,6 +339,8 @@ class OrchestratorController:
             try:
                 async for event in provider_to_use.stream(req):
                     if event.type == "token" and event.content:
+                        if first_token_at is None:
+                            first_token_at = time.monotonic()
                         response_content += event.content
                     yield event
             except Exception as e:
@@ -348,6 +351,20 @@ class OrchestratorController:
             # 6. Save Assistant Response — record the ACTUAL generating provider/model
             # (in direct-vision mode the VL answers, not the request's selected LLM).
             if response_content:
+                finished_at = time.monotonic()
+                input_tokens = sum(estimate_tokens(str(m.get("content", ""))) for m in ctx.messages)
+                output_tokens = estimate_tokens(response_content)
+                generation = {
+                    "duration_ms": int((finished_at - usage_started) * 1000),
+                    "queue_wait_ms": 0,
+                    "time_to_first_token_ms": int((first_token_at - usage_started) * 1000) if first_token_at else None,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "tokens_per_second": round(output_tokens / max(finished_at - (first_token_at or usage_started), 0.001), 2),
+                    "context_limit": getattr(req, "context_window", None),
+                    "status": "completed",
+                }
+                yield ModelEvent.metadata({"generation": generation, "runtime": getattr(provider_to_use, "id", provider_id)})
                 save_message(
                     actual_conversation_id,
                     user_id,
@@ -360,6 +377,7 @@ class OrchestratorController:
                         "search_query": sources_data.get("search_query", ""),
                         "search_provider": sources_data.get("search_provider", ""),
                         "retrieved_at": sources_data.get("retrieved_at", ""),
+                        "generation": generation,
                     },
                     model=req.model,
                     provider=getattr(provider_to_use, "id", provider_id) or provider_id,
@@ -369,9 +387,9 @@ class OrchestratorController:
                     event_type="chat",
                     provider=provider_id,
                     model=model_id,
-                    input_tokens=sum(estimate_tokens(str(m.get("content", ""))) for m in ctx.messages),
-                    output_tokens=estimate_tokens(response_content),
-                    duration_ms=int((time.monotonic() - usage_started) * 1000),
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    duration_ms=generation["duration_ms"],
                 )
 
             # 7. Background task: roll the conversation summary forward.

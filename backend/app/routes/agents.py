@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.security.auth.dependencies import require_permission
+from app.tools import ToolBudget, ToolExecutionRecord, ToolLimitError
 from app.security.auth.core import verify_token
 from app.agents.registry import (
     AGENTS, detect, detect_all, forget, install_cmd, profile, launch_install_terminal,
@@ -263,6 +264,7 @@ async def chat_stream(agent: str, req: ChatRequest,
                 sessions.append(sid, "assistant", blocks[-1].get("content", ""))
 
     async def event_stream():
+        tool_budget = ToolBudget()
         if not detect(agent)["installed"]:
             command = install_cmd(agent)
             yield await _sse({"type": "status", "data": {"status": "not_installed"}})
@@ -304,9 +306,25 @@ async def chat_stream(agent: str, req: ChatRequest,
                     elif ev["type"] == "prompt":
                         yield await _sse({"type": "prompt", "data": ev["data"]})
                     elif ev["type"] == "tool":
-                        yield await _sse({"type": "tool", "data": ev["data"]})
+                        tool_data = ev.get("data") or {}
+                        tool_name = tool_data.get("tool_name") or tool_data.get("name") or "tool"
+                        try:
+                            call_id = tool_budget.reserve(tool_name, tool_data.get("input", tool_data.get("arguments", {})))
+                            record = ToolExecutionRecord(
+                                call_id=call_id,
+                                tool_name=tool_name,
+                                arguments_summary=str(tool_data.get("input", tool_data.get("arguments", "")))[:1000],
+                                approval_state="requested" if tool_data.get("requires_approval") else "not_required",
+                            )
+                            yield await _sse({"type": "tool", "data": {**tool_data, "record": record.as_dict()}})
+                        except ToolLimitError as exc:
+                            yield await _sse({"type": "error", "content": str(exc)})
+                            break
                     elif ev["type"] == "tool_result":
-                        yield await _sse({"type": "tool_result", "data": ev["data"]})
+                        tool_data = ev.get("data") or {}
+                        output = str(tool_data.get("content", tool_data.get("output", "")))
+                        tool_data = {**tool_data, "output": tool_budget.truncate(output)}
+                        yield await _sse({"type": "tool_result", "data": tool_data})
                     elif ev["type"] == "error":
                         # The CLI died without a result frame (runner._read always sends one).
                         run_info = sessions.end_run(sid, ev.get("exit_code", 1))

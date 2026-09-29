@@ -126,9 +126,11 @@ environment:
   - GGUF_CACHE_TYPE_K=q8_0   # Key cache: f16, q8_0, q4_0
   - GGUF_CACHE_TYPE_V=q8_0   # Value cache: f16, q8_0, q4_0
   - GGUF_N_THREADS=0         # CPU threads: 0=auto
+  - LMWEBUI_LOCAL_MAX_ACTIVE=1 # Maximum concurrent local generations
+  - LMWEBUI_LOCAL_MAX_QUEUE=8  # Maximum queued local generations
 ```
 
-> A subset of these (context window, GPU toggle, KV cache quality) are also adjustable from the Runtime Manager UI. Env vars serve as system defaults; UI changes apply per-session.
+> A subset of these (context window, GPU toggle, KV cache quality) are also adjustable from the Runtime Manager UI. Env vars serve as backend defaults. Applying local runtime changes unloads the resident model before the next generation uses the new settings.
 
 ### Configuration File
 

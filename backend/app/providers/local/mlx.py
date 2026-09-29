@@ -12,6 +12,7 @@ from typing import List, Optional, AsyncGenerator
 
 from ..base import BaseProvider
 from ..schemas import ModelMetadata, GenerateRequest, GenerateResponse, ModelEvent
+from app.runtime.lifecycle import lifecycle_for
 
 # Probed by spec, not imported. `import mlx_lm` pulls in MLX/Metal and allocates at module scope,
 # so importing it here made every `import app.providers.factory` — and therefore the whole app, and
@@ -53,48 +54,53 @@ class MLXProvider(BaseProvider):
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         raise NotImplementedError("Use stream() for MLX inference")
 
+    def unload_model(self) -> None:
+        self._model = None
+        self._tokenizer = None
+        self._loaded_path = None
+        lifecycle_for("mlx").mark_unloaded()
+
     async def stream(self, request: GenerateRequest) -> AsyncGenerator[ModelEvent, None]:
-        if not HAS_MLX:
-            yield ModelEvent.error("MLX not installed (pip install mlx-lm)")
-            return
+        async with lifecycle_for("mlx").generation(request.model):
+            if not HAS_MLX:
+                yield ModelEvent.error("MLX not installed (pip install mlx-lm)")
+                return
+            model_id = request.model
+            if not model_id:
+                yield ModelEvent.error("No model specified")
+                return
+            model_path = str(MLX_DIR / model_id)
+            if not os.path.isdir(model_path):
+                yield ModelEvent.error(f"Model {model_id} not found in {MLX_DIR}")
+                return
+            yield ModelEvent.typing()
+            try:
+                messages = request.messages or []
+                prompt = ""
+                for msg in messages:
+                    role = msg.get("role", "user")
+                    content = msg.get("content", "")
+                    prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
+                prompt += "<|im_start|>assistant\n"
 
-        model_id = request.model
-        if not model_id:
-            yield ModelEvent.error("No model specified")
-            return
-
-        model_path = str(MLX_DIR / model_id)
-        if not os.path.isdir(model_path):
-            yield ModelEvent.error(f"Model {model_id} not found in {MLX_DIR}")
-            return
-
-        yield ModelEvent.typing()
-
-        try:
-            messages = request.messages or []
-            prompt = ""
-            for msg in messages:
-                role = msg.get("role", "user")
-                content = msg.get("content", "")
-                prompt += f"<|im_start|>{role}\n{content}\n<|im_end|>\n"
-            prompt += "<|im_start|>assistant\n"
-
-            async def _run():
-                # Imported here so the cost lands on the one call that needs it. A broken install
-                # raises ImportError into the except below and surfaces as an error event.
                 from mlx_lm import load as _mlx_load, generate as _mlx_generate
                 loop = asyncio.get_event_loop()
-                model, tokenizer = await loop.run_in_executor(None, lambda: _mlx_load(model_path))
-                resp = await loop.run_in_executor(
+                if self._loaded_path != model_path or self._model is None:
+                    self._model, self._tokenizer = await loop.run_in_executor(
+                        None, lambda: _mlx_load(model_path)
+                    )
+                    self._loaded_path = model_path
+                    lifecycle_for("mlx").set_model(model_id)
+                response = await loop.run_in_executor(
                     None,
-                    lambda: _mlx_generate(model, tokenizer, prompt, max_tokens=request.max_tokens or 2048, verbose=False),
+                    lambda: _mlx_generate(
+                        self._model, self._tokenizer, prompt,
+                        max_tokens=request.max_tokens or 2048, verbose=False,
+                    ),
                 )
-                return resp
-
-            response = await _run()
-            yield ModelEvent.token(response)
-            yield ModelEvent.done()
-
-        except Exception as e:
-            logger.error(f"MLX generation error: {e}")
-            yield ModelEvent.error(str(e))
+                yield ModelEvent.token(response)
+                yield ModelEvent.done()
+            except Exception as e:
+                lifecycle_for("mlx").set_state("failed", str(e))
+                logger.error(f"MLX generation error: {e}")
+                yield ModelEvent.error(str(e))

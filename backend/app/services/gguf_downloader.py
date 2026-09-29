@@ -149,10 +149,12 @@ class GGUFDownloadManager:
         """
         # Bound before the try so the failure handler can clean up no matter how early it trips.
         file_path: Optional[Path] = None
+        partial_path: Optional[Path] = None
         try:
             dest_dir = target_dir if target_dir else self.models_dir
             dest_dir.mkdir(parents=True, exist_ok=True)
             file_path = dest_dir / filename
+            partial_path = dest_dir / f"{filename}.part"
             
             # Check if file already exists
             if file_path.exists():
@@ -172,9 +174,11 @@ class GGUFDownloadManager:
             await self._notify_websockets(task_id)
             
             # Download with progress
+            downloaded = partial_path.stat().st_size if partial_path.exists() else 0
+            headers = {"Range": f"bytes={downloaded}-"} if downloaded else {}
             async with aiohttp.ClientSession(timeout=DOWNLOAD_TIMEOUT) as session:
-                async with session.get(url) as response:
-                    if response.status != 200:
+                async with session.get(url, headers=headers) as response:
+                    if response.status not in (200, 206):
                         error_msg = f"Download failed with status {response.status}"
                         self.download_tasks[task_id].update({
                             "status": "failed",
@@ -183,8 +187,18 @@ class GGUFDownloadManager:
                         await self._notify_websockets(task_id)
                         return
                     
-                    total_size = int(response.headers.get('content-length', 0))
-                    downloaded = 0
+                    resumed = response.status == 206 and downloaded > 0
+                    if not resumed:
+                        downloaded = 0
+                    content_range = response.headers.get("Content-Range", "")
+                    total_size = 0
+                    if "/" in content_range:
+                        try:
+                            total_size = int(content_range.rsplit("/", 1)[1])
+                        except ValueError:
+                            total_size = 0
+                    if not total_size:
+                        total_size = int(response.headers.get('content-length', 0)) + downloaded
                     
                     self.download_tasks[task_id].update({
                         "total_bytes": total_size
@@ -195,7 +209,7 @@ class GGUFDownloadManager:
                     logger.info(f"Download started: {filename} ({total_size // (1024*1024)} MB)")
                     
                     # Use aiofiles for non-blocking file write
-                    async with aiofiles.open(file_path, 'wb') as f:
+                    async with aiofiles.open(partial_path, 'ab' if resumed else 'wb') as f:
                         chunk_count = 0
                         last_notified_progress = 0
                         last_notified_bytes = 0
@@ -231,23 +245,24 @@ class GGUFDownloadManager:
                                     last_notified_bytes = downloaded
                     
                     # Integrity check: a truncated download yields a corrupt GGUF that
-                    # fails to load at runtime. Delete the partial file and fail loudly.
+                    # fails to load at runtime. Keep it as .part so the next attempt can resume.
                     if total_size > 0 and downloaded != total_size:
-                        error_msg = f"Download incomplete: got {downloaded} bytes, expected {total_size}. Partial file deleted."
+                        error_msg = f"Download incomplete: got {downloaded} bytes, expected {total_size}. Partial file preserved for retry."
                         logger.error(f"{filename}: {error_msg}")
-                        try:
-                            file_path.unlink(missing_ok=True)
-                        except Exception:
-                            pass
                         self.download_tasks[task_id].update({
                             "status": "failed",
-                            "error": error_msg
+                            "error": error_msg,
+                            "resumable": True,
+                            "downloaded_bytes": downloaded,
+                            "total_bytes": total_size,
                         })
                         await self._notify_websockets(task_id)
                         return
 
                     logger.info(f"Download completed: {filename}")
 
+            # Publish only after the complete temporary file passes validation.
+            partial_path.replace(file_path)
             # Download completed
             file_size = file_path.stat().st_size
             self.download_tasks[task_id].update({
@@ -259,16 +274,7 @@ class GGUFDownloadManager:
             await self._notify_websockets(task_id)
             
         except Exception as e:
-            # A dropped connection lands here, not on the byte-count check below — and it
-            # leaves a truncated multi-GB file that looks like a complete model to every
-            # later scan (list_checkpoints, ComfyUI's own /models/checkpoints, load attempts).
-            # Delete it: a partial file is worse than none.
-            if file_path is not None:
-                try:
-                    file_path.unlink(missing_ok=True)
-                    logger.info(f"Removed partial download: {file_path.name}")
-                except Exception as cleanup_error:
-                    logger.warning(f"Could not remove partial {file_path}: {cleanup_error}")
+            # Preserve the .part file so a retry can continue after a dropped connection.
             # Some aiohttp exceptions stringify to "", which surfaced as a bare
             # "Download failed: " with no cause. Fall back to the exception class name.
             reason = str(e) or type(e).__name__
@@ -276,7 +282,9 @@ class GGUFDownloadManager:
             logger.error(f"Download error for {filename}: {reason}")
             self.download_tasks[task_id].update({
                 "status": "failed",
-                "error": error_msg
+                "error": error_msg,
+                "resumable": bool(partial_path and partial_path.exists()),
+                "downloaded_bytes": partial_path.stat().st_size if partial_path and partial_path.exists() else 0,
             })
             await self._notify_websockets(task_id)
     

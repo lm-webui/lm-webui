@@ -69,6 +69,14 @@ class ModelEvent:
         """Create a structured context event (context_used + sources + retrieved_images)."""
         return cls(type="sources", data=data)
 
+    @classmethod
+    def tool_call(cls, data: Dict[str, Any]) -> 'ModelEvent':
+        return cls(type="tool_call", data=data)
+
+    @classmethod
+    def tool_result(cls, data: Dict[str, Any]) -> 'ModelEvent':
+        return cls(type="tool_result", data=data)
+
 
 # Event type constants for type safety
 EVENT_TYPES = {

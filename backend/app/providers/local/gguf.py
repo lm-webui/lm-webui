@@ -9,6 +9,7 @@ from typing import List, Dict, Optional, Any, AsyncGenerator
 from ..base import BaseProvider
 from ..schemas import ModelMetadata, GenerateRequest, GenerateResponse, ModelEvent
 from app.core.error_handlers import ModelNotFoundError, ProviderError
+from app.runtime.lifecycle import lifecycle_for
 
 # Conditional import to allow running without llama-cpp installed (for testing/architecting)
 try:
@@ -83,9 +84,7 @@ class GGUFProvider(BaseProvider):
                 self._user_config[key] = value
         # If a model is loaded, unload it so the next load picks up new config
         if self._active_model:
-            self._active_model = None
-            self._active_model_path = None
-            self._active_config = {}
+            self.unload_model()
         return self.get_config()
 
     def _resolve_param(self, key: str, default: Any, cast: type) -> Any:
@@ -156,6 +155,9 @@ class GGUFProvider(BaseProvider):
         if self._active_model_path == model_path and self._active_model:
             return self._active_model
 
+        if self._active_model is not None:
+            self.unload_model()
+
         # Resolve params: n_ctx from call arg > user_config > env > default
         cfg = self.get_config()
         n_ctx = n_ctx or cfg["n_ctx"]
@@ -211,6 +213,7 @@ class GGUFProvider(BaseProvider):
                 )
             self._active_model_path = model_path
             self._active_config = config
+            lifecycle_for("gguf").set_model(os.path.basename(model_path))
             logger.info(f"Model loaded successfully. Active config: {config}")
             return self._active_model
         except Exception as e:
@@ -231,29 +234,34 @@ class GGUFProvider(BaseProvider):
 
             raise ProviderError("gguf", f"Failed to load model: {stderr_detail}\n{hint}")
 
+    def unload_model(self) -> None:
+        """Release the resident model before a switch or idle unload."""
+        model = self._active_model
+        self._active_model = None
+        self._active_model_path = None
+        self._active_config = {}
+        if model is not None:
+            del model
+        lifecycle_for("gguf").mark_unloaded()
+
     # ── generate, stream, _generate_blocking follow ──
     # (unchanged from original — uses self._load_model above)
 
     async def generate(self, request: GenerateRequest) -> GenerateResponse:
         """Generate response (non-streaming)."""
-        async with self._lock:
-            # Find model path
-            models = await self.list_models()
-            model_meta = next((m for m in models if m.id == request.model), None)
-            
-            if not model_meta or not model_meta.path:
-                raise ModelNotFoundError("gguf", f"Model {request.model} not found")
-                
-            try:
-                # Offload blocking load/inference to thread
-                response = await asyncio.to_thread(
-                    self._generate_blocking, 
-                    model_meta.path, 
-                    request
-                )
-                return response
-            except Exception as e:
-                raise ProviderError("gguf", f"Generation failed: {e}")
+        async with lifecycle_for("gguf").generation(request.model):
+            async with self._lock:
+                # Find model path
+                models = await self.list_models()
+                model_meta = next((m for m in models if m.id == request.model), None)
+                if not model_meta or not model_meta.path:
+                    raise ModelNotFoundError("gguf", f"Model {request.model} not found")
+                try:
+                    response = await asyncio.to_thread(self._generate_blocking, model_meta.path, request)
+                    return response
+                except Exception as e:
+                    lifecycle_for("gguf").set_state("failed", str(e))
+                    raise ProviderError("gguf", f"Generation failed: {e}")
 
     def _generate_blocking(self, model_path: str, request: GenerateRequest) -> GenerateResponse:
         """Blocking generation logic."""
@@ -281,64 +289,49 @@ class GGUFProvider(BaseProvider):
 
     async def stream(self, request: GenerateRequest) -> AsyncGenerator[ModelEvent, None]:
         """Stream response."""
-        # Find model path
-        models = await self.list_models()
-        model_meta = next((m for m in models if m.id == request.model), None)
-        
-        if not model_meta or not model_meta.path:
-            yield ModelEvent.error(f"Model {request.model} not found")
-            return
+        async with lifecycle_for("gguf").generation(request.model):
+            models = await self.list_models()
+            model_meta = next((m for m in models if m.id == request.model), None)
+            if not model_meta or not model_meta.path:
+                yield ModelEvent.error(f"Model {request.model} not found")
+                return
+            try:
+                n_ctx = getattr(request, 'n_ctx', None)
+                queue = asyncio.Queue()
+                loop = asyncio.get_running_loop()
 
-        try:
-            # Use appropriate context size - don't use max_tokens as n_ctx
-            # max_tokens is how many to generate, n_ctx is context window
-            # Falls back to _load_model's default (4096, overridable via GGUF_N_CTX)
-            n_ctx = getattr(request, 'n_ctx', None)
-            
-            # We need to run the generator in a thread, but since it's an iterator, 
-            # we can't just use asyncio.to_thread on the whole thing easily.
-            # We'll use a queue.
-            queue = asyncio.Queue()
-            loop = asyncio.get_running_loop()
-            
-            def producer():
-                try:
-                    llm = self._load_model(model_meta.path, n_ctx)
-                    stream = llm.create_chat_completion(
-                        messages=request.messages,
-                        max_tokens=request.max_tokens,
-                        temperature=request.temperature,
-                        stop=request.stop or [],
-                        stream=True
-                    )
-                    
-                    loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.typing())
-                    
-                    for chunk in stream:
-                        delta = chunk["choices"][0].get("delta", {})
-                        content = delta.get("content")
-                        if content:
-                            loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.token(content))
-                            
-                    loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.done())
-                except Exception as e:
-                    loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.error(str(e)))
-                finally:
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
+                def producer():
+                    try:
+                        llm = self._load_model(model_meta.path, n_ctx)
+                        stream = llm.create_chat_completion(
+                            messages=request.messages,
+                            max_tokens=request.max_tokens,
+                            temperature=request.temperature,
+                            stop=request.stop or [],
+                            stream=True,
+                        )
+                        loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.typing())
+                        for chunk in stream:
+                            delta = chunk["choices"][0].get("delta", {})
+                            content = delta.get("content")
+                            if content:
+                                loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.token(content))
+                        loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.done())
+                    except Exception as e:
+                        loop.call_soon_threadsafe(queue.put_nowait, ModelEvent.error(str(e)))
+                    finally:
+                        loop.call_soon_threadsafe(queue.put_nowait, None)
 
-            # Start producer thread
-            import threading
-            t = threading.Thread(target=producer, daemon=True)
-            t.start()
-            
-            while True:
-                event = await queue.get()
-                if event is None:
-                    break
-                yield event
-                
-        except Exception as e:
-             yield ModelEvent.error(str(e))
+                import threading
+                threading.Thread(target=producer, daemon=True).start()
+                while True:
+                    event = await queue.get()
+                    if event is None:
+                        break
+                    yield event
+            except Exception as e:
+                lifecycle_for("gguf").set_state("failed", str(e))
+                yield ModelEvent.error(str(e))
 
 # Singleton for routes to access
 _gguf_provider: Optional[GGUFProvider] = None

@@ -7,7 +7,6 @@ import functools
 import json
 import logging
 import os
-import shutil
 import threading
 import uuid
 from pathlib import Path
@@ -47,7 +46,7 @@ def start_mlx_download(repo_id: str) -> str:
     name = repo_id.split("/")[-1] if "/" in repo_id else repo_id
     local_dir = MLX_DIR / name
 
-    if local_dir.exists():
+    if (local_dir / "config.json").exists():
         _PROGRESS[task_id] = {"progress": 100, "status": "exists", "repo_id": repo_id}
         return task_id
 
@@ -66,8 +65,6 @@ def start_mlx_download(repo_id: str) -> str:
             _PROGRESS[task_id] = {"progress": 100, "status": "completed", "repo_id": repo_id}
             logger.info(f"MLX model downloaded: {repo_id} -> {local_dir}")
         except Exception as e:
-            if local_dir.exists():
-                shutil.rmtree(local_dir, ignore_errors=True)
             _PROGRESS[task_id] = {"progress": 0, "status": "failed", "repo_id": repo_id, "error": str(e)}
             logger.error(f"MLX download failed for {repo_id}: {e}")
 
@@ -102,8 +99,6 @@ async def download_mlx_model(repo_id: str) -> dict:
         logger.info(f"MLX model downloaded: {repo_id} -> {path}")
         return {"status": "downloaded", "repo_id": repo_id, "path": path}
     except Exception as e:
-        if local_dir.exists():
-            shutil.rmtree(local_dir, ignore_errors=True)
         logger.error(f"MLX download failed for {repo_id}: {e}")
         return {"status": "error", "repo_id": repo_id, "error": str(e)}
 

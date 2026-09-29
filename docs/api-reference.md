@@ -1,19 +1,21 @@
 ---
 title: API Reference
-description: LM-WebUI backend API endpoints and WebSocket streaming
+description: LM-WebUI backend API endpoints and streaming
 ---
 
 # API Reference
 
-LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for streaming chat. Unless noted, every endpoint below lives under the base URL and requires an authenticated session.
+LM-WebUI exposes a REST API on the backend server, WebSocket chat streaming, and REST SSE streams. Unless noted, every endpoint below lives under the base URL and requires an authenticated session.
 
 - **Base URL:** `http://<host>:7070/api` (default host `0.0.0.0`, port `7070`)
 - **Authentication:** JWT access token stored in httpOnly cookies (bcrypt-hashed passwords). Log in via `/api/auth/login`; the client then sends cookies automatically.
 - **Health:** `GET /api/health` returns service status (used by the `lm-webui status` CLI).
 
-## Streaming (WebSocket)
+## Streaming
 
 - **`/ws`** — Chat streaming and cancellation. Send a chat message as JSON to receive assistant tokens incrementally; a cancel message aborts the in-flight response.
+- **`POST /api/chat/stream`** — Chat streaming over Server-Sent Events. Events include status, sources, tokens, generation metadata, errors, and completion.
+- Agent streams use the same SSE pattern and may emit status, output, prompt, tool, tool-result, run, error, and complete events. Tool calls are bounded per turn and tool output is truncated to the configured budget.
 
 ## Auth
 
@@ -41,6 +43,7 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/chat` | Send a chat message |
+| POST | `/api/chat/stream` | Stream a chat response over Server-Sent Events |
 | POST | `/api/sessions` | Create a session |
 | GET | `/api/sessions` | List sessions |
 | GET | `/api/sessions/current` | Current session |
@@ -115,13 +118,14 @@ LM-WebUI exposes a REST API on the backend server plus a WebSocket channel for s
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/runtimes` | Runtime status (GGUF, MLX, external) |
+| GET | `/api/runtimes` | Runtime status, lifecycle state, active/queued generations, active model, and recent errors |
 | POST | `/api/runtimes/scan` | Scan for installed runtimes |
 | POST | `/api/runtimes/external` | Register an external runtime |
 | POST | `/api/runtimes/{type}/test` | Test a runtime connection |
 | GET | `/api/runtimes/{type}/models` | Models for a runtime |
 | POST | `/api/runtimes/{type}/install` | Install a runtime |
 | POST | `/api/runtimes/{type}/uninstall` | Uninstall a runtime |
+| POST | `/api/runtimes/{type}/unload` | Unload the resident local model |
 | GET | `/api/runtimes/mlx/status` | MLX runtime status |
 | GET | `/api/runtimes/gguf/health` | GGUF runtime executables + version (llama-server, llama-cli, …) |
 | GET | `/api/runtimes/vision/status` | Vision status — installed bundles, llama-server, running state |

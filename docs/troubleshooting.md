@@ -92,3 +92,10 @@ update. So a stale UI is no longer a build problem — check, in order:
 - **Data:** `~/.lmwebui/data/` (preserved across updates).
 - **Models:** `~/.lmwebui/models/`.
 - **Status:** `lm-webui status`.
+# Local runtime queues and model switching
+
+Local GGUF and MLX generations are admitted through a bounded queue. If the queue is full, wait for an active generation to finish or lower request concurrency. The defaults are one active generation and eight queued generations; tune them with `LMWEBUI_LOCAL_MAX_ACTIVE` and `LMWEBUI_LOCAL_MAX_QUEUE` in the backend environment.
+
+Changing local runtime settings unloads the resident model. The next request reloads it with the new configuration. MLX inference runs inside the backend process, so no separate `mlx_lm.server` process is required.
+
+If an agent stops before completing a tool call, check the tool-call limit, duplicate-call detection, timeout, and output budget reported in the run error.

@@ -196,7 +196,9 @@ The Runtime Manager reports local runtime availability across three tabs: **GGUF
 
 Vision models pair a main GGUF with an `mmproj` stored in `models/vision/<model>/`; the download flow requires selecting a main model and one mmproj, and downloads run in a single-flight queue in the background.
 
-**MLX** — external server on Apple Silicon macOS hosts. Install `mlx_lm.server` on the host, the Runtime Manager detects it and connects via HTTP API. The MLX tab mirrors the GGUF layout (capability status, searchable model list, runtime details). Setup scripts (install/uninstall/start/stop) available directly in the UI.
+**MLX** — in-process inference on Apple Silicon using `mlx-lm`. The backend loads installed MLX models directly and keeps the active model resident between requests. The MLX tab mirrors the GGUF layout (capability status, searchable model list, runtime details). Setup scripts (install/uninstall/start/stop) manage the host dependencies.
+
+Local runtimes expose lifecycle state, active and queued generation counts, the active model, and recent runtime errors. Local generation is bounded by default to one active request and eight queued requests. Override those limits with `LMWEBUI_LOCAL_MAX_ACTIVE` and `LMWEBUI_LOCAL_MAX_QUEUE` in the backend environment when needed. Runtime configuration changes unload the resident model before applying new settings; the Runtime Manager also supports explicit unload.
 
 **ComfyUI** — external server for image generation, shown as a connection manager. Detected on `localhost:8188` (native) or `host.docker.internal:8188` (Docker), one-click connect from Runtime Manager. Model management handled by ComfyUI's own interface.
 

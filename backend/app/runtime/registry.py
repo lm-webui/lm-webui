@@ -130,6 +130,8 @@ class RuntimeRegistry:
 
     def _build_ui_entries(self) -> List[Dict]:
         """Build the UI-formatted runtime list from current registry state."""
+        from .lifecycle import lifecycle_snapshots
+        lifecycle = lifecycle_snapshots()
         result = []
         for rt in RuntimeType:
             info = self._runtimes.get(rt.value, {})
@@ -146,6 +148,7 @@ class RuntimeRegistry:
                 "managed": detection_info.get("managed", False),
                 "install_hint": detection_info.get("install_hint", ""),
             }
+            entry.update(lifecycle.get(rt.value, {}))
 
             # Add GGUF-specific model info
             if rt == RuntimeType.GGUF and info.get("installed"):

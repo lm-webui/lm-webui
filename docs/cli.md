@@ -87,7 +87,7 @@ lm-webui-host runtime install mlx --dry-run
 
 | Runtime | What it installs | When you need it |
 | --- | --- | --- |
-| `mlx` | `mlx`, `mlx-lm`, `mlx-optiq` into the active Python | Apple Silicon hosts; MLX runs as an external server on macOS |
+| `mlx` | `mlx`, `mlx-lm`, `mlx-optiq` into the active Python | Apple Silicon hosts; LM-WebUI loads MLX models in-process |
 | `ollama` | Ollama via its install script | Hosting models through Ollama |
 | `vllm` | `vllm` into the active Python | Hosting models through vLLM |
 | `gguf` | `llama-cpp-python` into the active Python | GGUF/llama.cpp on the host |

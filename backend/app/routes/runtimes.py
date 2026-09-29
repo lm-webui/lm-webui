@@ -40,6 +40,23 @@ async def get_runtimes(_: dict = Depends(require_permission("runtime.view"))):
     return {"runtimes": await registry.get_runtime_info_for_ui_async()}
 
 
+@router.post("/{runtime_type}/unload")
+async def unload_runtime(runtime_type: str, _: dict = Depends(require_permission("runtime.control"))):
+    """Unload a resident local model without removing its files."""
+    if runtime_type == "gguf":
+        from app.providers.local.gguf import get_gguf_provider
+        get_gguf_provider().unload_model()
+    elif runtime_type == "mlx":
+        from app.providers.local.mlx import MLXProvider
+        from app.providers.factory import ProviderFactory
+        provider = ProviderFactory.get_provider("mlx")
+        if isinstance(provider, MLXProvider):
+            provider.unload_model()
+    else:
+        raise HTTPException(400, f"Runtime '{runtime_type}' does not support model unload")
+    return {"runtime": runtime_type, "status": "unloaded"}
+
+
 @router.post("/scan")
 async def scan_runtimes(_: dict = Depends(require_permission("runtime.view"))):
     """Scan localhost for running external runtimes."""
