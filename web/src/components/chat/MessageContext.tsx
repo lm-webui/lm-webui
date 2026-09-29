@@ -124,7 +124,11 @@ if (contextBadges.length === 0 && otherSources.length === 0 && webResults.length
           {message.citations.map((citation, index) => (
             <HoverCard key={citation.id}>
               <HoverCardTrigger asChild>
-                <button className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded border border-primary/20 transition-colors">
+                <button
+                  type="button"
+                  aria-label={`Open citation ${index + 1}`}
+                  className="inline-flex items-center justify-center w-5 h-5 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 rounded border border-primary/20 transition-colors"
+                >
                   {index + 1}
                 </button>
               </HoverCardTrigger>

@@ -181,6 +181,8 @@ export default function Composer({
                 <span className="truncate max-w-[150px]">{file.name}</span>
                 <button
                   onClick={() => removeFile(index)}
+                  type="button"
+                  aria-label={`Remove ${file.name}`}
                   className="ml-1 hover:text-red-500 rounded-full p-0.5 hover:bg-zinc-300 dark:hover:bg-zinc-700 transition-colors"
                 >
                   <X className="h-3 w-3" />
@@ -200,12 +202,14 @@ export default function Composer({
           </div>
         )}
         <div className="flex-1 px-3 pt-2 ml-1 md:px-4 md:pt-4">
+          <label htmlFor="composer-message" className="sr-only">Message</label>
           <textarea
+            id="composer-message"
             ref={inputRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             placeholder={"Ask LM WebUI..."}
-            className="w-full resize-none bg-transparent text-sm outline-none placeholder:text-zinc-700/30 dark:placeholder:text-zinc-400/30 min-h-[24px] max-h-[50vh] overflow-y-auto leading-6"
+            className="w-full resize-none bg-transparent text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm placeholder:text-zinc-700/30 dark:placeholder:text-zinc-400/30 min-h-[24px] max-h-[50vh] overflow-y-auto leading-6"
             rows={1}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -231,6 +235,7 @@ export default function Composer({
                 <Button
                   variant="ghost"
                   size="icon"
+                  aria-label="Add files or tools"
                   className="rounded-full text-zinc-500 mx-0 md:mx-3 h-8 w-8"
                 >
                   <Plus className="h-5 w-5" />
@@ -255,9 +260,13 @@ export default function Composer({
                     {isUploading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   </label>
                   <button
+                    type="button"
                     onClick={() =>
                       !isImageMode && setIsSearchEnabled(!isSearchEnabled)
                     }
+                    aria-pressed={searchActive}
+                    aria-label="Search the web"
+                    disabled={isImageMode}
                     className={`flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors ${isImageMode ? "text-zinc-400 dark:text-zinc-600 cursor-not-allowed" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"}`}
                   >
                     <span className="flex items-center gap-2">
@@ -268,7 +277,10 @@ export default function Composer({
                     />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setIsImageMode(!isImageMode)}
+                    aria-pressed={isImageMode}
+                    aria-label="Generate an image"
                     className="flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <span className="flex items-center gap-2">
@@ -279,7 +291,10 @@ export default function Composer({
                     />
                   </button>
                   <button
+                    type="button"
                     onClick={() => setIsCodingMode(!isCodingMode)}
+                    aria-pressed={isCodingMode}
+                    aria-label="Enable coding mode"
                     className="flex items-center justify-between px-3 py-2 text-sm rounded-lg transition-colors text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800"
                   >
                     <span className="flex items-center gap-2">
@@ -296,6 +311,8 @@ export default function Composer({
             {searchActive && (
               <span
                 title="Web search is on"
+                aria-label="Web search is on"
+                role="status"
                 className="inline-flex items-center gap-1 rounded-full p-0.5 text-[10px] font-medium text-neutral-400/50 dark:text-neutral-600/50"
               >
                 <Globe className="w-4 h-4" />
@@ -334,6 +351,7 @@ export default function Composer({
                 onClick={onStop}
                 size="icon"
                 title="Stop generating"
+                aria-label="Stop generating"
                 className="rounded-full h-10 w-10 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900"
               >
                 <Square className="h-4 w-4" />
@@ -343,6 +361,7 @@ export default function Composer({
                 onClick={handleSend}
                 disabled={busy || !value.trim()}
                 size="icon"
+                aria-label={busy ? "Sending message" : "Send message"}
                 className={cn(
                   "rounded-full h-10 w-10",
                   value.trim()

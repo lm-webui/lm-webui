@@ -77,7 +77,7 @@ export const SearchTool = React.memo(function SearchTool({
         <div className="flex items-center gap-2 min-w-0 text-sm text-muted-foreground">
           <span className="font-[450] whitespace-nowrap shrink-0">
             {isAnimating ? (
-              <ShimmerText>Searching...</ShimmerText>
+              <ShimmerText>Searching…</ShimmerText>
             ) : (
               `Web search · ${totalResults} result${totalResults === 1 ? "" : "s"}`
             )}

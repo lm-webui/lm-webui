@@ -48,7 +48,7 @@ export function MessageActions({
   if (isUser) {
     // User messages:
     return (
-      <div className="flex items-center gap-2 opacity-50 hover:opacity-100 transition-opacity">
+      <div className="message-actions flex items-center gap-2">
         <Button
           size="sm"
           variant="ghost"
@@ -59,6 +59,7 @@ export function MessageActions({
           )}
           onClick={onCopy}
           title={copied ? "Copied!" : "Copy"}
+          aria-label={copied ? "Copied" : "Copy message"}
         >
           {copied ? <Check className={cn(isMobile ? "h-3 w-3" : "h-3.5 w-3.5")} /> : <Copy className={cn(isMobile ? "h-3 w-3" : "h-3.5 w-3.5")} />}
         </Button>
@@ -72,6 +73,7 @@ export function MessageActions({
             )}
             onClick={onEdit}
             title="Edit"
+            aria-label="Edit message"
           >
             <Edit className={cn(isMobile ? "h-3 w-3" : "h-3.5 w-3.5")} />
           </Button>
@@ -121,7 +123,7 @@ export function MessageActions({
   ].filter((action): action is NonNullable<typeof action> => action !== null);
 
   return (
-    <div className="flex items-center gap-2 ml-2 opacity-50 hover:opacity-100 transition-opacity">
+    <div className="message-actions flex items-center gap-2 ml-2">
       {assistantActions.map((action, index) => (
         <Button
           key={index}
@@ -134,6 +136,7 @@ export function MessageActions({
           )}
           onClick={action.onClick}
           title={action.label}
+          aria-label={action.label}
         >
           <action.icon className={cn(isMobile ? "h-3 w-3" : "h-3.5 w-3.5")} />
         </Button>

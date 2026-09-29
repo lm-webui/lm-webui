@@ -2,6 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer components {
+  .message-actions {
+    opacity: 0.3;
+    transform: translateY(2px);
+    transition: opacity 180ms ease, transform 180ms ease;
+  }
+
+  .message-row:hover .message-actions,
+  .message-row:focus-within .message-actions {
+    opacity: 0.5;
+    transform: translateY(0);
+  }
+
+  @media (hover: none) {
+    .message-actions {
+      opacity: 0.3;
+      transform: none;
+    }
+  }
+
+  .streaming-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    border-radius: 999px;
+    background: currentColor;
+    animation: streaming-caret-blink 1s steps(2, jump-none) infinite;
+  }
+
+  @keyframes streaming-caret-blink {
+    50% { opacity: 0.15; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .message-actions,
+    .message-row:hover .message-actions,
+    .message-row:focus-within .message-actions {
+      transform: none;
+      transition: none;
+    }
+
+    .streaming-caret { animation: none; }
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 95%;

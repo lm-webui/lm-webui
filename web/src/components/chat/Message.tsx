@@ -264,7 +264,7 @@ export function Message({
   return (
     <div
       className={cn(
-        "group animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
+        "message-row animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
         message.role === "user"
           ? "ml-auto md:-mr-2"
           : "-ml-2 -mr-2",
@@ -288,7 +288,6 @@ export function Message({
         <MessageBubble
           role={message.role}
           isMobile={isMobile}
-          contentLength={message.content.length}
         >
           {message.role === "assistant" ? (
             <div
@@ -352,7 +351,7 @@ export function Message({
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypeRaw, [rehypeSanitize, SANITIZE_SCHEMA]]}
-                children={formatToolList(sanitizeContent(message.content)) + (message.isLoading ? " ▎" : "")}
+                children={formatToolList(sanitizeContent(message.content))}
                 components={{
                   p({ children, ...props }) {
                     // Use CitationParser for text content while preserving React elements
@@ -454,6 +453,9 @@ export function Message({
                   },
                 }}
               />
+              {message.isLoading && (
+                <span className="streaming-caret" aria-hidden="true" />
+              )}
 
               {/* Render generated image from generatedImageUrl field */}
               {message.generatedImageUrl && (
@@ -576,7 +578,10 @@ export function Message({
           ) : (
             <>
               <div
-                className={cn("overflow-hidden", !expanded && "max-h-[25vh]")}
+                className={cn(
+                  "overflow-hidden",
+                  !expanded && "max-h-[min(25vh,20rem)]",
+                )}
               >
                 {/* break-words: whitespace-pre-wrap wraps at spaces but not inside one long
                     token, so a pasted URL would widen the row past the viewport. */}
@@ -705,7 +710,6 @@ export function Message({
         <div
           className={cn(
             "text-[10px] mt-1 mb-4 ml-4 mr-8 flex items-center gap-2",
-            "opacity-35 hover:opacity-55 transition-opacity",
             message.role === "user" ? "justify-end" : "",
             isMobile && "text-[11px]",
           )}
@@ -730,7 +734,13 @@ export function Message({
             />
           )}
 
-          <span>{new Date(message.timestamp).toLocaleTimeString()}</span>
+          <span className="opacity-30">
+            {new Date(message.timestamp).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: false,
+            })}
+          </span>
 
           {/* Streaming status indicator */}
           {message.isLoading && (
@@ -745,8 +755,8 @@ export function Message({
               not one that produced anything, which reads as noise next to their own text. */}
           {message.model && message.role === "assistant" && (
             <>
-              <span>•</span>
-              <span className="truncate max-w-[140px]">{message.model}</span>
+              <span className="opacity-30">•</span>
+              <span className="truncate max-w-[140px] opacity-30">{message.model}</span>
             </>
           )}
 
@@ -824,6 +834,7 @@ function MessageImage({ src, alt, onImageError, ...props }: any) {
       <Button
         size="sm"
         variant="outline"
+        aria-label="Download image"
         className="absolute top-2 right-2 opacity-0 group-hover/image:opacity-100 transition-opacity h-8 w-8 p-0 max-md:opacity-100"
         onClick={async (e) => {
           e.stopPropagation(); // Prevent image click

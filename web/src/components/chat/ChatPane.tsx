@@ -170,6 +170,14 @@ export default function ChatPane({
     scrollToBottom();
   }, [conversation?.messages.length, tailLength, isThinking]);
 
+  React.useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => scrollToBottom());
+    observer.observe(el.firstElementChild || el);
+    return () => observer.disconnect();
+  }, [conversation?.id]);
+
   // new chat would open wherever the old scroll position left off.
   React.useEffect(() => {
     stickToBottomRef.current = true;

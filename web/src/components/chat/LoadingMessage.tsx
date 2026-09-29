@@ -52,6 +52,8 @@ export function LoadingMessage({
   if (isSearching) {
     return (
       <div
+        role="status"
+        aria-live="polite"
         className={cn(
           "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
           isMobile ? "max-w-full" : "max-w-4xl",
@@ -67,6 +69,8 @@ export function LoadingMessage({
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className={cn(
         "animate-in fade-in-0 slide-in-from-bottom-2 duration-300",
         isMobile ? "max-w-full" : "max-w-4xl",
