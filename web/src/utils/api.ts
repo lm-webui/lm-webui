@@ -13,8 +13,10 @@ export function agentTerminalWsUrl(agent: string, sessionId: string): string {
   return `${proto}//${base.host}/api/agents/${agent}/terminal/${sessionId}`;
 }
 
-// Helper function to handle token refresh
-async function handleTokenRefresh(): Promise<void> {
+// Helper function to handle token refresh.
+// Exported for the Agent Hub terminal socket: a WebSocket cannot carry an Authorization header,
+// so its only credential is the cookie this refreshes. See TerminalPane's onclose.
+export async function handleTokenRefresh(): Promise<void> {
   
   try {
     const refreshResponse = await fetch(`${API_BASE_URL}/api/auth/refresh`, {

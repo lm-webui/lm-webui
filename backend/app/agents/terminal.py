@@ -108,7 +108,13 @@ class TerminalSession:
         token = uuid.uuid4().hex
         self._attachments[token] = user_id
         self._expire_controller()
-        if self._controller is None:
+        # Same user reconnecting (StrictMode remount, reconnect button, a reconnect after a switch)
+        # races the old socket's server-side detach: the new attachment could land *while* the old
+        # one is still controller, and detach() would then clear the controller without promoting
+        # anyone — leaving the user a view-only viewer of their own terminal. The previous holder is
+        # the same person, so hand control over rather than demote. No privilege change; a
+        # *different* user attaching is still only ever granted a viewer slot.
+        if self._controller is None or self._controller_user == user_id:
             self._grant(token)
             return token, "controller"
         return token, "viewer"

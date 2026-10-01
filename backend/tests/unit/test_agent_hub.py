@@ -9,6 +9,7 @@ import pytest
 
 from app.agents import agent_files as af
 from app.agents.parser import parse
+from app.agents.registry import extract_session_id, resume_cmd, resume_run_cmd
 
 
 def test_parse_reads_jsonl(tmp_path):
@@ -30,6 +31,33 @@ def test_parse_falls_back_to_plain_text():
     """Output that is not JSON at all is still readable."""
     assert parse("codex", "boom: not json") == [{"type": "text", "content": "boom: not json"}]
     assert parse("codex", "   ") == []
+
+
+@pytest.mark.parametrize("agent, session_id, expected", [
+    ("codex", "019e029c-b1e9-7e31-992e-df4638cf8ee8", ["codex", "resume", "019e029c-b1e9-7e31-992e-df4638cf8ee8"]),
+    ("hermes", "20260305_091523_a1b2c3", ["hermes", "--resume", "20260305_091523_a1b2c3"]),
+    ("opencode", "ses_abc123", ["opencode", "--session", "ses_abc123"]),
+])
+def test_native_resume_commands(agent, session_id, expected):
+    assert resume_cmd(agent, "/tmp", session_id) == expected
+
+
+@pytest.mark.parametrize("agent, session_id, expected", [
+    ("codex", "native", ["codex", "exec", "resume", "native"]),
+    ("hermes", "native", ["hermes", "chat", "--resume", "native", "-q"]),
+    ("opencode", "native", ["opencode", "run", "--session", "native"]),
+])
+def test_native_run_resume_commands(agent, session_id, expected):
+    assert resume_run_cmd(agent, "/tmp", session_id) == expected
+
+
+@pytest.mark.parametrize("agent, output, expected", [
+    ("codex", "session 019e029c-b1e9-7e31-992e-df4638cf8ee8", "019e029c-b1e9-7e31-992e-df4638cf8ee8"),
+    ("hermes", "saved as 20260305_091523_a1b2c3", "20260305_091523_a1b2c3"),
+    ("opencode", '{"sessionID":"ses_abc123"}', "ses_abc123"),
+])
+def test_native_session_id_extraction(agent, output, expected):
+    assert extract_session_id(agent, output) == expected
 
 
 def test_resolving_files_creates_nothing(tmp_path, monkeypatch):

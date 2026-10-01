@@ -4,7 +4,7 @@ import json
 from typing import AsyncGenerator, AsyncIterator
 
 from .registry import AGENTS
-from .registry import spawn_cmd, normalize, prepare_workspace
+from .registry import spawn_cmd, normalize, prepare_workspace, resume_run_cmd
 
 
 class InteractiveSession:
@@ -161,13 +161,14 @@ class InteractiveSession:
                 self._proc.kill()
 
 
-async def run(agent: str, prompt: str, cwd: str, holder: dict | None = None) -> AsyncGenerator[str, None]:
+async def run(agent: str, prompt: str, cwd: str, holder: dict | None = None,
+              resume_id: str = "") -> AsyncGenerator[str, None]:
     """Run the agent once with `prompt`, yielding decoded stdout lines as they arrive.
 
     `holder` (if given) receives `{"returncode": <int>}` on exit, so the caller can read the
     process status after consuming the stream.
     """
-    cmd = [*AGENTS[agent].run]
+    cmd = resume_run_cmd(agent, cwd, resume_id) or [*AGENTS[agent].run]
     # A prompt starting with "-" would otherwise be read as a flag by the CLI.
     # ponytail: argv stays the transport; move to stdin if a prompt ever approaches ARG_MAX.
     if prompt.startswith("-"):

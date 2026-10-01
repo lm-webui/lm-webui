@@ -18,7 +18,7 @@ from app.agents.registry import (
 from app.agents.runner import run, InteractiveSession
 from app.agents.terminal import TerminalRegistry
 from app.agents import agent_files as af
-from app.agents.registry import is_interactive, context_file
+from app.agents.registry import is_interactive, context_file, extract_session_id, resume_cmd
 from app.agents.parser import parse
 from app.agents.sessions import sessions
 
@@ -174,6 +174,7 @@ async def compact_session(agent: str, sid: str,
         raise HTTPException(404, "Session not found")
     s["transcript"] = []
     sessions.set_claude_session(sid, None)
+    sessions.set_native_session(sid, None)
     return {"ok": True}
 
 
@@ -358,11 +359,15 @@ async def chat_stream(agent: str, req: ChatRequest,
         sessions.start_run(sid)
         try:
             yield await _sse({"type": "status", "data": {"status": "running", "session_id": sid}})
-            async for line in run(agent, prompt, s["cwd"], holder):
+            async for line in run(agent, prompt, s["cwd"], holder, s.get("native_session_id") or ""):
                 sessions.append_output(sid, line)
                 yield await _sse({"type": "output", "content": line})
             rc = holder.get("returncode", 1)
             run_info = sessions.end_run(sid, rc)
+            if rc == 0:
+                native_id = extract_session_id(agent, (run_info or {}).get("output", ""))
+                if native_id:
+                    sessions.set_native_session(sid, native_id)
             _finish(sid, msg, run_info)
             if rc != 0:
                 yield await _sse({
@@ -441,7 +446,13 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
 
     # Detection resolves the CLI using the service/login PATH. Reuse that absolute path for the
     # PTY: systemd/launchd often cannot resolve the user's globally installed CLI by bare name.
-    cmd = s.get("terminal_cmd") or ([detected["path"]] if detected and detected.get("path") else TERMINAL_CMD[agent])
+    cmd = s.get("terminal_cmd")
+    if not cmd:
+        cmd = resume_cmd(agent, s["cwd"], s.get("native_session_id") or "")
+        if not cmd:
+            cmd = [detected["path"]] if detected and detected.get("path") else TERMINAL_CMD[agent]
+        elif detected and detected.get("path"):
+            cmd[0] = detected["path"]
     if s.get("install") and terminals.get(agent, sid) is None:
         # Install jobs are not conversational sessions. Never replay a persisted install record
         # by rerunning its command after a backend restart.
@@ -458,16 +469,33 @@ async def agent_terminal(ws: WebSocket, agent: str, sid: str, access_token: str 
     token, mode = ts.attach(payload["id"])
     await ws.send_json({"type": "attached", "mode": mode})
     try:
-        await ws.send_bytes(ts.backlog())  # replay history to a reconnecting client
+        backlog = ts.backlog()
+        native_id = extract_session_id(agent, backlog.decode(errors="replace"))
+        if native_id:
+            sessions.set_native_session(sid, native_id)
+        await ws.send_bytes(backlog)  # replay history to a reconnecting client
     except Exception:
         pass
 
     async def pump_out():
         async for data in ts.output():
+            native_id = extract_session_id(agent, data.decode(errors="replace"))
+            if native_id:
+                sessions.set_native_session(sid, native_id)
             try:
                 await ws.send_bytes(data)
             except Exception:
                 return
+        # The pty closed, so the CLI exited. Close the socket with it, or the browser is left in
+        # "open" on a frozen terminal: nothing more will ever be sent, keystrokes go to a dead
+        # master (TerminalSession.write is a no-op once _master is None), and because the socket
+        # never closes the pane never offers a reconnect. This is what a CLI that dies on startup
+        # — bad config, failed auth, wrong args — looks like from the user's side: blank, untypable.
+        # Reconnecting respawns, since TerminalRegistry.get_or_create reuses only a live session.
+        try:
+            await ws.close(code=1000, reason="agent process exited")
+        except Exception:
+            pass
 
     out_task = asyncio.create_task(pump_out())
     try:

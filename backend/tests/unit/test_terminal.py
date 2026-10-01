@@ -89,3 +89,24 @@ def test_terminal_turn_lease():
     assert ts.can_write(second)
     assert ts.heartbeat(second)
     assert not ts.heartbeat(first)
+
+
+def test_reattaching_user_takes_the_controller_slot():
+    """A reconnecting attachment must not be demoted to viewer by its own predecessor.
+
+    StrictMode remounts / the reconnect button race the old socket's server-side detach: if the new
+    token arrives while the old one is still controller, the plain `controller is None` test makes
+    the user a viewer of their own terminal, and the later detach then clears the slot without
+    promoting them — permanently un-writable. A different user is unaffected and still a viewer.
+    """
+    ts = TerminalSession("claude", ["true"], "/tmp")
+    first, _ = ts.attach(1)
+    again, mode = ts.attach(1)          # same user reconnects
+    assert mode == "controller"
+    assert ts.can_write(again)
+    ts.detach(first)                    # the stale socket finally goes away
+    assert ts.can_write(again), "detach of the old token revoked the current user's control"
+
+    other, other_mode = ts.attach(2)    # a second user is still only a viewer
+    assert other_mode == "viewer"
+    assert not ts.can_write(other)

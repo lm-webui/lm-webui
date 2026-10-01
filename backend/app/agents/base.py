@@ -60,3 +60,12 @@ class AgentDef:
 
     prepare_workspace: Optional[Callable[[str], None]] = None
     """Seed per-session files in the run cwd before spawn. Interactive agents only."""
+
+    resume: Optional[Callable[[str, str], tuple[str, ...]]] = None
+    """(cwd, native_session_id) -> interactive resume argv."""
+
+    resume_run: Optional[Callable[[str, str], tuple[str, ...]]] = None
+    """(cwd, native_session_id) -> non-interactive resume argv prefix."""
+
+    extract_session_id: Optional[Callable[[str], str | None]] = None
+    """Extract a provider session id from one-shot output, or return None."""

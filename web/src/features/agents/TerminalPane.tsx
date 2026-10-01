@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Terminal as TerminalIcon, WifiOff, Loader2 } from "lucide-react";
-import { agentTerminalWsUrl } from "@/utils/api";
+import { agentTerminalWsUrl, handleTokenRefresh } from "@/utils/api";
 
 /*
  * Real TUI for Agent Hub interactive sessions, backed by vendored @xterm/xterm.
@@ -158,6 +158,8 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
   // Why the socket dropped: 4403 = not installed / no terminal permission, 4404 = session mismatch.
   const [closed, setClosed] = useState<{ code: number; reason: string } | null>(null);
   const [mode, setMode] = useState<"controller" | "viewer">("controller");
+  // Which (agent, session) has already spent its one auth retry — see ws.onclose.
+  const authRetried = useRef<string | null>(null);
 
   const send = (data: string | Uint8Array) => {
     const s = sockRef.current;
@@ -295,6 +297,21 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     // later, so it only records that the drop was not clean.
     ws.onerror = () => { errored = true; };
     ws.onclose = (ev) => {
+      // A WebSocket handshake carries no Authorization header, so the socket's only credential is
+      // the access_token cookie — checked once, at connect. The token lives 60 minutes, so a page
+      // left open past that fails the *next* connect with 4403 and used to need the reconnect
+      // button twice (once to discover it, once after logging in again). Refresh the cookie and
+      // retry once instead. Bounded per (agent, session): a 4403 that survives a fresh token is
+      // not an expiry — it is ownership or a missing permission — and must not loop.
+      const retryKey = `${agent}:${sessionId}`;
+      if (ev.code === 4403 && ev.reason !== "agent not installed" && authRetried.current !== retryKey) {
+        authRetried.current = retryKey;
+        setState("connecting");
+        handleTokenRefresh()
+          .then(() => setNonce((n) => n + 1))
+          .catch(() => { setClosed({ code: ev.code, reason: ev.reason }); setState("error"); });
+        return;
+      }
       setClosed({ code: ev.code, reason: ev.reason });
       setState(errored || ev.code !== 1000 ? "error" : "closed");
     };
@@ -321,13 +338,13 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
 
   const connect = () => setNonce((n) => n + 1);
 
-  if (!agent || !sessionId) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-        Pick an agent to open its interactive terminal.
-      </div>
-    );
-  }
+  // No early return when nothing is selected. Effect 2 (which creates the xterm instance) is keyed
+  // on `ready` and needs the host div to already be in the DOM — but on a fresh load `agent` is ""
+  // and the engine becomes ready a tick later, so a placeholder-return left hostRef null, the
+  // effect bailed, and it never re-ran: picking an agent then mounted the host and opened the
+  // socket with no xterm behind it. Blank pane, no onData, so typing did nothing. The host must
+  // therefore stay mounted from the first render; idleness is an overlay, not a different tree.
+  const idle = !agent || !sessionId;
 
   return (
     // paddingBottom, not a margin on the bar: the inset has to shrink the WHOLE pane so the
@@ -336,13 +353,13 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
     <div className="flex flex-col h-full min-h-0" style={keyboardInset ? { paddingBottom: keyboardInset } : undefined}>
       <div className="flex items-center justify-between border-b border-border/40 px-3 h-9 shrink-0">
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
-          <TerminalIcon className="h-3.5 w-3.5" /> {agent} · interactive
+          <TerminalIcon className="h-3.5 w-3.5" /> {agent ? `${agent} · interactive` : "terminal"}
         </span>
         {state === "open" && mode === "viewer" && (
           <button onClick={() => send(JSON.stringify({ type: "request_turn" }))}
             className="text-[.65rem] text-primary hover:underline">request control</button>
         )}
-        {state !== "open" && (
+        {!idle && state !== "open" && (
           <button onClick={connect} className="text-[.65rem] text-primary hover:underline flex items-center gap-1">
             {state === "connecting" ? <Loader2 className="h-3 w-3 animate-spin" /> : <WifiOff className="h-3 w-3" />}
             {state === "connecting" ? "connecting…" : state === "error" ? "reconnect" : "connect"}
@@ -368,9 +385,16 @@ export default function TerminalPane({ agent, sessionId }: { agent: string; sess
         </div>
       )}
 
-      <div ref={hostRef} className="flex-1 min-h-0 min-w-0 overflow-hidden bg-black/80 p-2" />
+      <div className="relative flex-1 min-h-0 min-w-0">
+        <div ref={hostRef} data-testid="terminal-host" className="h-full min-h-0 min-w-0 overflow-hidden bg-black/80 p-2" />
+        {idle && (
+          <div className="absolute inset-0 flex items-center justify-center bg-background px-4 text-center text-sm text-muted-foreground">
+            Pick an agent to open its interactive terminal.
+          </div>
+        )}
+      </div>
 
-      {isTouch ? (
+      {idle ? null : isTouch ? (
         /* 44x36 targets in one scrollable row: eight keys across a 320px screen would be ~39px
            each, under the touch guideline. shrink-0 + overflow-x-auto keeps them full size and
            lets the row scroll on the narrowest phones. */

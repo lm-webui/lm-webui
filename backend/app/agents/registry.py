@@ -53,6 +53,21 @@ def prepare_workspace(agent: str, cwd: str) -> None:
         a.prepare_workspace(cwd)
 
 
+def resume_cmd(agent: str, cwd: str, session_id: str) -> list[str]:
+    a = AGENTS.get(agent)
+    return list(a.resume(cwd, session_id)) if a and a.resume and session_id else []
+
+
+def resume_run_cmd(agent: str, cwd: str, session_id: str) -> list[str]:
+    a = AGENTS.get(agent)
+    return list(a.resume_run(cwd, session_id)) if a and a.resume_run and session_id else []
+
+
+def extract_session_id(agent: str, output: str) -> str | None:
+    a = AGENTS.get(agent)
+    return a.extract_session_id(output) if a and a.extract_session_id else None
+
+
 # detect() spawns a `--version` subprocess per call; throttle it so re-opens of the agent
 # list / Manage tab don't re-spawn subprocesses every time. (ponytail: naive dict cache, fine for
 # the handful of agents here.)

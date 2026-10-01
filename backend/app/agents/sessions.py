@@ -81,6 +81,7 @@ class AgentSessions:
             "runs": [],
             "active_run": None,
             "claude_session_id": None,
+            "native_session_id": None,
             "install": install,
             "terminal_cmd": terminal_cmd,
         }
@@ -101,6 +102,12 @@ class AgentSessions:
         s = self._sessions.get(sid)
         if s:
             s["claude_session_id"] = claude_session_id
+            self._persist()
+
+    def set_native_session(self, sid: str, native_session_id: str | None) -> None:
+        s = self._sessions.get(sid)
+        if s:
+            s["native_session_id"] = native_session_id
             self._persist()
 
     def list(self, agent: str | None = None, owner_id: int | None = None,
