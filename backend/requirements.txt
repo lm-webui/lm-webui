@@ -19,6 +19,10 @@ urllib3>=2.0.0
 
 # LLM Provider APIs
 openai
+# Unified Google Gen AI SDK. `AQ.`-prefixed keys are auth tokens, not the legacy `AIza`
+# traffic strings — only this SDK handles them. Declared explicitly because the provider
+# imports it at request time and a missing package fails every Gemini call.
+google-genai
 
 # Document Processing (text extraction, no RAG/vector)
 pdfplumber

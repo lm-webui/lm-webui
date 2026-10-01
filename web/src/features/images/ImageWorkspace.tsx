@@ -85,12 +85,12 @@ export default function ImageWorkspace() {
           openai: {
             label: PROVIDERS.openai!.name, icon: "cloud",
             connected: status.providers?.openai === "ready",
-            models: apiModels.openai || ["dall-e-3", "dall-e-2"],
+            models: apiModels.openai || [],
           },
           google: {
             label: PROVIDERS.google!.name, icon: "cloud",
             connected: status.providers?.google === "ready",
-            models: apiModels.google || ["imagen-3", "gemini-2.5-flash-image"],
+            models: apiModels.google || [],
           },
           local: {
             label: "Local", icon: "server",

@@ -39,7 +39,7 @@ export const PROVIDERS: Record<string, Provider> = {
   },
   google: {
     id: "google", name: "Google Gemini", icon: RiGeminiFill, color: "text-blue-500",
-    type: "cloud", placeholder: "AIza...", requiresApiKey: true,
+    type: "cloud", placeholder: "AIza... or AQ....", requiresApiKey: true,
     categories: ["model", "api", "image"],
   },
   anthropic: {

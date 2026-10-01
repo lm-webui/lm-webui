@@ -228,8 +228,11 @@ async def get_image_models(user_id: dict = Depends(get_current_user)):
 
     registry = get_model_registry()
     known = {
-        "openai": ["dall-e-3", "dall-e-2", "gpt-image-1"],
-        "google": ["imagen-3", "gemini-2.5-flash-image"],
+        # Cloud image models are discovered from the provider's own list API just below. An empty
+        # list is the honest answer when there is no key to probe with — a hardcoded fallback here
+        # would offer models the account may not have, and rot as they get retired.
+        "openai": [],
+        "google": [],
         # Only files/bundles that the local runtime can resolve now. Presets remain available
         # through Runtime Manager until their files are actually installed.
         "comfyui": available_models(),
@@ -260,9 +263,10 @@ async def get_image_models(user_id: dict = Depends(get_current_user)):
             strat = registry.get_strategy("google", user_id["id"])
             if strat:
                 all_models = await strat.fetch_models(api_keys.get("google"))
-                # Models supporting image gen: usually contain "imagen" or
-                # are "gemini-*-flash-*" or "gemini-*-pro-*" with vision
-                img_keywords = ["imagen", "-image"]
+                # Gemini's image models are the `-image` variants of the flash/pro chat models
+                # (gemini-2.5-flash-image). The standalone `imagen-*` line this used to also match
+                # is no longer served by the Gemini API.
+                img_keywords = ["-image"]
                 dynamic = sorted(
                     set(
                         m["id"]

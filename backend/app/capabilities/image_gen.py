@@ -43,13 +43,15 @@ def supports_image_input(provider: str, model: str) -> bool:
 def _is_image_gen(provider: str, model: str) -> bool:
     """True when the provider/model can generate images at all (t2i or img2img).
 
-    Broader than `supports_image_input` — DALL-E/imagen generate but take no source
-    image. Used to honor the composer's selected model only when it's an image model,
+    Broader than `supports_image_input` — DALL-E generates but takes no source image.
+    Used to honor the composer's selected model only when it's an image model,
     falling back to the Settings default otherwise.
     """
     p, m = (provider or "").lower(), (model or "").lower()
     if p in ("google", "gemini"):
-        return "image" in m or "imagen" in m
+        # `gemini-2.5-flash-image` and its successors. The separate `imagen-*` family is no
+        # longer served by the Gemini API, so it is not a name worth matching any more.
+        return "image" in m
     if p == "openai":
         return "gpt-image" in m or "dall-e" in m
     if p in ("comfyui", "local"):

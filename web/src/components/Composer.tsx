@@ -336,7 +336,6 @@ export default function Composer({
                       [
                         "dall-e",
                         "gpt-image",
-                        "imagen",
                         "-image",
                         "gemini-3",
                         "-flash-image",

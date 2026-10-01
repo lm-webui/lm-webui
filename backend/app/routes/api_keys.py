@@ -90,7 +90,10 @@ async def list_api_keys(user_id: dict = Depends(get_current_user)):
     env_mapping = {
         "OPENAI_API_KEY": "openai",
         "ANTHROPIC_API_KEY": "anthropic", 
+        # Both names are honored: the genai SDK reads GOOGLE_API_KEY first and falls back to
+        # GEMINI_API_KEY, so an install using either one should show up as configured.
         "GOOGLE_API_KEY": "google",
+        "GEMINI_API_KEY": "google",
         "XAI_API_KEY": "xai",
         "DEEPSEEK_API_KEY": "deepseek"
     }

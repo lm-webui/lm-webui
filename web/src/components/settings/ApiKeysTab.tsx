@@ -117,8 +117,10 @@ export function ApiKeysTab() {
     if (providerId === "openai" && !trimmedInput.startsWith("sk-")) {
       return { isValid: false, error: "OpenAI API keys should start with 'sk-'" };
     }
-    if (providerId === "google" && !trimmedInput.startsWith("AIza")) {
-      return { isValid: false, error: "Google API keys should start with 'AIza'" };
+    // Google issues two key shapes: legacy `AIza` traffic strings and the `AQ.` auth tokens the
+    // current genai SDK uses. Requiring `AIza` made a valid new key impossible to save.
+    if (providerId === "google" && !trimmedInput.startsWith("AIza") && !trimmedInput.startsWith("AQ.")) {
+      return { isValid: false, error: "Google API keys should start with 'AIza' or 'AQ.'" };
     }
 
     return { isValid: true };

@@ -1,10 +1,7 @@
 """
-Google Image Generation — direct REST API via Gemini (no SDK dependency).
+Google Image Generation — via the official google-genai SDK.
 """
 import logging
-import base64
-import json
-import aiohttp
 from fastapi.responses import JSONResponse
 from app.models.schemas import ChatRequest
 from app.services.save_generated_image import save_generated_image
@@ -12,8 +9,6 @@ from app.database import get_db
 from app.security.encryption import decrypt_key
 
 logger = logging.getLogger(__name__)
-
-GEMINI_API = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 async def generate_image_gemini(req: ChatRequest, background_tasks=None):
@@ -31,50 +26,56 @@ async def generate_image_gemini(req: ChatRequest, background_tasks=None):
         return JSONResponse(status_code=401, content={"error": "Google API key required"})
 
     try:
+        from google import genai
+        from google.genai import errors, types
+
         model_name = req.model or "gemini-2.5-flash"
         prompt = req.message
         logger.info(f"Generating image with Google model: {model_name}")
 
-        url = f"{GEMINI_API}/{model_name}:generateContent?key={api_key}"
+        # The key is handed to the SDK, never placed in a URL. The previous implementation
+        # called `${GEMINI_API}/...:generateContent?key=<key>` directly, which put a live
+        # credential in a query string — logged by every proxy in the path and by the SDK's
+        # own request telemetry. Both `AIza` traffic strings and `AQ.` auth tokens work here
+        # because the SDK chooses the auth mechanism; nothing parses the key.
+        client = genai.Client(api_key=api_key)
 
-        parts = [{"text": prompt}]
+        parts: list = [prompt]
         if req.image_data_uri:
-            # img2img: pass the source image as an inlineData part (data:image/png;base64,XXX)
+            # img2img: pass the source image as an inline_data part (data:image/png;base64,XXX)
             try:
                 meta, b64 = req.image_data_uri.split(",", 1)
                 mime = meta.split(";")[0].split(":")[1]
-                parts.append({"inlineData": {"mimeType": mime, "data": b64}})
+                parts.append({"inline_data": {"mime_type": mime, "data": b64}})
             except Exception as exc:
                 logger.warning(f"Could not attach image part: {exc}")
 
-        payload: dict = {
-            "contents": [{"parts": parts}],
-            "generationConfig": {"responseModalities": ["Text", "Image"]},
-        }
+        try:
+            response = await client.aio.models.generate_content(
+                model=model_name,
+                contents=parts,
+                config=types.GenerateContentConfig(
+                    response_modalities=["Text", "Image"],
+                ),
+            )
+        except errors.APIError as exc:
+            code = exc.code if isinstance(exc.code, int) else 500
+            logger.error(f"Google API error {code}: {exc.message}")
+            return JSONResponse(status_code=code, content={"error": exc.message})
 
+        candidates = response.candidates or []
+        if not candidates:
+            return JSONResponse(status_code=500, content={"error": "No candidates returned"})
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, json=payload) as resp:
-                body = await resp.json()
+        image_bytes = None
+        for part in (candidates[0].content.parts or []):
+            blob = getattr(part, "inline_data", None)
+            if blob and (blob.mime_type or "").startswith("image/"):
+                image_bytes = blob.data
+                break
 
-                if resp.status != 200:
-                    err_msg = body.get("error", {}).get("message", str(body))
-                    logger.error(f"Google API error {resp.status}: {err_msg}")
-                    return JSONResponse(status_code=resp.status, content={"error": err_msg})
-
-                # Extract image from response
-                candidates = body.get("candidates", [])
-                if not candidates:
-                    return JSONResponse(status_code=500, content={"error": "No candidates returned"})
-
-                image_bytes = None
-                for part in candidates[0].get("content", {}).get("parts", []):
-                    if "inlineData" in part and part["inlineData"].get("mimeType", "").startswith("image/"):
-                        image_bytes = base64.b64decode(part["inlineData"]["data"])
-                        break
-
-                if not image_bytes:
-                    return JSONResponse(status_code=500, content={"error": "No image in response"})
+        if not image_bytes:
+            return JSONResponse(status_code=500, content={"error": "No image in response"})
 
         logger.info(f"Decoded {len(image_bytes)} bytes from Gemini response")
 

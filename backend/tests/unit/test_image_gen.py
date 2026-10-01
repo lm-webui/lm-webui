@@ -12,8 +12,7 @@ class TestIsImageGen:
         assert _is_image_gen("openai", "gpt-image-1") is True
         assert _is_image_gen("openai", "dall-e-3") is True
         assert _is_image_gen("google", "gemini-2.5-flash-image") is True
-        assert _is_image_gen("google", "imagen-3") is True
-        assert _is_image_gen("gemini", "imagen-3") is True
+        assert _is_image_gen("gemini", "gemini-3-pro-image-preview") is True
         assert _is_image_gen("comfyui", "sdxl") is True
 
     def test_non_image_models(self):

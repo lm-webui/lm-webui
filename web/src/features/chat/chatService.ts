@@ -170,8 +170,7 @@ export class ChatService {
       (selectedModel.includes("dall-e") || 
        selectedModel.includes("image") || 
        selectedModel.includes("flux") ||
-       selectedModel.toLowerCase().includes("nano banana") ||
-       selectedModel.toLowerCase().includes("imagen"));
+       selectedModel.toLowerCase().includes("nano banana"));
 
     let processedResponse = "";
     let generatedImageUrl: string | undefined;
