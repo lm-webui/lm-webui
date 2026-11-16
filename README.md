@@ -232,6 +232,18 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 
 ---
 
+## Star History
+
+<a href="https://www.star-history.com/?repos=lm-webui%2Flm-webui&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=lm-webui/lm-webui&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=lm-webui/lm-webui&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=lm-webui/lm-webui&type=date&legend=top-left" />
+ </picture>
+</a>
+
+---
+
 ## 🔗 Links
 
 - **Website**: [lmwebui.com](https://lmwebui.com)
@@ -244,7 +256,7 @@ This project is licensed under the MIT License — see the [LICENSE](LICENSE) fi
 ## 🙏 Acknowledgments
    
 LM-WebUI is a thin layer standing on a very tall AI stack. None of this would exist without the
-people who built the foundations, shout-out to [llama.cpp](https://github.com/ggml-org/llama.cpp)[MLX](https://github.com/ml-explore/mlx), [huggingface](https://huggingface.co), [ComfyUI](https://github.com/comfy-org/comfyui), and other foundational open source library that make LM-WebUI posible.  
+people who built the foundations, shout-out to [llama.cpp](https://github.com/ggml-org/llama.cpp), [MLX](https://github.com/ml-explore/mlx), [huggingface](https://huggingface.co), [ComfyUI](https://github.com/comfy-org/comfyui), and other foundational open source library that make LM-WebUI posible.  
 
 ---
 
