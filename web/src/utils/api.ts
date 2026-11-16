@@ -876,11 +876,6 @@ export async function testApiKey(provider: string): Promise<{ valid: boolean; me
   return response;
 }
 
-export async function getApiKey(provider: string): Promise<string> {
-  const response = await authFetch(`${API_BASE_URL}/api/api_keys/${provider}`);
-  return response.api_key;
-}
-
 export async function testSearxngUrl(baseUrl: string): Promise<{ valid: boolean; message: string }> {
   const response = await authFetch(`${API_BASE_URL}/api/settings/search/connectivity`, {
     method: 'POST',
