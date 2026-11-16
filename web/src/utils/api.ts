@@ -845,11 +845,12 @@ export interface ApiKey {
   created_at: string;
 }
 
-export async function addApiKey(provider: string, apiKey: string, baseUrl?: string): Promise<void> {
+export async function addApiKey(provider: string, apiKey: string, baseUrl?: string, model?: string): Promise<void> {
   const requestBody: any = {
     provider,
     api_key: apiKey,
     ...(baseUrl ? { base_url: baseUrl } : {}),
+    ...(model ? { model } : {}),
   };
 
   await authFetch(`${API_BASE_URL}/api/api_keys`, {
@@ -859,6 +860,10 @@ export async function addApiKey(provider: string, apiKey: string, baseUrl?: stri
     },
     body: JSON.stringify(requestBody)
   });
+}
+
+export async function getApiKey(provider: string): Promise<{ api_key: string; base_url?: string; model?: string }> {
+  return await authFetch(`${API_BASE_URL}/api/api_keys/${provider}`);
 }
 
 export async function testApiKey(provider: string): Promise<{ valid: boolean; message: string }> {

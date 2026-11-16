@@ -22,6 +22,7 @@ from app.database import get_db
 # New Provider System
 from app.providers.factory import ProviderFactory
 from app.providers.schemas import GenerateRequest, ModelEvent
+from app.providers.remote.openai_compat import OpenAICompatProvider
 
 logger = logging.getLogger(__name__)
 
@@ -179,8 +180,8 @@ class ModelRegistry:
             "ollama": ollama_adapter,
             "gguf": gguf_adapter,
             "mlx": mlx_adapter,
+            "custom_api": None,
         }
-        self._cache = {}
         self._session: Optional[aiohttp.ClientSession] = None
     
     async def get_session(self) -> aiohttp.ClientSession:
@@ -197,6 +198,17 @@ class ModelRegistry:
         """Get strategy for provider."""
         strategy = self._strategies.get(provider)
 
+        if provider == "custom_api" and user_id:
+            config = self.get_user_api_config(user_id, "custom_api")
+            if not config or not config.get("base_url"):
+                return None
+            custom = OpenAICompatProvider(
+                provider_id="custom_api",
+                name="Custom API",
+                api_base=config["base_url"],
+            )
+            return LegacyStrategyAdapter(custom)
+
         # For Ollama, check if user has configured a custom URL
         if provider == "ollama" and user_id:
             api_keys = self.get_user_api_keys(user_id)
@@ -206,6 +218,23 @@ class ModelRegistry:
                     return LegacyStrategyAdapter(new_provider)
 
         return strategy
+
+    def get_user_api_config(self, user_id: int, provider: str) -> Dict[str, Optional[str]]:
+        db = get_db()
+        try:
+            row = db.execute(
+                "SELECT encrypted_key, base_url, model_name FROM api_keys WHERE user_id = ? AND provider = ?",
+                (user_id, provider),
+            ).fetchone()
+        except Exception:
+            row = None
+        if not row:
+            return {}
+        return {
+            "api_key": decrypt_key(row[0]) if row[0] else None,
+            "base_url": decrypt_key(row[1]) if row[1] else None,
+            "model": row[2],
+        }
 
     def get_user_api_keys(self, user_id: int) -> Dict[str, str]:
         db = get_db()
@@ -250,6 +279,9 @@ class ModelRegistry:
             seen.add(adapter_id)
             key = api_keys.get(provider) or resolved.get_backend_name()
             tasks.append(resolved.fetch_models(key, session))
+
+        if self.get_user_api_config(user_id, "custom_api").get("model"):
+            tasks.append(self.fetch_models_for_provider("custom_api", user_id))
             
         results = await asyncio.gather(*tasks, return_exceptions=True)
         
@@ -268,6 +300,10 @@ class ModelRegistry:
         session = await self.get_session()
         api_keys = self.get_user_api_keys(user_id)
         
+        if provider == "custom_api":
+            config = self.get_user_api_config(user_id, provider)
+            if config.get("model"):
+                return [{"id": config["model"], "name": config["model"], "provider": provider}]
         key = api_keys.get(provider) or api_keys.get(strategy.get_backend_name())
         return await strategy.fetch_models(key, session)
     
@@ -318,9 +354,6 @@ class ModelRegistry:
                  pass
         
         return 4096
-
-    def clear_cache(self, user_id: Optional[int] = None):
-        self._cache.clear()
 
 # Global ModelRegistry instance
 _model_registry = None

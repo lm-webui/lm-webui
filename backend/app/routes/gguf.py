@@ -381,11 +381,11 @@ logger = logging.getLogger(__name__)
 
 # ── GGUF Engine Config ────────────────────────────────────────────────
 from app.providers.local.gguf import get_gguf_provider
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class GGUFConfigRequest(BaseModel):
-    n_ctx: int | None = None
+    n_ctx: int | None = Field(default=None, gt=0)
     n_gpu_layers: int | None = None
     cache_type_k: str | None = None
     cache_type_v: str | None = None

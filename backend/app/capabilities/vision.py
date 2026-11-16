@@ -175,8 +175,10 @@ async def describe_data_uris(uris: list, message: str = "", user_id: int = 1) ->
         vision_runtime.model = model
         if not await vision_runtime.start():
             return ""
-        from app.providers.remote.openai import OpenAIProvider
-        provider = OpenAIProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
+        # The compat base, not the OpenAI vendor: this is a local llama-server serving one
+        # downloaded model, and a vendor's MODEL_HINTS would filter its own name away.
+        from app.providers.remote.openai_compat import OpenAICompatProvider
+        provider = OpenAICompatProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
         return await _describe(provider, uris, message)
     except Exception:
         return ""
@@ -241,8 +243,9 @@ async def execute(ctx: CapabilityContext) -> VisionResult:
             ctx.vision_ready = False
             return VisionResult(images=images, provider=None, ready=False)
         else:
-            from app.providers.remote.openai import OpenAIProvider
-            ctx.vision_provider = OpenAIProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
+            # Compat base, not the OpenAI vendor — see the note in _provide_provider above.
+            from app.providers.remote.openai_compat import OpenAICompatProvider
+            ctx.vision_provider = OpenAICompatProvider("vision", "Vision (llama-server)", vision_runtime.base_url)
             ctx.vision_provider_id = "vision"
             ctx.vision_ready = True
             # Vision mode comes from the intent classifier (direct vs describe).

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { ModelService } from "./modelService";
 import { MODELS_CHANGED_EVENT } from "./modelEvents";
 import { MODEL_PROVIDERS } from "@/utils/modelProviders";
@@ -35,8 +35,10 @@ export function useAllModels({
     isLoading: false,
     error: null
   });
+  const loadVersion = useRef(0);
 
   const loadAllModels = useCallback(async () => {
+    const version = ++loadVersion.current;
     setState(prev => ({ ...prev, isLoading: true, error: null }));
 
     const allModels: string[] = [];
@@ -81,6 +83,7 @@ export function useAllModels({
       }
 
       completed++;
+      if (version !== loadVersion.current) return;
       setState({
         allModels: [...new Set(allModels)],
         allModelMapping: { ...allModelMapping },

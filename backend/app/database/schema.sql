@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
     provider TEXT NOT NULL,
     encrypted_key TEXT NOT NULL,
     base_url TEXT,
+    model_name TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, provider),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

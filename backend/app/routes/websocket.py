@@ -239,6 +239,6 @@ async def websocket_capabilities(
         },
         "supported_providers": [
             "openai", "claude", "gemini", "grok",
-            "deepseek", "lmstudio", "ollama", "gguf"
+            "deepseek", "lmstudio", "ollama", "gguf", "custom_api"
         ]
     }

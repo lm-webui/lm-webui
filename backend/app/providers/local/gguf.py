@@ -63,7 +63,7 @@ class GGUFProvider(BaseProvider):
     def get_config(self) -> Dict[str, Any]:
         """Return the effective config (env defaults + user overrides + active model)."""
         return {
-            "n_ctx": self._resolve_param("GGUF_N_CTX", 4096, int),
+            "n_ctx": self._resolve_param("GGUF_N_CTX", 8192, int),
             "n_gpu_layers": self._resolve_param("GGUF_N_GPU_LAYERS", _HW_SETTINGS.get("n_gpu_layers", -1), int),
             "flash_attn": self._resolve_param_bool("GGUF_FLASH_ATTN", _HW_SETTINGS.get("flash_attn", True)),
             "cache_type_k": self._resolve_param_str("GGUF_CACHE_TYPE_K", "q8_0"),
@@ -137,7 +137,7 @@ class GGUFProvider(BaseProvider):
     # ── Adjustable parameters ──────────────────────────────────────────
     # These can be overridden via environment variables:
     #
-    # GGUF_N_CTX            Context window size (default: 4096)
+    # GGUF_N_CTX            Context window size (default: 8192)
     # GGUF_N_GPU_LAYERS     GPU layers to offload (-1 = all, 0 = CPU only)
     # GGUF_FLASH_ATTN       Flash attention (1 = on, 0 = off)
     # GGUF_CACHE_TYPE_K     Key cache type: f16, q8_0, q4_0 (default: q8_0)
@@ -266,13 +266,14 @@ class GGUFProvider(BaseProvider):
     def _generate_blocking(self, model_path: str, request: GenerateRequest) -> GenerateResponse:
         """Blocking generation logic."""
         # Use appropriate context size - don't use max_tokens as n_ctx
-        # Falls back to _load_model's default (4096, overridable via GGUF_N_CTX)
+        # Falls back to _load_model's default (8192, overridable via GGUF_N_CTX)
         n_ctx = getattr(request, 'n_ctx', None)
         llm = self._load_model(model_path, n_ctx)
+        max_tokens = min(request.max_tokens, max(1, llm.n_ctx() - 1))
         
         output = llm.create_chat_completion(
             messages=request.messages,
-            max_tokens=request.max_tokens,
+            max_tokens=max_tokens,
             temperature=request.temperature,
             stop=request.stop or [],
             stream=False
@@ -303,9 +304,10 @@ class GGUFProvider(BaseProvider):
                 def producer():
                     try:
                         llm = self._load_model(model_meta.path, n_ctx)
+                        max_tokens = min(request.max_tokens, max(1, llm.n_ctx() - 1))
                         stream = llm.create_chat_completion(
                             messages=request.messages,
-                            max_tokens=request.max_tokens,
+                            max_tokens=max_tokens,
                             temperature=request.temperature,
                             stop=request.stop or [],
                             stream=True,
@@ -333,12 +335,7 @@ class GGUFProvider(BaseProvider):
                 lifecycle_for("gguf").set_state("failed", str(e))
                 yield ModelEvent.error(str(e))
 
-# Singleton for routes to access
-_gguf_provider: Optional[GGUFProvider] = None
-
-
 def get_gguf_provider() -> GGUFProvider:
-    global _gguf_provider
-    if _gguf_provider is None:
-        _gguf_provider = GGUFProvider()
-    return _gguf_provider
+    # Runtime routes and chat must configure/use the same provider instance.
+    from app.providers.factory import ProviderFactory
+    return ProviderFactory.get_provider("gguf")

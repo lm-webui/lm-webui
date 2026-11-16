@@ -5,14 +5,14 @@ from typing import List, Optional
 
 import aiohttp
 
-from ..remote.openai import OpenAIProvider
+from ..remote.openai_compat import OpenAICompatProvider
 from ..schemas import ModelMetadata
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-class OllamaProvider(OpenAIProvider):
+class OllamaProvider(OpenAICompatProvider):
     """Provider for Ollama (Local)."""
 
     def __init__(self, base_url: str = "http://localhost:11434/v1"):
@@ -27,8 +27,8 @@ class OllamaProvider(OpenAIProvider):
     async def list_models(self, api_key: Optional[str] = None) -> List[ModelMetadata]:
         """List ALL Ollama models via /api/tags.
 
-        Note: must NOT reuse OpenAIProvider.list_models — that filters to gpt/o1/o3,
-        which drops every Ollama model name.
+        Overrides the inherited `/models` call because `/api/tags` is Ollama's native endpoint
+        and reports model names as the user sees them locally.
         """
         base = self._api_base.rstrip("/v1") if self._api_base else "http://localhost:11434"
         session = await self.get_session()

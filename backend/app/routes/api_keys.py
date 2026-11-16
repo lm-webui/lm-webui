@@ -13,6 +13,7 @@ class ApiKeyRequest(BaseModel):
     provider: str
     api_key: str
     base_url: Optional[str] = None
+    model: Optional[str] = None
 
 @router.post("")
 async def save_api_key(request: ApiKeyRequest, user_id: dict = Depends(get_current_user)):
@@ -21,6 +22,23 @@ async def save_api_key(request: ApiKeyRequest, user_id: dict = Depends(get_curre
     # For local providers (lmstudio, ollama), we store URLs
     # For cloud providers, we encrypt the API key
     local_providers = {"lmstudio", "ollama"}
+
+    if request.provider == "custom_api":
+        if not request.base_url or not request.base_url.strip():
+            raise HTTPException(400, "Custom API URL is required")
+        if not request.model or not request.model.strip():
+            raise HTTPException(400, "Custom API model is required")
+        url = request.base_url.strip().rstrip("/")
+        if not url.startswith(("http://", "https://")):
+            url = f"http://{url}"
+        if not url.endswith("/v1"):
+            url += "/v1"
+        db.execute(
+            "INSERT OR REPLACE INTO api_keys (user_id, provider, encrypted_key, base_url, model_name) VALUES (?, ?, ?, ?, ?)",
+            (user_id["id"], request.provider, encrypt_key(request.api_key.strip()), encrypt_key(url), request.model.strip()),
+        )
+        db.commit()
+        return {"message": "Key saved"}
     
     if request.provider in local_providers:
         # For local providers, the api_key field contains the URL
@@ -113,7 +131,7 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
     # Try to get base_url if column exists
     try:
         result = db.execute(
-            "SELECT encrypted_key, base_url FROM api_keys WHERE user_id = ? AND provider = ?",
+            "SELECT encrypted_key, base_url, model_name FROM api_keys WHERE user_id = ? AND provider = ?",
             (user_id["id"], provider)
         ).fetchone()
     except Exception:
@@ -122,7 +140,7 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
             "SELECT encrypted_key FROM api_keys WHERE user_id = ? AND provider = ?",
             (user_id["id"], provider)
         ).fetchone()
-        result = (result[0], None) if result else None
+        result = (result[0], None, None) if result else None
 
     if result:
         decrypted_key = decrypt_key(result[0])
@@ -135,6 +153,8 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
                 response["base_url"] = decrypted_url
             except:
                 pass
+        if len(result) > 2 and result[2]:
+            response["model"] = result[2]
                 
         return response
     else:

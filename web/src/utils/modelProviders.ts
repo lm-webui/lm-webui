@@ -39,7 +39,7 @@ export const PROVIDERS: Record<string, Provider> = {
   },
   google: {
     id: "google", name: "Google Gemini", icon: RiGeminiFill, color: "text-blue-500",
-    type: "cloud", placeholder: "AIza... or AQ....", requiresApiKey: true,
+    type: "cloud", placeholder: "AQ.... or AIza...", requiresApiKey: true,
     categories: ["model", "api", "image"],
   },
   anthropic: {
@@ -62,6 +62,11 @@ export const PROVIDERS: Record<string, Provider> = {
     id: "lmstudio", name: "LM Studio", icon: SiLmstudio, type: "local",
     placeholder: "http://localhost:1234", categories: ["api"],
   },
+  custom_api: {
+    id: "custom_api", name: "Custom API", icon: SiVllm, color: "text-orange-500",
+    type: "local", placeholder: "https://provider.example/v1",
+    categories: ["model", "api"],
+  },
   comfyui: {
     id: "comfyui", name: "Image-Gen", icon: RiImageAiFill, categories: ["image"],
   },
@@ -81,11 +86,13 @@ export const PROVIDER_MAPPING = {
   'ollama': 'ollama',
   'gguf': 'gguf',
   'mlx': 'mlx',
+  'custom_api': 'custom_api',
 } as const;
 
 export const PROVIDERS_REQUIRING_API_KEY = [
   'openai',
   'google',
+  'custom_api',
 ] as const;
 
 export type ProviderId = keyof typeof PROVIDER_MAPPING;

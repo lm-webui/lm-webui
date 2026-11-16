@@ -5,6 +5,9 @@ Manages the lifecycle and instantiation of model providers.
 from typing import Dict, Optional, Type
 from .interface import Provider
 from .remote.openai import OpenAIProvider
+from .remote.xai import XAIProvider
+from .remote.deepseek import DeepSeekProvider
+from .remote.vllm import VLLMProvider
 from .remote.gemini import GeminiProvider
 from .remote.anthropic import AnthropicProvider
 from .local.gguf import GGUFProvider
@@ -17,19 +20,16 @@ class ProviderFactory:
     """Factory for creating and managing provider instances."""
 
     _instances: Dict[str, Provider] = {}
-    # Providers that are OpenAI-compatible with a custom base URL.
-    # Keyed by provider_id -> (class, default_api_base)
-    _openai_compat: Dict[str, tuple] = {
-        "xai": (OpenAIProvider, "https://api.x.ai/v1"),
-        "deepseek": (OpenAIProvider, "https://api.deepseek.com/v1"),
-        "vllm": (OpenAIProvider, "http://localhost:7070/v1"),
-    }
+    # Each provider owns its identity, base URL and model filter. OpenAI-compatible ones
+    # subclass OpenAICompatProvider in their own module.
     _registry: Dict[str, Type[Provider]] = {
-        "openai": OpenAIProvider,  # covers any OpenAI-compatible endpoint
+        "openai": OpenAIProvider,  # api.openai.com
+        "xai": XAIProvider,        # xAI (Grok) - OpenAI wire protocol
+        "deepseek": DeepSeekProvider,
+        "vllm": VLLMProvider,      # local server
         "google": GeminiProvider,  # Google Gemini
         "gemini": GeminiProvider,  # alias
         "anthropic": AnthropicProvider,  # Anthropic (Claude)
-        **{k: v[0] for k, v in _openai_compat.items()},
         "ollama": OllamaProvider,  # local via Ollama
         "gguf": GGUFProvider,      # direct llama.cpp
         "mlx": MLXProvider,        # Apple Silicon MLX
@@ -46,11 +46,6 @@ class ProviderFactory:
         """Get or create a provider instance."""
         if provider_id not in cls._registry:
             return None
-
-        # Auto-set api_base for OpenAI-compatible providers (xai, deepseek, vllm)
-        if provider_id in cls._openai_compat and "api_base" not in kwargs:
-            _, default_base = cls._openai_compat[provider_id]
-            kwargs["api_base"] = default_base
 
         # For now, we use singletons for providers unless specific config is passed
         if provider_id in cls._instances and not kwargs:

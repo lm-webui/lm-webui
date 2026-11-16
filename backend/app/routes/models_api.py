@@ -5,9 +5,13 @@ This module provides routes for API-based model management from external provide
 Requires authentication for all endpoints.
 """
 
-from fastapi import APIRouter, Depends, Query, Request, HTTPException
+import logging
+
+from fastapi import APIRouter, Depends, Query, HTTPException
 from app.security.auth.dependencies import get_current_user
 from app.services.model_registry import get_model_registry
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/models/api")
 
@@ -15,15 +19,9 @@ router = APIRouter(prefix="/api/models/api")
 async def list_api_models(provider: str = Query(None), user_id: dict = Depends(get_current_user)):
     """Get API models for authenticated user, optionally filtered by provider"""
     model_registry = get_model_registry()
-    
-    # Debug: Check what models we have before filtering
-    print(f"DEBUG: API models route - Provider filter: {provider}")
-    
+
     # Fetch models using ModelRegistry
     models = await model_registry.fetch_models_for_user(user_id["id"])
-    
-    print(f"DEBUG: Total models before filtering: {len(models)}")
-    print(f"DEBUG: Available providers: {list(set(m.get('provider') for m in models))}")
 
     # Map frontend provider names to backend names for filtering
     # Accept both 'google' and 'gemini' as input, but always return 'google'
@@ -38,8 +36,7 @@ async def list_api_models(provider: str = Query(None), user_id: dict = Depends(g
         # Map frontend provider to backend provider for filtering
         backend_provider = provider_mapping.get(provider, provider)
         filtered_models = [model for model in models if model.get("provider") == backend_provider]
-        print(f"DEBUG: Models after filtering for provider '{provider}' (backend: '{backend_provider}'): {len(filtered_models)}")
-        
+
         formatted_models = []
         for model in filtered_models:
             # Always return 'google' as provider name for Google models
@@ -77,22 +74,13 @@ async def list_all_api_models(user_id: dict = Depends(get_current_user)):
 @router.post("/refresh")
 async def refresh_api_cache(user_id: dict = Depends(get_current_user)):
     """Refresh API model cache for authenticated user"""
-    model_registry = get_model_registry()
-    
-    # Clear ModelRegistry cache for this user
-    model_registry.clear_cache(user_id["id"])
-    
-    # Fetch fresh models (will be cached automatically)
-    models = await model_registry.fetch_models_for_user(user_id["id"])
-    
-    # Return formatted models
+    # Nothing is cached — every call already hits the provider's list API — so this is the same
+    # fetch again, in the same shape.
     return await list_api_models(provider=None, user_id=user_id)
 
 @router.get("/dynamic")
 async def list_dynamic_models(provider: str = Query(None), user_id: dict = Depends(get_current_user)):
     """Get models dynamically from provider APIs using ModelRegistry"""
-    print(f"DEBUG: Dynamic models route - Provider: {provider}, User: {user_id['id']}")
-    
     if not provider:
         raise HTTPException(400, "Provider parameter is required for dynamic model fetching")
     
@@ -126,14 +114,12 @@ async def list_dynamic_models(provider: str = Query(None), user_id: dict = Depen
                 "provider": response_provider
             })
         
-        print(f"DEBUG: ModelRegistry returned {len(formatted_models)} models for {provider} (backend: {backend_provider})")
         return {"models": formatted_models}
-        
-    except ValueError as e:
+
+    except ValueError:
         # Provider not supported
-        print(f"ERROR: Unsupported provider {provider} (backend: {backend_provider}): {e}")
         return {"models": []}
     except Exception as e:
-        print(f"ERROR: Failed to fetch dynamic models for {provider} (backend: {backend_provider}): {e}")
+        logger.warning(f"Dynamic model fetch failed for {provider} (backend: {backend_provider}): {e}")
         # Return empty list instead of fallback models
         return {"models": []}

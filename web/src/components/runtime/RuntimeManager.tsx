@@ -96,7 +96,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
   const [gpuInfo, setGpuInfo] = useState<any>(null);
   const [installingGpu, setInstallingGpu] = useState(false);
   const [ggufConfig, setGgufConfig] = useState({
-    n_ctx: 4096,
+    n_ctx: 8192,
     n_gpu_layers: -1,
     cache_type_k: "q8_0",
     cache_type_v: "q8_0",
@@ -208,7 +208,7 @@ export default function RuntimeManager({ open, onOpenChange, onModelLoad, inline
       const data = await authFetch("/api/models/gguf/config");
       if (data) {
         setGgufConfig({
-          n_ctx: data.n_ctx ?? 4096,
+          n_ctx: data.n_ctx ?? 8192,
           n_gpu_layers: data.n_gpu_layers ?? -1,
           cache_type_k: data.cache_type_k ?? "q8_0",
           cache_type_v: data.cache_type_v ?? "q8_0",

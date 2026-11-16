@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { addApiKey, deleteApiKey, listApiKeys, testApiKey } from "@/utils/api";
+import { addApiKey, deleteApiKey, getApiKey, listApiKeys, testApiKey } from "@/utils/api";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,15 @@ import { Wifi, WifiOff, RefreshCw, Key, Save, Trash2 } from "lucide-react";
 export function ApiKeysTab() {
   const [selectedProvider, setSelectedProvider] = useState("openai");
   const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [modelName, setModelName] = useState("");
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
   const [isTesting, setIsTesting] = useState(false);
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
   const [isLoadingApiKeys, setIsLoadingApiKeys] = useState(false);
 
   // Provider configuration - sourced from centralized PROVIDERS (canonical icons)
-  const providerOrder = ["openai", "google", "anthropic", "xai", "deepseek", "vllm", "lmstudio", "ollama"];
+  const providerOrder = ["openai", "google", "anthropic", "xai", "deepseek", "vllm", "lmstudio", "ollama", "custom_api"];
   const providers = providerOrder
     .map((id) => PROVIDERS[id])
     .filter((p): p is Provider => !!p)
@@ -37,7 +39,8 @@ export function ApiKeysTab() {
     if (providers.find(p => p.id === providerId)?.type === "local") {
       const lastUrl = localStorage.getItem(`last_url_${providerId}`);
       if (lastUrl) {
-        setApiKey(lastUrl);
+        if (providerId === "custom_api") setBaseUrl(lastUrl);
+        else setApiKey(lastUrl);
       }
     }
   };
@@ -79,8 +82,17 @@ export function ApiKeysTab() {
   useEffect(() => {
     const isConfigured = storedApiKeys[selectedProvider];
     setConnectionStatus(isConfigured ? "connected" : "disconnected");
+    setApiKey("");
+    setBaseUrl("");
+    setModelName("");
     // Load last used URL for local providers
     loadLastUsedUrl(selectedProvider);
+    if (selectedProvider === "custom_api" && isConfigured) {
+      getApiKey(selectedProvider).then((config) => {
+        setBaseUrl(config.base_url || "");
+        setModelName(config.model || "");
+      }).catch(() => {});
+    }
   }, [selectedProvider, storedApiKeys]);
 
   // Validate API key or URL before saving
@@ -91,6 +103,16 @@ export function ApiKeysTab() {
     const trimmedInput = input.trim();
     if (!trimmedInput) {
       return { isValid: false, error: `${provider.type === "local" ? "Server URL" : "API key"} is required` };
+    }
+
+    if (providerId === "custom_api") {
+      try {
+        const url = new URL(trimmedInput.startsWith("http") ? trimmedInput : `http://${trimmedInput}`);
+        if (!["http:", "https:"].includes(url.protocol)) return { isValid: false, error: "URL must use http:// or https:// protocol" };
+      } catch {
+        return { isValid: false, error: "Please enter a valid Custom API URL" };
+      }
+      return { isValid: true };
     }
 
     // Local provider URL validation
@@ -128,19 +150,28 @@ export function ApiKeysTab() {
 
   // Save API key to backend
   const handleSaveApiKey = async () => {
-    const validation = validateInput(selectedProvider, apiKey);
+    if (selectedProvider === "custom_api") {
+      const urlValidation = validateInput(selectedProvider, baseUrl);
+      if (!urlValidation.isValid || !modelName.trim()) {
+        toast.error(urlValidation.error || "Custom API model is required");
+        return;
+      }
+    }
+    const validation = selectedProvider === "custom_api"
+      ? { isValid: !!apiKey.trim(), error: "Custom API key is required" }
+      : validateInput(selectedProvider, apiKey);
     if (!validation.isValid) {
       toast.error(validation.error || `Please enter a valid ${currentProvider?.type === "local" ? "server URL" : "API key"} for ${currentProvider?.name}`);
       return;
     }
 
     try {
-      await addApiKey(selectedProvider, apiKey);
+      await addApiKey(selectedProvider, selectedProvider === "custom_api" ? apiKey : apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined);
       setStoredApiKeys(prev => ({ ...prev, [selectedProvider]: true }));
 
       // Save last used URL for local providers
       if (currentProvider?.type === "local") {
-        saveLastUsedUrl(selectedProvider, apiKey);
+        saveLastUsedUrl(selectedProvider, selectedProvider === "custom_api" ? baseUrl : apiKey);
       }
 
       setApiKey(""); // Clear input
@@ -182,6 +213,10 @@ export function ApiKeysTab() {
 
   // Test connection for selected provider
   const testConnection = async () => {
+    if (selectedProvider === "custom_api" && (!baseUrl.trim() || !modelName.trim())) {
+      toast.error("Custom API URL and model name are required to test");
+      return;
+    }
     // If not configured and no API key entered, show error
     if (!isConfigured && !apiKey?.trim()) {
       toast.error(`Please enter a ${currentProvider?.type === "local" ? "server URL" : "API key"} for ${currentProvider?.name} to test`);
@@ -204,10 +239,10 @@ export function ApiKeysTab() {
       // Save the key so connection testing can use it
       if (!isConfigured && apiKey) {
         // Save the API key/URL first
-        await addApiKey(selectedProvider, apiKey);
+        await addApiKey(selectedProvider, apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined);
         // Save last used URL for local providers
         if (currentProvider?.type === "local") {
-          saveLastUsedUrl(selectedProvider, apiKey);
+          saveLastUsedUrl(selectedProvider, selectedProvider === "custom_api" ? baseUrl : apiKey);
         }
         // Update state to reflect it's now configured
         setStoredApiKeys(prev => ({ ...prev, [selectedProvider]: true }));
@@ -364,7 +399,7 @@ export function ApiKeysTab() {
                       Test
                     </Button>
 
-                    {isConfigured ? (
+                    {isConfigured && selectedProvider !== "custom_api" ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -389,21 +424,29 @@ export function ApiKeysTab() {
                   </div>
                 </div>
 
-                {!isConfigured ? (
+                {!isConfigured || selectedProvider === "custom_api" ? (
                   <div className="space-y-2">
+                    {selectedProvider === "custom_api" && <>
+                      <Label htmlFor="custom-api-url" className="text-sm">Provider URL</Label>
+                      <Input id="custom-api-url" type="text" placeholder={currentProvider?.placeholder} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="text-sm" />
+                      <Label htmlFor="custom-api-model" className="text-sm">Model name</Label>
+                      <Input id="custom-api-model" type="text" placeholder="Clef" value={modelName} onChange={(e) => setModelName(e.target.value)} className="text-sm" />
+                    </>}
                     <Label htmlFor="api-key-input" className="text-sm">
-                      {currentProvider?.type === "local" ? "Server URL" : "API Key"}
+                      {selectedProvider === "custom_api" ? "API Key" : currentProvider?.type === "local" ? "Server URL" : "API Key"}
                     </Label>
                     <Input
                       id="api-key-input"
-                      type={currentProvider?.type === "local" ? "text" : "password"}
+                      type={currentProvider?.type === "local" && selectedProvider !== "custom_api" ? "text" : "password"}
                       placeholder={currentProvider?.placeholder}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       className="text-sm"
                     />
                     <div className="text-xs text-zinc-500/70 dark:text-zinc-400/70">
-                      {currentProvider?.type === "local"
+                      {selectedProvider === "custom_api"
+                        ? "Requests use the OpenAI-compatible /chat/completions endpoint."
+                        : currentProvider?.type === "local"
                         ? "Enter the server URL (e.g., http://localhost:11434, http://{server_ip}:11434)"
                         : "Your API key is stored securely and encrypted."}
                     </div>
