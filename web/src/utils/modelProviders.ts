@@ -3,6 +3,7 @@
 import type { ComponentType } from "react";
 import { RiOpenaiFill, RiAnthropicFill, RiGeminiFill, RiGrokAiFill, RiImageAiFill } from "react-icons/ri";
 import { SiOllama, SiDeepseek, SiVllm, SiLmstudio, SiHuggingface, SiApple } from "react-icons/si";
+import { TbApi } from "react-icons/tb";
 
 export type ProviderType = "cloud" | "local";
 export type ProviderCategory = "model" | "api" | "image";
@@ -63,7 +64,7 @@ export const PROVIDERS: Record<string, Provider> = {
     placeholder: "http://localhost:1234", categories: ["api"],
   },
   custom_api: {
-    id: "custom_api", name: "Custom API", icon: SiVllm, color: "text-orange-500",
+    id: "custom_api", name: "Custom API", icon: TbApi, color: "text-orange-500",
     type: "local", placeholder: "https://provider.example/v1",
     categories: ["model", "api"],
   },

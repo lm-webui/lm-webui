@@ -189,7 +189,26 @@ class OrchestratorController:
                     except Exception:
                         base_url = row[0]  # fallback: use raw value
 
-            provider = ProviderFactory.get_provider(provider_id or "", base_url=base_url) if base_url else ProviderFactory.get_provider(provider_id or "")
+            if provider_id == "custom_api":
+                from app.providers.remote.openai_compat import OpenAICompatProvider
+                from app.security.encryption import decrypt_key
+                row = get_db().execute(
+                    "SELECT base_url FROM api_keys WHERE user_id = ? AND provider = ?",
+                    (user_id, "custom_api"),
+                ).fetchone()
+                if row and row[0]:
+                    try:
+                        base_url = decrypt_key(row[0])
+                    except Exception:
+                        base_url = row[0]
+                provider = OpenAICompatProvider(
+                    provider_id="custom_api",
+                    name="Custom API",
+                    api_base=base_url,
+                    minimal_payload=True,
+                ) if base_url else None
+            else:
+                provider = ProviderFactory.get_provider(provider_id or "", base_url=base_url) if base_url else ProviderFactory.get_provider(provider_id or "")
             if not provider:
                 yield ModelEvent.error(f"Provider {provider_id} not available")
                 return

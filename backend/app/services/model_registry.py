@@ -206,6 +206,7 @@ class ModelRegistry:
                 provider_id="custom_api",
                 name="Custom API",
                 api_base=config["base_url"],
+                minimal_payload=True,
             )
             return LegacyStrategyAdapter(custom)
 
@@ -223,7 +224,7 @@ class ModelRegistry:
         db = get_db()
         try:
             row = db.execute(
-                "SELECT encrypted_key, base_url, model_name FROM api_keys WHERE user_id = ? AND provider = ?",
+                "SELECT encrypted_key, base_url, model_name, vision_enabled FROM api_keys WHERE user_id = ? AND provider = ?",
                 (user_id, provider),
             ).fetchone()
         except Exception:
@@ -234,6 +235,7 @@ class ModelRegistry:
             "api_key": decrypt_key(row[0]) if row[0] else None,
             "base_url": decrypt_key(row[1]) if row[1] else None,
             "model": row[2],
+            "vision_enabled": bool(row[3]),
         }
 
     def get_user_api_keys(self, user_id: int) -> Dict[str, str]:
@@ -303,7 +305,12 @@ class ModelRegistry:
         if provider == "custom_api":
             config = self.get_user_api_config(user_id, provider)
             if config.get("model"):
-                return [{"id": config["model"], "name": config["model"], "provider": provider}]
+                return [{
+                    "id": config["model"],
+                    "name": config["model"],
+                    "provider": provider,
+                    "supports_vision": config.get("vision_enabled", False),
+                }]
         key = api_keys.get(provider) or api_keys.get(strategy.get_backend_name())
         return await strategy.fetch_models(key, session)
     

@@ -14,6 +14,7 @@ class ApiKeyRequest(BaseModel):
     api_key: str
     base_url: Optional[str] = None
     model: Optional[str] = None
+    vision_enabled: bool = False
 
 @router.post("")
 async def save_api_key(request: ApiKeyRequest, user_id: dict = Depends(get_current_user)):
@@ -34,8 +35,8 @@ async def save_api_key(request: ApiKeyRequest, user_id: dict = Depends(get_curre
         if not url.endswith("/v1"):
             url += "/v1"
         db.execute(
-            "INSERT OR REPLACE INTO api_keys (user_id, provider, encrypted_key, base_url, model_name) VALUES (?, ?, ?, ?, ?)",
-            (user_id["id"], request.provider, encrypt_key(request.api_key.strip()), encrypt_key(url), request.model.strip()),
+            "INSERT OR REPLACE INTO api_keys (user_id, provider, encrypted_key, base_url, model_name, vision_enabled) VALUES (?, ?, ?, ?, ?, ?)",
+            (user_id["id"], request.provider, encrypt_key(request.api_key.strip()), encrypt_key(url), request.model.strip(), int(request.vision_enabled)),
         )
         db.commit()
         return {"message": "Key saved"}
@@ -131,7 +132,7 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
     # Try to get base_url if column exists
     try:
         result = db.execute(
-            "SELECT encrypted_key, base_url, model_name FROM api_keys WHERE user_id = ? AND provider = ?",
+            "SELECT encrypted_key, base_url, model_name, vision_enabled FROM api_keys WHERE user_id = ? AND provider = ?",
             (user_id["id"], provider)
         ).fetchone()
     except Exception:
@@ -140,7 +141,7 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
             "SELECT encrypted_key FROM api_keys WHERE user_id = ? AND provider = ?",
             (user_id["id"], provider)
         ).fetchone()
-        result = (result[0], None, None) if result else None
+        result = (result[0], None, None, 0) if result else None
 
     if result:
         decrypted_key = decrypt_key(result[0])
@@ -155,6 +156,8 @@ async def get_api_key(provider: str, user_id: dict = Depends(get_current_user)):
                 pass
         if len(result) > 2 and result[2]:
             response["model"] = result[2]
+        if len(result) > 3:
+            response["vision_enabled"] = bool(result[3])
                 
         return response
     else:

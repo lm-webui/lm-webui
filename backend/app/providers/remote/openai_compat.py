@@ -30,8 +30,9 @@ class OpenAICompatProvider(BaseProvider):
     # Cache: models that only accept temperature=1 (GPT-5 Nano, etc.)
     _default_temp_models: set = set()
 
-    def __init__(self, provider_id: str = "openai", name: str = "OpenAI", api_base: str = "https://api.openai.com/v1"):
+    def __init__(self, provider_id: str = "openai", name: str = "OpenAI", api_base: str = "https://api.openai.com/v1", minimal_payload: bool = False):
         super().__init__(provider_id, name, api_base)
+        self._minimal_payload = minimal_payload
 
     def _build_payload(self, request: GenerateRequest, stream: bool = False) -> Dict[str, Any]:
         """Build the API payload, conditionally excluding unsupported params."""
@@ -64,6 +65,10 @@ class OpenAICompatProvider(BaseProvider):
             max_key: request.max_tokens,
             "stream": stream,
         }
+
+        if self._minimal_payload:
+            payload.pop(max_key, None)
+            return payload
 
         # Priority: 1) user setting → 2) fallback 0.7 → 3) model-compatible value
         if request.model in self._no_temp_models:

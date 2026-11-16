@@ -112,8 +112,9 @@ class DatabaseMigration:
             # Check media_library table for extracted_text column
             cursor.execute("PRAGMA table_info(api_keys);")
             api_key_columns = [col[1] for col in cursor.fetchall()]
-            if "model_name" not in api_key_columns:
-                missing_columns["api_keys"] = ["model_name"]
+            for column in ("model_name", "vision_enabled"):
+                if column not in api_key_columns:
+                    missing_columns.setdefault("api_keys", []).append(column)
 
             # Check media_library table for extracted_text column
             cursor.execute("PRAGMA table_info(media_library);")
@@ -225,6 +226,10 @@ class DatabaseMigration:
             if "api_keys" in missing_columns and "model_name" in missing_columns["api_keys"]:
                 cursor.execute("ALTER TABLE api_keys ADD COLUMN model_name TEXT;")
                 logger.info("✅ Added model_name column to api_keys table")
+
+            if "api_keys" in missing_columns and "vision_enabled" in missing_columns["api_keys"]:
+                cursor.execute("ALTER TABLE api_keys ADD COLUMN vision_enabled INTEGER NOT NULL DEFAULT 0;")
+                logger.info("✅ Added vision_enabled column to api_keys table")
 
             # Add extracted_text to media_library table
             if "media_library" in missing_columns and "extracted_text" in missing_columns["media_library"]:

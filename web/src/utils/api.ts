@@ -845,12 +845,13 @@ export interface ApiKey {
   created_at: string;
 }
 
-export async function addApiKey(provider: string, apiKey: string, baseUrl?: string, model?: string): Promise<void> {
+export async function addApiKey(provider: string, apiKey: string, baseUrl?: string, model?: string, visionEnabled = false): Promise<void> {
   const requestBody: any = {
     provider,
     api_key: apiKey,
     ...(baseUrl ? { base_url: baseUrl } : {}),
     ...(model ? { model } : {}),
+    ...(provider === "custom_api" ? { vision_enabled: visionEnabled } : {}),
   };
 
   await authFetch(`${API_BASE_URL}/api/api_keys`, {
@@ -862,7 +863,7 @@ export async function addApiKey(provider: string, apiKey: string, baseUrl?: stri
   });
 }
 
-export async function getApiKey(provider: string): Promise<{ api_key: string; base_url?: string; model?: string }> {
+export async function getApiKey(provider: string): Promise<{ api_key: string; base_url?: string; model?: string; vision_enabled?: boolean }> {
   return await authFetch(`${API_BASE_URL}/api/api_keys/${provider}`);
 }
 

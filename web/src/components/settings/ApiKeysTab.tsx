@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +17,7 @@ export function ApiKeysTab() {
   const [apiKey, setApiKey] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
   const [modelName, setModelName] = useState("");
+  const [visionEnabled, setVisionEnabled] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"connected" | "disconnected" | "testing">("disconnected");
   const [isTesting, setIsTesting] = useState(false);
   const [storedApiKeys, setStoredApiKeys] = useState<Record<string, boolean>>({});
@@ -85,12 +87,14 @@ export function ApiKeysTab() {
     setApiKey("");
     setBaseUrl("");
     setModelName("");
+    setVisionEnabled(false);
     // Load last used URL for local providers
     loadLastUsedUrl(selectedProvider);
     if (selectedProvider === "custom_api" && isConfigured) {
       getApiKey(selectedProvider).then((config) => {
         setBaseUrl(config.base_url || "");
         setModelName(config.model || "");
+        setVisionEnabled(!!config.vision_enabled);
       }).catch(() => {});
     }
   }, [selectedProvider, storedApiKeys]);
@@ -166,7 +170,7 @@ export function ApiKeysTab() {
     }
 
     try {
-      await addApiKey(selectedProvider, selectedProvider === "custom_api" ? apiKey : apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined);
+      await addApiKey(selectedProvider, apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined, visionEnabled);
       setStoredApiKeys(prev => ({ ...prev, [selectedProvider]: true }));
 
       // Save last used URL for local providers
@@ -239,7 +243,7 @@ export function ApiKeysTab() {
       // Save the key so connection testing can use it
       if (!isConfigured && apiKey) {
         // Save the API key/URL first
-        await addApiKey(selectedProvider, apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined);
+        await addApiKey(selectedProvider, apiKey, selectedProvider === "custom_api" ? baseUrl : undefined, selectedProvider === "custom_api" ? modelName : undefined, visionEnabled);
         // Save last used URL for local providers
         if (currentProvider?.type === "local") {
           saveLastUsedUrl(selectedProvider, selectedProvider === "custom_api" ? baseUrl : apiKey);
@@ -428,9 +432,13 @@ export function ApiKeysTab() {
                   <div className="space-y-2">
                     {selectedProvider === "custom_api" && <>
                       <Label htmlFor="custom-api-url" className="text-sm">Provider URL</Label>
-                      <Input id="custom-api-url" type="text" placeholder={currentProvider?.placeholder} value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="text-sm" />
+                      <Input id="custom-api-url" type="text" placeholder="https://provider.example/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} className="text-sm" />
                       <Label htmlFor="custom-api-model" className="text-sm">Model name</Label>
-                      <Input id="custom-api-model" type="text" placeholder="Clef" value={modelName} onChange={(e) => setModelName(e.target.value)} className="text-sm" />
+                      <Input id="custom-api-model" type="text" placeholder="e.g. Qwen3.8-27B" value={modelName} onChange={(e) => setModelName(e.target.value)} className="text-sm" />
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox checked={visionEnabled} onCheckedChange={(checked) => setVisionEnabled(checked === true)} />
+                        <span>Supports vision</span>
+                      </label>
                     </>}
                     <Label htmlFor="api-key-input" className="text-sm">
                       {selectedProvider === "custom_api" ? "API Key" : currentProvider?.type === "local" ? "Server URL" : "API Key"}
@@ -438,7 +446,7 @@ export function ApiKeysTab() {
                     <Input
                       id="api-key-input"
                       type={currentProvider?.type === "local" && selectedProvider !== "custom_api" ? "text" : "password"}
-                      placeholder={currentProvider?.placeholder}
+                      placeholder={selectedProvider === "custom_api" ? "api_key..." : currentProvider?.placeholder}
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
                       className="text-sm"
